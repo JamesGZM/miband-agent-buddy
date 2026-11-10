@@ -24,7 +24,10 @@ pub struct Preferences {
     pub selected: Option<usize>,
     pub themes: HashMap<String, String>,
     pub revision: u64,
+    pub wake_hold_seconds: u32,
+    pub language: String,
 }
+pub const WAKE_HOLD_SECONDS: std::ops::RangeInclusive<u32> = 5..=1800;
 impl Default for Preferences {
     fn default() -> Self {
         Self {
@@ -35,6 +38,8 @@ impl Default for Preferences {
             selected: None,
             themes: HashMap::new(),
             revision: 0,
+            wake_hold_seconds: 20,
+            language: "system".into(),
         }
     }
 }
@@ -77,12 +82,14 @@ pub enum BuddyTheme {
     #[default]
     Chatgpt,
     Claude,
+    Deepseek,
 }
 impl BuddyTheme {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Chatgpt => "chatgpt",
             Self::Claude => "claude",
+            Self::Deepseek => "deepseek",
         }
     }
 }
@@ -119,11 +126,34 @@ impl Appearance {
     }
 }
 #[derive(Deserialize)]
+pub enum Language {
+    #[serde(rename = "system")]
+    System,
+    #[serde(rename = "zh-Hans")]
+    ZhHans,
+    #[serde(rename = "zh-Hant")]
+    ZhHant,
+    #[serde(rename = "en")]
+    En,
+}
+impl Language {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::ZhHans => "zh-Hans",
+            Self::ZhHant => "zh-Hant",
+            Self::En => "en",
+        }
+    }
+}
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesUpdate {
     pub app_theme: AppTheme,
     pub appearance: Appearance,
     pub background: bool,
+    #[serde(default)]
+    pub language: Option<Language>,
 }
 #[derive(Deserialize)]
 #[serde(tag = "operation", content = "value", rename_all = "lowercase")]
@@ -134,8 +164,14 @@ pub enum Action {
     Install,
     Logout,
     Theme(BuddyTheme),
+    Page(u8),
+    Wake,
     Preferences(PreferencesUpdate),
     Autostart(bool),
+    #[serde(rename = "wake_hold")]
+    WakeHold(u32),
+    #[serde(rename = "refresh_device")]
+    RefreshDevice,
 }
 
 #[cfg(test)]
@@ -179,5 +215,9 @@ mod tests {
         assert!(!p.keep_screen);
         assert!(p.themes.is_empty());
         assert!(p.selected.is_none());
+        assert_eq!(p.wake_hold_seconds, 20);
+        let legacy: Preferences = serde_json::from_str(r#"{"revision":4}"#).unwrap();
+        assert_eq!((legacy.revision, legacy.wake_hold_seconds), (4, 20));
+        assert_eq!(legacy.language, "system");
     }
 }

@@ -44,7 +44,16 @@
       "visible": true
     },
     "page": 0,
-    "mode": "thinking"
+    "mode": "thinking",
+    "capabilities": {
+      "maxWakeHoldMs": 1800000,
+      "themes": [
+        "chatgpt",
+        "claude",
+        "deepseek"
+      ],
+      "page": true
+    }
   },
   "credentials": {
     "address": "fixture-device",
@@ -58,7 +67,8 @@
       "settings": {
         "buddyTheme": "chatgpt",
         "revision": 2,
-        "keepScreen": false
+        "keepScreen": false,
+        "wakeHoldMs": 20000
       }
     },
     {
@@ -70,6 +80,23 @@
       }
     },
     {
+      "op": "configure",
+      "settings": {
+        "buddyTheme": "claude",
+        "revision": 3
+      },
+      "request": "op-1"
+    },
+    {
+      "op": "show_page",
+      "page": 1,
+      "request": "op-2"
+    },
+    {
+      "op": "wake",
+      "request": "op-3"
+    },
+    {
       "op": "pause",
       "value": true
     },
@@ -78,6 +105,16 @@
     },
     {
       "op": "disconnect"
+    },
+    {
+      "op": "configure",
+      "settings": {
+        "revision": 3,
+        "wakeHoldMs": 300000
+      }
+    },
+    {
+      "op": "refresh_device"
     }
   ],
   "transportCommands": [
@@ -126,6 +163,10 @@
     },
     {
       "op": "disconnect"
+    },
+    {
+      "op": "device_status",
+      "id": "device-status"
     }
   ],
   "transportEvents": [
@@ -180,6 +221,15 @@
       "event": "error",
       "code": "auth_rejected",
       "message": "fixture"
+    },
+    {
+      "event": "device",
+      "battery": 76,
+      "charging": false,
+      "firmware": "3.0.0",
+      "model": "fixture-model",
+      "storageTotal": 1000,
+      "storageFree": 400
     }
   ],
   "runtimeState": {
@@ -204,13 +254,23 @@
         "visible": true
       },
       "page": 0,
-      "mode": "thinking"
+      "mode": "thinking",
+      "capabilities": {
+        "maxWakeHoldMs": 1800000,
+        "themes": [
+          "chatgpt",
+          "claude",
+          "deepseek"
+        ],
+        "page": true
+      }
     },
     "paused": false,
     "settings": {
       "buddyTheme": "chatgpt",
       "revision": 2,
-      "keepScreen": false
+      "keepScreen": false,
+      "wakeHoldMs": 20000
     },
     "agent": {
       "state": "thinking",
@@ -222,7 +282,16 @@
     "wake": {
       "status": "confirmed"
     },
-    "installed": true
+    "installed": true,
+    "device": {
+      "battery": 76,
+      "charging": false,
+      "firmware": "3.0.0",
+      "model": "fixture-model",
+      "storageTotal": 1000,
+      "storageFree": 400,
+      "at": 1
+    }
   },
   "actions": [
     {
@@ -250,6 +319,14 @@
       "value": "claude"
     },
     {
+      "operation": "page",
+      "value": 1
+    },
+    {
+      "operation": "wake",
+      "value": null
+    },
+    {
       "operation": "preferences",
       "value": {
         "appTheme": "deepseek",
@@ -261,6 +338,27 @@
     {
       "operation": "autostart",
       "value": false
+    },
+    {
+      "operation": "theme",
+      "value": "deepseek"
+    },
+    {
+      "operation": "wake_hold",
+      "value": 300
+    },
+    {
+      "operation": "refresh_device",
+      "value": null
+    },
+    {
+      "operation": "preferences",
+      "value": {
+        "appTheme": "chatgpt",
+        "appearance": "system",
+        "background": true,
+        "language": "en"
+      }
     }
   ]
 }

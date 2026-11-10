@@ -39,6 +39,7 @@ pub struct Command {
 pub enum Operation {
     Snapshot { payload: Value },
     Ping,
+    DeviceStatus,
     LaunchBuddy,
     Install { path: String },
     Disconnect,

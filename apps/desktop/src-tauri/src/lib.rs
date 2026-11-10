@@ -2,6 +2,7 @@ mod account;
 mod app;
 mod commands;
 mod domain;
+mod i18n;
 mod login;
 mod net;
 mod persistence;

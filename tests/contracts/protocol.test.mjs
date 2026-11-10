@@ -15,7 +15,10 @@ test('canonical v1 snapshot, ACK and both IPC boundaries consume the same fixtur
   assert.equal(protocol.matchesAck(null, fixture.snapshot), false);
   for (const c of fixture.runtimeCommands) assert.deepEqual(wire.decodeRuntimeCommand(c), c);
   for (const e of fixture.transportEvents) assert.deepEqual(wire.decodeTransportEvent(e), e);
-  for (const c of [{op:'pause',value:'true'}, {op:'configure',settings:{revision:-1}}, {op:'connect',address:'x',key:'bad'}, {op:'unknown'}]) {
+  assert.throws(() => protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 2})));
+  assert.equal(protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 1})).page, 1);
+  for (const c of [{op:'pause',value:'true'}, {op:'configure',settings:{revision:-1}}, {op:'connect',address:'x',key:'bad'}, {op:'unknown'},
+    {op:'configure',settings:{revision:1},request:'bad id'}, {op:'show_page',page:2,request:'op-1'}, {op:'show_page',page:1}, {op:'wake'}]) {
     assert.throws(() => wire.decodeRuntimeCommand(c));
   }
   for (const e of [{event:'battery',percent:101}, {event:'ack',ack:null}, {event:'result',id:1,ok:'yes'}]) {

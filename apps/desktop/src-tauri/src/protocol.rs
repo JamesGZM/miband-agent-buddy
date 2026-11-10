@@ -60,6 +60,8 @@ pub struct RuntimeSettings {
     pub revision: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_screen: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wake_hold_ms: Option<u64>,
 }
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -75,8 +77,18 @@ pub enum RuntimeCommand {
     },
     Configure {
         settings: RuntimeSettings,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request: Option<String>,
+    },
+    ShowPage {
+        page: u8,
+        request: String,
+    },
+    Wake {
+        request: String,
     },
     Install,
+    RefreshDevice,
 }
 
 #[cfg(test)]
@@ -111,11 +123,47 @@ mod tests {
                 buddy_theme: Some(BuddyTheme::Chatgpt),
                 revision: 2,
                 keep_screen: Some(false),
+                wake_hold_ms: Some(20000),
             },
         };
         assert_eq!(
             serde_json::to_value(command).unwrap(),
             f["runtimeCommands"][0]
         );
+        let operations = [
+            RuntimeCommand::Configure {
+                settings: RuntimeSettings {
+                    buddy_theme: Some(BuddyTheme::Claude),
+                    revision: 3,
+                    keep_screen: None,
+                    wake_hold_ms: None,
+                },
+                request: Some("op-1".into()),
+            },
+            RuntimeCommand::ShowPage {
+                page: 1,
+                request: "op-2".into(),
+            },
+            RuntimeCommand::Wake {
+                request: "op-3".into(),
+            },
+        ];
+        for (index, command) in operations.into_iter().enumerate() {
+            assert_eq!(
+                serde_json::to_value(command).unwrap(),
+                f["runtimeCommands"][index + 2]
+            );
+        }
+        let hold = RuntimeCommand::Configure {
+            settings: RuntimeSettings {
+                buddy_theme: None,
+                revision: 3,
+                keep_screen: None,
+                wake_hold_ms: Some(300000),
+            },
+            request: None,
+        };
+        assert_eq!(serde_json::to_value(hold).unwrap(), f["runtimeCommands"][8]);
+        assert_eq!(serde_json::to_value(RuntimeCommand::RefreshDevice).unwrap(), f["runtimeCommands"][9]);
     }
 }

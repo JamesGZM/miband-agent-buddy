@@ -18,7 +18,7 @@ function createPageController(deps) {
   return {
     private: {
       pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
-      ringSource: '/common/capsule/ring-idle.png', ringOpacity: .32,
+      ringSource: '/common/capsule/ring-idle-b0.png', ringOpacity: 1,
       loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
       symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
       diskRing: '/common/capsule/disk-000.png', memoryRing: '/common/capsule/memory-000.png', cpuRing: '/common/capsule/cpu-000.png',
@@ -42,12 +42,13 @@ function createPageController(deps) {
           try { msg=protocol.acceptMessage(event.data,lastMessage); } catch(error) { self.errorText='Invalid message'; return; }
           if(!msg)return;
           settingsController.apply(msg);
+          if(msg.page!=null&&msg.page!==self.pageIndex){self.pageIndex=msg.page;snapMetrics=true;metricsStamp='';}
           if(visible&&msg.wakeId)keepController.hold(msg.wakeId,msg.wakeHoldMs);
           lastMessage=msg; receivedAt=clock(); self.received+=1;
           if((msg.mode||'idle')!==activeMode){activeMode=msg.mode||'idle';modeAt=receivedAt;}
           self.tick();
           var ack=protocol.makeAck(msg,self.keepResult,self.received);
-          ack.appVersion='0.5.1';ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
+          ack.appVersion='0.5.3';ack.capabilities={maxWakeHoldMs:1800000,themes:['chatgpt','claude','deepseek'],page:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
           ack.character=buddyTheme==='claude'?'claude':'codex';ack.mode=activeMode;ack.gestures=self.gestureCount;ack.exitReady=true;
           if(msg.command==='exit')exitTimer=schedule(function(){self.exitApp();},500);
           channel.send({data:ack,success:function(){if(!alive)return;self.errorText='';if(msg.command==='exit')self.exitApp();},fail:function(data,code){if(!alive)return;self.errorText='ACK error '+code;if(msg.command==='exit')self.exitApp();}});

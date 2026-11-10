@@ -1,4 +1,6 @@
 // Small ES5-compatible protocol shared with the host-side tests.
+var MAX_WAKE_HOLD_MS = 1800000;
+var THEMES = ['chatgpt', 'claude', 'deepseek'];
 function validMetric(m) {
   return m == null || (typeof m === 'object' && typeof m.usedBytes === 'number' && isFinite(m.usedBytes) && m.usedBytes >= 0 && typeof m.totalBytes === 'number' && isFinite(m.totalBytes) && m.totalBytes > 0 && m.usedBytes <= m.totalBytes && typeof m.percent === 'number' && isFinite(m.percent) && m.percent >= 0 && m.percent <= 100 && Math.abs(m.percent-m.usedBytes/m.totalBytes*100)<0.1);
 }
@@ -12,9 +14,10 @@ function decodeMessage(raw) {
       typeof msg.value !== 'number' || !isFinite(msg.value) || Math.abs(msg.value) > 999999 ||
       typeof msg.cpu !== 'number' || !isFinite(msg.cpu) || msg.cpu < -1 || msg.cpu > 100 || !validMetric(msg.memory) || !validMetric(msg.disk) ||
       (msg.character !== undefined && msg.character !== null && ['codex','claude'].indexOf(msg.character) < 0) ||
-      (msg.buddyTheme != null && (['chatgpt','claude'].indexOf(msg.buddyTheme)<0 || typeof msg.settingsRevision!=='number' || !isFinite(msg.settingsRevision) || msg.settingsRevision<0 || msg.settingsRevision>2147483647 || msg.settingsRevision%1!==0 || typeof msg.keepScreen!=='boolean')) ||
-      ((msg.wakeId!=null||msg.wakeHoldMs!=null)&&(typeof msg.wakeId!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(msg.wakeId)||(typeof msg.wakeHoldMs!=='number'||msg.wakeHoldMs%1!==0)||msg.wakeHoldMs<1000||msg.wakeHoldMs>30000)) ||
+      (msg.buddyTheme != null && (THEMES.indexOf(msg.buddyTheme)<0 || typeof msg.settingsRevision!=='number' || !isFinite(msg.settingsRevision) || msg.settingsRevision<0 || msg.settingsRevision>2147483647 || msg.settingsRevision%1!==0 || typeof msg.keepScreen!=='boolean')) ||
+      ((msg.wakeId!=null||msg.wakeHoldMs!=null)&&(typeof msg.wakeId!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(msg.wakeId)||(typeof msg.wakeHoldMs!=='number'||msg.wakeHoldMs%1!==0)||msg.wakeHoldMs<1000||msg.wakeHoldMs>MAX_WAKE_HOLD_MS)) ||
       (msg.command != null && msg.command !== 'exit') ||
+      (msg.page != null && msg.page !== 0 && msg.page !== 1) ||
       (msg.mode !== undefined && msg.mode !== null && ['idle','thinking','working','attention','complete','sleep','offline','error'].indexOf(msg.mode) < 0)) {
     throw new Error('Invalid snapshot');
   }
@@ -32,7 +35,8 @@ function makeAck(msg, keepScreen, received) {
     keepScreen: keepScreen, received: received };
 }
 
-module.exports = { decodeMessage: decodeMessage, acceptMessage: acceptMessage, makeAck: makeAck };
+module.exports = { decodeMessage: decodeMessage, acceptMessage: acceptMessage, makeAck: makeAck,
+  MAX_WAKE_HOLD_MS: MAX_WAKE_HOLD_MS, THEMES: THEMES };
 
 function matchesAck(ack, snapshot) {
   return !!ack && ack.v === 1 && ack.type === 'ack' &&

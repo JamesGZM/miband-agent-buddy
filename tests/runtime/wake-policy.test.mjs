@@ -44,6 +44,13 @@ test('interleaved same-timestamp retransmission cannot reopen a completed task',
  assert.equal(h.agent.status().state,'complete');assert.equal(h.agent.status().eventCount,2);assert.equal(h.policy.take(true).reason,'complete');
 });
 
+test('user operations bypass the event cooldown and are not displaced by later Codex events',()=>{
+ const h=harness();h.event('UserPromptSubmit');assert.equal(h.policy.take(true).reason,'start');
+ h.advance(1);h.policy.requestUser('theme','op-1');h.event('PermissionRequest');h.policy.requestConnection();
+ const wake=h.policy.take(true);assert.deepEqual([wake.reason,wake.kind,wake.operation],['user','theme','op-1']);
+ h.advance(1);h.event('Stop');assert.equal(h.policy.take(true),null);
+ h.policy.requestUser('wake','op-2');assert.equal(h.policy.take(false),null);assert.equal(h.policy.take(true),null);
+});
 test('explicit connection/install wakes are bounded and do not override pending task attention',()=>{
  const h=harness();h.policy.requestConnection();assert.equal(h.policy.take(true).reason,'connection');assert.equal(h.policy.take(true),null);
  h.advance(10001);h.event('PermissionRequest');h.policy.requestConnection('installed');assert.equal(h.policy.take(true).reason,'attention');

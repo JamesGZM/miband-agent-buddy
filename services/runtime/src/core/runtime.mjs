@@ -1,13 +1,17 @@
 import { createWakePolicy } from './wake-policy.mjs';
 import { createCodexState } from './codex-state.mjs';
-import { acceptAck, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
+import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
 import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
 
 export const DEFAULT_TIMINGS = Object.freeze({
   sample: 2000, ack: 8000, probe: 30000, connect: 55000,
   wake: 15000, launch: 1000, failedSend: 10000, install: 310000,
-  cooldown: 10000, ttl: 60000,
+  cooldown: 10000, ttl: 60000, operation: 25000, device: 300000,
 });
+const LEGACY_WAKE_HOLD_MS = 30000;
+const MAX_WAKE_HOLD_MS = 1800000;
+const LINK_READY = ["connected", "waiting", "standby"];
+const OPERATION_ACTIVE = ["waking", "applying"];
 
 /**
  * One selected band and one in-flight snapshot. All platform effects are injected.
@@ -25,6 +29,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       if (desired && !paused && state.connection !== "installing") wakePolicy.observe(event, previous);
     }});
   let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
+  let operation = null, operationDeadline = null;
   let transport = null,
     credential = null,
     desired = false,
@@ -33,12 +38,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     deadline = null,
     installDeadline = null;
   let retryAt = 0, launchOnConnect = false;
+  let capabilities = null, deviceAt = 0;
   let seq = 0,
     session = makeId(),
     pending = null,
     paused = false,
     metrics = null,
-    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false };
+    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false, wakeHoldMs: 20000 };
   let state = {
     connection: "disconnected",
     ack: null,
@@ -54,7 +60,52 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       agent: agent.status(),
       paused,
       settings,
+      operation,
     });
+  function operationActive() {
+    return OPERATION_ACTIVE.includes(operation?.status);
+  }
+  function settleOperation(status, code = null) {
+    if (!operationActive()) return;
+    cancel(operationDeadline); operationDeadline = null;
+    operation = {...operation, status, code, settledAt: now()};
+  }
+  function ownsWake(flight) {
+    return operationActive() && !!flight && flight.operation === operation.id;
+  }
+  function beginOperation(request, kind, target) {
+    settleOperation("cancelled", "superseded");
+    operation = {id: request, kind, status: "waking", code: null, at: now(), target};
+    if (!transport || !desired || !LINK_READY.includes(state.connection)) settleOperation("failed", "not_connected");
+    else if (paused) settleOperation("failed", "paused");
+    else {
+      wakePolicy.requestUser(kind, request);
+      operationDeadline = schedule(() => { settleOperation("failed", "timeout"); publish(); }, timings.operation);
+      // The user's launch supersedes an event wake; snapshots still carry the agent mode.
+      if (wakeFlight) clearWake();
+      launchPendingWake();
+    }
+    publish();
+  }
+  function launchPendingWake() {
+    if (!transport || !desired || paused || wakeFlight || pingDeadline || !LINK_READY.includes(state.connection)) return;
+    const wake = wakePolicy.take(true);
+    if (wake) launchWake(wake);
+  }
+  // Older Buddy builds reject leases above 30 s; newer ones advertise their own limit.
+  function wakeHold() {
+    const max = capabilities?.maxWakeHoldMs;
+    const limit = Number.isInteger(max) && max >= 1000 ? Math.min(max, MAX_WAKE_HOLD_MS) : LEGACY_WAKE_HOLD_MS;
+    return Math.min(settings.wakeHoldMs ?? 20000, limit);
+  }
+  function supportsTheme(theme) {
+    return theme !== "deepseek" || (Array.isArray(capabilities?.themes) && capabilities.themes.includes(theme));
+  }
+  function requestDevice() {
+    if (!transport || !LINK_READY.includes(state.connection)) return;
+    deviceAt = now();
+    write({op: "device_status", id: "device-status"});
+  }
   function clearWake() {
     cancel(wakeDeadline); wakeDeadline = null; wakeFlight = null;
   }
@@ -65,6 +116,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     write({op: "launch_buddy", id: wakeFlight.id});
     wakeDeadline = schedule(() => {
       state.wake = { ...state.wake, status: "unconfirmed" };
+      if (ownsWake(wakeFlight)) settleOperation("failed", "no_response");
       clearWake(); clearPending();
       state.connection = "standby";
       retryAt = now() + timings.probe;
@@ -79,6 +131,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
   async function stop() {
     desired = false;
     launchOnConnect = false;
+    settleOperation("cancelled", "disconnected");
     wakePolicy.clear();
     clearWake();
     cancel(pingDeadline); pingDeadline = null;
@@ -146,25 +199,50 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         launchOnConnect = false;
         state.connection = "waiting";
         state.error = null;
+        requestDevice();
         publish();
       }
       if (event.event === "battery") {
         state.battery = event.percent;
+        if (state.device && typeof event.charging === "boolean") state.device = {...state.device, battery: event.percent, charging: event.charging};
         publish();
       }
+      if (event.event === "device") {
+        const {battery, charging, firmware, model, storageTotal, storageFree} = event;
+        state.device = {battery, charging, firmware, model, storageTotal, storageFree, at: now()};
+        if (Number.isInteger(battery)) state.battery = battery;
+        publish();
+        return;
+      }
+      if (event.event === "result" && event.id === "device-status") return;
       if (event.event === "progress") {
         state.progress = Math.max(0, Math.min(100, event.progress * 100));
         publish();
       }
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
         const ack = event.ack;
+        capabilities = ack.capabilities && typeof ack.capabilities === "object" ? ack.capabilities : null;
+        if (operationActive()) {
+          const target = operation.target;
+          if (operation.kind === "theme") {
+            if (confirmedSettings(ack, target)) settleOperation("done");
+            else if (ack.settingsRevision == null) settleOperation("failed", "unsupported");
+          }
+          if (operation.kind === "page" && pending.page === target.page) {
+            if (ack.page === target.page) settleOperation("done");
+            else settleOperation("failed", "unsupported");
+          }
+        }
         if (wakeFlight?.queued && pending.wakeId === wakeFlight.id) {
           const held = ack.wakeDisplay?.id === wakeFlight.id && ack.wakeDisplay?.remainingMs > 0;
+          const owned = ownsWake(wakeFlight) && operation.kind === "wake";
           if (held && ack.keepScreen === "on") {
             state.wake = {...state.wake, status: "confirmed"};
+            if (owned) settleOperation("done");
             clearWake();
           } else if (!held || ack.keepScreen === "error") {
             state.wake = {...state.wake, status: "display_unconfirmed"};
+            if (owned) settleOperation("failed", "display_unconfirmed");
             clearWake();
           }
         }
@@ -188,11 +266,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       if (event.event === "result" && event.id === wakeFlight?.id) {
         if (event.ok) {
           wakeFlight.queued = true;
+          if (ownsWake(wakeFlight)) operation = {...operation, status: "applying"};
           state.wake = {...state.wake, status: "awaiting_ack"};
           state.connection = "waiting";
           retryAt = now() + timings.launch;
         } else {
           state.wake = {...state.wake, status: "failed", code: event.code};
+          if (ownsWake(wakeFlight)) settleOperation("failed", event.code || "launch_failed");
           if (event.code === "app_missing") {
             state.installed = false;
             state.error = "手環尚未安裝 Buddy，請前往手環頁安裝";
@@ -214,6 +294,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         };
         state.ack = null;
         state.lastAckAt = null;
+        capabilities = null;
         state.error = event.ok ? null : "Buddy 安裝失敗，請保持手環連線後重試";
         publish();
       } else if (event.event === "result" && !event.ok && event.id === pending?.seq) {
@@ -248,6 +329,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       cancel(watchdog);
       if (child !== transport) return;
       transport = null;
+      settleOperation("failed", "link_lost");
       cancel(installDeadline);
       clearWake();
       cancel(pingDeadline); pingDeadline = null;
@@ -277,12 +359,32 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         break;
       case "pause":
         paused = !!c.value;
+        if (paused) settleOperation("cancelled", "paused");
         wakePolicy.clear(); clearWake(); clearPending();
         publish();
         break;
       case "configure":
+        if (!supportsTheme(c.settings.buddyTheme)) {
+          if (c.request) {
+            settleOperation("cancelled", "superseded");
+            operation = {id: c.request, kind: "theme", status: "failed", code: "unsupported", at: now(), settledAt: now(),
+              target: {buddyTheme: c.settings.buddyTheme, revision: c.settings.revision}};
+          }
+          publish();
+          break;
+        }
         settings = { ...settings, ...c.settings };
-        publish();
+        if (c.request) beginOperation(c.request, "theme", {buddyTheme: settings.buddyTheme, revision: settings.revision});
+        else publish();
+        break;
+      case "show_page":
+        beginOperation(c.request, "page", {page: c.page});
+        break;
+      case "wake":
+        beginOperation(c.request, "wake", {});
+        break;
+      case "refresh_device":
+        requestDevice();
         break;
       case "install":
         if (!transport || !["connected", "waiting", "standby"].includes(state.connection)) {
@@ -291,6 +393,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           break;
         }
         clearPending();
+        settleOperation("cancelled", "install");
         wakePolicy.clear(); clearWake();
         cancel(pingDeadline); pingDeadline = null;
         state.connection = "installing";
@@ -316,12 +419,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     try { nextMetrics = await sample(); } catch { nextMetrics = null; }
     if (closing) return;
     metrics = nextMetrics;
-    const linkReady = transport && ["connected", "waiting", "standby"].includes(state.connection);
     if (!desired || paused || state.connection === "installing") wakePolicy.clear();
-    if (linkReady && desired && !paused && !wakeFlight && !pingDeadline) {
-      const wake = wakePolicy.take(true);
-      if (wake) launchWake(wake);
-    }
+    launchPendingWake();
+    if (transport && !paused && LINK_READY.includes(state.connection) && now() - deviceAt >= timings.device) requestDevice();
     if (
       transport &&
       !paused &&
@@ -351,7 +451,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         settingsRevision: settings.revision,
         keepScreen: false,
       };
-      if (wakeFlight) { pending.wakeId = wakeFlight.id; pending.wakeHoldMs = 20000; }
+      if (wakeFlight) { pending.wakeId = wakeFlight.id; pending.wakeHoldMs = wakeHold(); }
+      if (operationActive() && operation.kind === "page") pending.page = operation.target.page;
       const payload = {...pending};
       if (wakeFlight) pending.wakeId = wakeFlight.id;
       write({ op: "snapshot", id: seq, payload });
@@ -359,7 +460,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         clearPending();
         state.connection = "standby";
         state.error = null;
-        retryAt = now() + timings.probe;
+        // A user waiting on the band must not sit behind the idle probe interval.
+        retryAt = now() + (operationActive() ? timings.launch : timings.probe);
         publish();
 
       }, timings.ack);

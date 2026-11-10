@@ -22,7 +22,15 @@ test('duplicate wake and ordinary time cannot extend a lease; exit cancels it',(
  h.controller.hide();h.calls.at(-1).success();h.advance(60000);assert.equal(h.calls.length,2);assert.equal(h.controller.snapshot().state,'off');
 });
 test('new event replaces the lease, while invalid durations never acquire screen lock',()=>{
- const h=harness();assert.equal(h.controller.hold('bad',60000),false);assert.equal(h.calls.length,0);
+ const h=harness();assert.equal(h.controller.hold('bad',1800001),false);assert.equal(h.calls.length,0);
  h.controller.hold('event-1',20000);h.calls[0].success();h.advance(10000);h.controller.hold('event-2',20000);h.calls[1].success();
  h.advance(19999);assert.equal(h.calls.length,2);h.advance(1);assert.equal(h.calls.length,3);assert.equal(h.calls[2].keepScreenOn,false);
+});
+test('half-hour lease keeps renewing every 30 seconds and still expires on the band',()=>{
+ const h=harness();assert.equal(h.controller.hold('long',1800000),true);
+ for(let elapsed=0;elapsed<1800000-30000;elapsed+=30000){h.calls.at(-1).success();h.advance(30000);}
+ assert.equal(h.calls.every(c=>c.keepScreenOn),true);assert.equal(h.calls.length,60);
+ h.calls.at(-1).success();h.advance(30000);
+ assert.equal(h.calls.at(-1).keepScreenOn,false);assert.equal(h.controller.display().remainingMs,0);
+ h.advance(120000);assert.equal(h.calls.length,61);
 });

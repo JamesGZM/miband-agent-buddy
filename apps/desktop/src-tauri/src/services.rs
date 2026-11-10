@@ -1,12 +1,14 @@
 //! Application operations shared by window commands and tray actions.
 use crate::{
-    domain::{Action, BuddyTheme, Credentials, Device, supported},
+    domain::{Action, BuddyTheme, Credentials, Device, WAKE_HOLD_SECONDS, supported},
     persistence,
     protocol::{Connection, RuntimeCommand, RuntimeSettings, RuntimeState},
     state::Session,
     xiaomi,
 };
 use serde::Serialize;
+use serde_json::{Value, json};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
     let d = s
@@ -23,6 +25,7 @@ pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
     save(s)?;
     let theme = match s.prefs.themes.get(&d.addr).map(String::as_str) {
         Some("claude") => BuddyTheme::Claude,
+        Some("deepseek") => BuddyTheme::Deepseek,
         _ => BuddyTheme::Chatgpt,
     };
     s.worker.send(RuntimeCommand::Connect {
@@ -32,8 +35,28 @@ pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
             buddy_theme: Some(theme),
             revision: s.prefs.revision,
             keep_screen: Some(s.prefs.keep_screen),
+            wake_hold_ms: Some(u64::from(s.prefs.wake_hold_seconds) * 1000),
         },
     })
+}
+/// Themes beyond the original pair are rejected by older Buddy builds, so they need an advertised capability.
+fn theme_supported(s: &Session, theme: BuddyTheme) -> Result<(), String> {
+    if !matches!(theme, BuddyTheme::Deepseek) {
+        return Ok(());
+    }
+    let advertised = s
+        .runtime
+        .ack
+        .as_ref()
+        .and_then(|a| a.fields.get("capabilities"))
+        .and_then(|c| c.get("themes"))
+        .and_then(Value::as_array)
+        .is_some_and(|themes| themes.iter().any(|t| t == theme.as_str()));
+    if advertised {
+        Ok(())
+    } else {
+        Err("需要更新 Buddy 才能使用 DeepSeek 主題".into())
+    }
 }
 pub fn disconnect(s: &mut Session) -> Result<(), String> {
     s.prefs.selected = None;
@@ -45,6 +68,59 @@ pub fn pause(s: &mut Session, value: bool) -> Result<(), String> {
 }
 pub fn save(s: &Session) -> Result<(), String> {
     persistence::save_preferences(&s.config, &s.prefs)
+}
+
+static OPERATIONS: AtomicU64 = AtomicU64::new(0);
+fn operation_active(s: &Session) -> bool {
+    s.runtime
+        .fields
+        .get("operation")
+        .and_then(|o| o.get("status"))
+        .and_then(Value::as_str)
+        .is_some_and(|status| matches!(status, "waking" | "applying"))
+}
+fn band_operation_allowed(s: &Session) -> Result<(), String> {
+    if operation_active(s) {
+        return Err("請等待目前操作完成".into());
+    }
+    match s.runtime.connection {
+        Connection::Connected | Connection::Waiting | Connection::Standby => Ok(()),
+        Connection::Installing => Err("正在安裝 Buddy，請稍候".into()),
+        _ => Err("請先連線手環".into()),
+    }
+}
+/// The projection is updated before the worker replies so polling never sees a stale idle state.
+fn start_operation(
+    s: &mut Session,
+    kind: &str,
+    command: impl FnOnce(String) -> RuntimeCommand,
+) -> Result<(), String> {
+    let request = format!("op-{}", OPERATIONS.fetch_add(1, Ordering::Relaxed) + 1);
+    s.worker.send(command(request.clone()))?;
+    s.runtime.fields.insert(
+        "operation".into(),
+        json!({"id": request, "kind": kind, "status": "waking", "requestedAt": now_ms()}),
+    );
+    Ok(())
+}
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+/// Keeps a just-sent request visible until the worker reports it, bounded for a lost command.
+fn carry_requested_operation(previous: &RuntimeState, next: &mut RuntimeState) {
+    let Some(local) = previous.fields.get("operation") else {
+        return;
+    };
+    let Some(requested_at) = local.get("requestedAt").and_then(Value::as_u64) else {
+        return;
+    };
+    let reported = next.fields.get("operation").and_then(|o| o.get("id"));
+    if reported != local.get("id") && now_ms().saturating_sub(requested_at) < 5000 {
+        next.fields.insert("operation".into(), local.clone());
+    }
 }
 
 pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
@@ -65,28 +141,43 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
             save(s)
         }
         Action::Theme(theme) => {
-            if s.runtime.connection != Connection::Connected {
-                return Err("請先連線並在手環打開 Buddy".into());
-            }
+            band_operation_allowed(s)?;
             if s.runtime
                 .ack
                 .as_ref()
-                .and_then(|a| a.settings_revision)
-                .is_none()
+                .is_some_and(|a| a.settings_revision.is_none())
             {
                 return Err("請先更新 Buddy，舊版不支援主題設定".into());
             }
+            theme_supported(s, theme)?;
             s.prefs.revision += 1;
             save(s)?;
-            s.worker.send(RuntimeCommand::Configure {
+            let revision = s.prefs.revision;
+            start_operation(s, "theme", |request| RuntimeCommand::Configure {
                 settings: RuntimeSettings {
                     buddy_theme: Some(theme),
-                    revision: s.prefs.revision,
+                    revision,
                     keep_screen: None,
+                    wake_hold_ms: None,
                 },
+                request: Some(request),
             })
         }
+        Action::Page(page) => {
+            if page > 1 {
+                return Err("不支援的手環頁面".into());
+            }
+            band_operation_allowed(s)?;
+            start_operation(s, "page", |request| RuntimeCommand::ShowPage { page, request })
+        }
+        Action::Wake => {
+            band_operation_allowed(s)?;
+            start_operation(s, "wake", |request| RuntimeCommand::Wake { request })
+        }
         Action::Preferences(value) => {
+            if let Some(language) = &value.language {
+                s.prefs.language = language.as_str().into();
+            }
             let changed = s.prefs.update_local(
                 value.app_theme.as_str(),
                 value.appearance.as_str(),
@@ -100,13 +191,34 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                         buddy_theme: None,
                         revision: s.prefs.revision,
                         keep_screen: Some(false),
+                        wake_hold_ms: None,
                     },
+                    request: None,
                 })
             } else {
                 Ok(())
             }
         }
         Action::Autostart(_) => Err("登入啟動設定需要桌面平台".into()),
+        Action::WakeHold(seconds) => {
+            if !WAKE_HOLD_SECONDS.contains(&seconds) {
+                return Err("亮屏時長需為 5 到 1800 秒的整數".into());
+            }
+            s.prefs.wake_hold_seconds = seconds;
+            save(s)?;
+            // Saved preferences apply on the next connection when no worker is reachable.
+            let _ = s.worker.send(RuntimeCommand::Configure {
+                settings: RuntimeSettings {
+                    buddy_theme: None,
+                    revision: s.prefs.revision,
+                    keep_screen: None,
+                    wake_hold_ms: Some(u64::from(seconds) * 1000),
+                },
+                request: None,
+            });
+            Ok(())
+        }
+        Action::RefreshDevice => s.worker.send(RuntimeCommand::RefreshDevice),
     }
 }
 pub fn finish_login(
@@ -126,7 +238,8 @@ pub fn finish_login(
     s.prefs.themes.clear();
     save(s)
 }
-pub fn accept_runtime(s: &mut Session, state: RuntimeState) {
+pub fn accept_runtime(s: &mut Session, mut state: RuntimeState) {
+    carry_requested_operation(&s.runtime, &mut state);
     if let (Some(index), Some(ack)) = (s.prefs.selected, state.ack.as_ref()) {
         if ack.settings_revision == Some(s.prefs.revision) && ack.settings_applied == Some(true) {
             if let (Some(theme), Some(device)) = (
@@ -159,6 +272,8 @@ pub struct PreferencesView<'a> {
     keep_screen: bool,
     background: bool,
     selected: Option<usize>,
+    wake_hold_seconds: u32,
+    language: &'a str,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -204,6 +319,8 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
             keep_screen: s.prefs.keep_screen,
             background: s.prefs.background,
             selected: s.prefs.selected,
+            wake_hold_seconds: s.prefs.wake_hold_seconds,
+            language: &s.prefs.language,
         },
         autostart,
         runtime: &s.runtime,
@@ -275,5 +392,59 @@ mod tests {
         accept_runtime(&mut s, state(2, true));
         assert_eq!(s.prefs.themes["11:22:33:44:55:66"], "claude");
         std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn band_operations_are_allowed_while_sleeping_but_never_overlap() {
+        let mut s = session();
+        s.runtime.connection = Connection::Disconnected;
+        assert_eq!(perform(&mut s, Action::Wake).unwrap_err(), "請先連線手環");
+        for connection in [Connection::Standby, Connection::Waiting, Connection::Connected] {
+            s.runtime.connection = connection;
+            // The fixture has no worker, so reaching the send proves the state gate passed.
+            assert_eq!(perform(&mut s, Action::Page(1)).unwrap_err(), "背景程序未啟動，請重新開啟 App");
+        }
+        assert_eq!(perform(&mut s, Action::Page(2)).unwrap_err(), "不支援的手環頁面");
+        s.runtime.fields.insert("operation".into(), json!({"id":"op-9","status":"applying"}));
+        let revision = s.prefs.revision;
+        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Claude)).unwrap_err(), "請等待目前操作完成");
+        assert_eq!(s.prefs.revision, revision);
+    }
+    #[test]
+    fn requested_operation_survives_an_older_worker_frame() {
+        let mut s = session();
+        s.runtime.fields.insert("operation".into(), json!({"id":"op-1","status":"waking","requestedAt":now_ms()}));
+        accept_runtime(&mut s, RuntimeState::default());
+        assert_eq!(s.runtime.fields["operation"]["id"], "op-1");
+        let mut reported = RuntimeState::default();
+        reported.fields.insert("operation".into(), json!({"id":"op-1","status":"done"}));
+        accept_runtime(&mut s, reported);
+        assert_eq!(s.runtime.fields["operation"]["status"], "done");
+    }
+    #[test]
+    fn wake_hold_is_validated_and_persisted() {
+        let mut s = session();
+        for bad in [0, 4, 1801] {
+            assert!(perform(&mut s, Action::WakeHold(bad)).is_err());
+        }
+        assert_eq!(s.prefs.wake_hold_seconds, 20);
+        perform(&mut s, Action::WakeHold(300)).unwrap();
+        let saved: Preferences = serde_json::from_str(&std::fs::read_to_string(&s.config).unwrap()).unwrap();
+        assert_eq!(saved.wake_hold_seconds, 300);
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn deepseek_requires_an_advertised_band_capability() {
+        let mut s = session();
+        s.runtime.connection = Connection::Connected;
+        let ack = |fields: serde_json::Value| BandAck {
+            settings_revision: Some(2),
+            fields: serde_json::from_value(fields).unwrap(),
+            ..Default::default()
+        };
+        s.runtime.ack = Some(ack(json!({})));
+        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(), "需要更新 Buddy 才能使用 DeepSeek 主題");
+        assert_eq!(s.prefs.revision, 2);
+        s.runtime.ack = Some(ack(json!({"capabilities":{"themes":["chatgpt","claude","deepseek"]}})));
+        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(), "背景程序未啟動，請重新開啟 App");
     }
 }

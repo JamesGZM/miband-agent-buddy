@@ -7,7 +7,8 @@ prepare()
 root=Path(__file__).resolve().parents[1]
 assets=root/'apps/desktop/ui/assets';assets.mkdir(exist_ok=True)
 shutil.copytree(root/'apps/band/src/common/capsule',assets/'capsule',dirs_exist_ok=True)
-for theme,prefix in [('chatgpt',''),('claude','claude-')]:
+Image.open(root/'apps/band/src/common/icon.png').convert('RGBA').resize((64,64),Image.Resampling.LANCZOS).save(assets/'app-icon.png')
+for theme,prefix in [('chatgpt',''),('claude','claude-'),('deepseek','deepseek-')]:
  im=Image.new('RGBA',(490,192),'black')
  for name in [prefix+'ring-idle.png',prefix+'symbols.png']:
   im.alpha_composite(Image.open(assets/'capsule'/name).convert('RGBA').transpose(Image.Transpose.ROTATE_90))

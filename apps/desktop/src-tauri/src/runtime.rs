@@ -54,7 +54,7 @@ fn health(state: &RuntimeState) -> Value {
         "settingsApplied":ack.and_then(|a| a.settings_applied),"keepScreen":field("keepScreen"),
         "keepDiagnostics":field("keepDiagnostics"),"mode":field("mode")})
 }
-pub fn start(shared: Shared) {
+pub fn start(shared: Shared, app: tauri::AppHandle) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
@@ -77,6 +77,7 @@ pub fn start(shared: Shared) {
                 };
             }
             let reader_state = shared.clone();
+            let tray_app = app.clone();
             std::thread::spawn(move || {
                 let mut last_health =
                     std::time::Instant::now() - std::time::Duration::from_secs(10);
@@ -99,6 +100,8 @@ pub fn start(shared: Shared) {
                             last_health = std::time::Instant::now();
                         }
                         services::accept_runtime(&mut s, state);
+                        drop(s);
+                        crate::app::refresh_tray(&tray_app);
                     }
                 }
                 if let Ok(mut s) = reader_state.lock() {
@@ -109,6 +112,7 @@ pub fn start(shared: Shared) {
                         ..Default::default()
                     };
                 }
+                crate::app::refresh_tray(&tray_app);
             });
             if let Ok(mut s) = shared.lock() {
                 if let Some(index) = s.prefs.selected {

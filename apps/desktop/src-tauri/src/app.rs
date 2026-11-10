@@ -1,12 +1,123 @@
 use crate::{
-    commands, persistence,
-    protocol::RuntimeState,
+    commands, i18n, persistence,
+    protocol::{Connection, RuntimeState},
     runtime::{self, RuntimeClient},
     services,
     state::{Session, Shared},
 };
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{
+    image::Image,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager,
+};
+
+pub struct TrayItems {
+    status: MenuItem<tauri::Wry>,
+    open: MenuItem<tauri::Wry>,
+    wake: MenuItem<tauri::Wry>,
+    pause: MenuItem<tauri::Wry>,
+    disconnect: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+fn band_ready(connection: Connection) -> bool {
+    matches!(
+        connection,
+        Connection::Connected | Connection::Waiting | Connection::Standby
+    )
+}
+
+fn battery_percent(runtime: &RuntimeState) -> Option<u32> {
+    runtime
+        .fields
+        .get("battery")
+        .and_then(|v| v.as_f64())
+        .or_else(|| {
+            runtime
+                .fields
+                .get("device")
+                .and_then(|v| v.get("battery"))
+                .and_then(|v| v.as_f64())
+        })
+        .filter(|n| n.is_finite() && *n >= 0.0)
+        .map(|n| n.round() as u32)
+}
+
+fn status_text(s: &Session) -> String {
+    let labels = i18n::labels(i18n::current(&s.prefs.language));
+    let connection = match s.runtime.connection {
+        Connection::Connected => labels.connected,
+        Connection::Standby => labels.standby,
+        Connection::Installing => labels.installing,
+        Connection::Connecting | Connection::Waiting | Connection::Retrying => labels.connecting,
+        _ => labels.disconnected,
+    };
+    let mut parts = Vec::new();
+    if s.runtime.paused {
+        parts.push(labels.paused.to_string());
+    }
+    parts.push(connection.to_string());
+    let device = s
+        .prefs
+        .selected
+        .and_then(|index| s.credentials.as_ref().and_then(|c| c.devices.get(index)));
+    match device {
+        Some(device) => parts.push(device.name.clone()),
+        None => {
+            if !matches!(
+                s.runtime.connection,
+                Connection::Connected
+                    | Connection::Waiting
+                    | Connection::Standby
+                    | Connection::Installing
+                    | Connection::Connecting
+                    | Connection::Retrying
+            ) {
+                parts.push(labels.no_device.to_string());
+            }
+        }
+    }
+    if band_ready(s.runtime.connection) {
+        if let Some(battery) = battery_percent(&s.runtime) {
+            parts.push(format!("{battery}%"));
+        }
+    }
+    parts.join(" · ")
+}
+
+/// Relabels the tray after language or runtime state changes.
+pub fn refresh_tray(app: &AppHandle) {
+    let Some(items) = app.try_state::<TrayItems>() else {
+        return;
+    };
+    let shared = app.state::<Shared>();
+    let Ok(s) = shared.lock() else {
+        return;
+    };
+    let labels = i18n::labels(i18n::current(&s.prefs.language));
+    let ready = band_ready(s.runtime.connection);
+    let _ = items.status.set_text(status_text(&s));
+    let _ = items.open.set_text(labels.open);
+    let _ = items.wake.set_text(labels.wake);
+    let _ = items.wake.set_enabled(ready);
+    let _ = items
+        .pause
+        .set_text(if s.runtime.paused {
+            labels.resume
+        } else {
+            labels.pause
+        });
+    let _ = items.disconnect.set_text(labels.disconnect);
+    let _ = items.disconnect.set_enabled(ready);
+    let _ = items.quit.set_text(labels.quit);
+}
+
+/// Relabels the tray after the language preference changes.
+pub fn apply_language(app: &AppHandle, _choice: &str) {
+    refresh_tray(app);
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -35,43 +146,82 @@ pub fn run() {
                 config,
             }));
             app.manage(shared.clone());
-            runtime::start(shared);
-            use tauri::{
-                menu::{Menu, MenuItem},
-                tray::TrayIconBuilder,
-            };
-            let open =
-                MenuItem::with_id(app, "open", "開啟 MiBand Agent Buddy", true, None::<&str>)?;
-            let pause = MenuItem::with_id(app, "pause", "暫停／恢復同步", true, None::<&str>)?;
-            let disconnect = MenuItem::with_id(app, "disconnect", "中斷連線", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &pause, &disconnect, &quit])?;
+            let language = shared.lock().unwrap().prefs.language.clone();
+            runtime::start(shared, app.handle().clone());
+            let labels = i18n::labels(i18n::current(&language));
+            let status = MenuItem::with_id(app, "status", labels.disconnected, false, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", labels.open, true, None::<&str>)?;
+            let wake = MenuItem::with_id(app, "wake", labels.wake, false, None::<&str>)?;
+            let pause = MenuItem::with_id(app, "pause", labels.pause, true, None::<&str>)?;
+            let disconnect =
+                MenuItem::with_id(app, "disconnect", labels.disconnect, false, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
+            let sep1 = PredefinedMenuItem::separator(app)?;
+            let sep2 = PredefinedMenuItem::separator(app)?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &status,
+                    &sep1,
+                    &open,
+                    &wake,
+                    &pause,
+                    &disconnect,
+                    &sep2,
+                    &quit,
+                ],
+            )?;
+            app.manage(TrayItems {
+                status: status.clone(),
+                open: open.clone(),
+                wake: wake.clone(),
+                pause: pause.clone(),
+                disconnect: disconnect.clone(),
+                quit: quit.clone(),
+            });
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))
+                .expect("tray template icon");
             TrayIconBuilder::new()
-                .title("Buddy")
+                .icon(tray_icon)
+                .icon_as_template(true)
                 .menu(&menu)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
-                    if event.id.as_ref() == "open" {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                    match event.id.as_ref() {
+                        "open" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
                         }
-                        return;
-                    }
-                    if event.id.as_ref() == "quit" {
-                        app.exit(0);
-                        return;
-                    }
-                    let state = app.state::<Shared>();
-                    let mut s = state.lock().unwrap();
-                    if event.id.as_ref() == "disconnect" {
-                        let _ = services::disconnect(&mut s);
-                    }
-                    if event.id.as_ref() == "pause" {
-                        let paused = s.runtime.paused;
-                        let _ = services::pause(&mut s, !paused);
+                        "quit" => app.exit(0),
+                        "wake" => {
+                            let state = app.state::<Shared>();
+                            let mut s = state.lock().unwrap();
+                            let _ = services::perform(&mut s, crate::domain::Action::Wake);
+                            drop(s);
+                            refresh_tray(app);
+                        }
+                        "disconnect" => {
+                            let state = app.state::<Shared>();
+                            let mut s = state.lock().unwrap();
+                            let _ = services::disconnect(&mut s);
+                            drop(s);
+                            refresh_tray(app);
+                        }
+                        "pause" => {
+                            let state = app.state::<Shared>();
+                            let mut s = state.lock().unwrap();
+                            let paused = s.runtime.paused;
+                            let _ = services::pause(&mut s, !paused);
+                            drop(s);
+                            refresh_tray(app);
+                        }
+                        _ => {}
                     }
                 })
                 .build(app)?;
+            refresh_tray(app.handle());
             if std::env::args().any(|a| a == "--background") {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
@@ -115,4 +265,31 @@ pub fn run() {
                 s.worker.shutdown();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{band_ready, battery_percent};
+    use crate::protocol::{Connection, RuntimeState};
+    use serde_json::json;
+
+    #[test]
+    fn band_ready_matches_operation_gate() {
+        assert!(band_ready(Connection::Connected));
+        assert!(band_ready(Connection::Standby));
+        assert!(!band_ready(Connection::Disconnected));
+        assert!(!band_ready(Connection::Installing));
+    }
+
+    #[test]
+    fn battery_reads_top_level_or_device_field() {
+        let mut runtime = RuntimeState::default();
+        assert_eq!(battery_percent(&runtime), None);
+        runtime.fields.insert("battery".into(), json!(76.4));
+        assert_eq!(battery_percent(&runtime), Some(76));
+        runtime.fields.insert("device".into(), json!({"battery": 41}));
+        assert_eq!(battery_percent(&runtime), Some(76));
+        runtime.fields.remove("battery");
+        assert_eq!(battery_percent(&runtime), Some(41));
+    }
 }

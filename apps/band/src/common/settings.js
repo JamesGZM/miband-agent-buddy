@@ -2,7 +2,7 @@
 function createSettings(storage,changed,schedule,cancel){
  schedule=schedule||setTimeout;cancel=cancel||clearTimeout;var timeout=null;
  var current={buddyTheme:'chatgpt',settingsRevision:0,keepScreen:false},generation=0,ready=false,writing=false;
- function valid(v){return v&&['chatgpt','claude'].indexOf(v.buddyTheme)>=0&&typeof v.keepScreen==='boolean'&&typeof v.settingsRevision==='number'&&isFinite(v.settingsRevision)&&v.settingsRevision>=0&&v.settingsRevision%1===0;}
+ function valid(v){return v&&['chatgpt','claude','deepseek'].indexOf(v.buddyTheme)>=0&&typeof v.keepScreen==='boolean'&&typeof v.settingsRevision==='number'&&isFinite(v.settingsRevision)&&v.settingsRevision>=0&&v.settingsRevision%1===0;}
  function load(){var id=generation;storage.get({key:'buddy-settings',success:function(raw){if(id!==generation)return;try{var v=JSON.parse(raw);if(valid(v))current=v;}catch(e){}ready=true;changed(current);},fail:function(){if(id!==generation)return;ready=true;changed(current);}});}
  function apply(msg){
   if(msg.buddyTheme==null)return;

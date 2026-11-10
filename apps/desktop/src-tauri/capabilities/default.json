@@ -1,1 +1,1 @@
-{"identifier":"main-only","description":"Local setup UI only; Xiaomi login has no IPC capability","windows":["main"],"permissions":["core:default"]}
+{"identifier":"main-only","description":"Local setup UI only; Xiaomi login has no IPC capability","windows":["main"],"permissions":["core:default","core:window:allow-start-dragging"]}

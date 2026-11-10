@@ -52,7 +52,8 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   channel.onmessage({ data });
   assert.equal(page.received, 1);
   assert.equal(page.cpuText, '0%');
-  assert.equal(sent[0].data.appVersion, '0.5.1');
+  assert.equal(sent[0].data.appVersion, '0.5.3');
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();
@@ -80,6 +81,14 @@ test('tap switches pages without resetting on new data',()=>{
  channel.onmessage({data:JSON.stringify({v:1,type:'snapshot',session:'test',seq:1,text:'',value:0,cpu:42,memory:{usedBytes:8,totalBytes:16,percent:50},disk:{usedBytes:60,totalBytes:100,percent:60}})});
  assert.equal(page.pageIndex,1);assert.equal(page.memoryText,'50%');assert.equal(page.diskText,'60%');
  setTime(1300);page.togglePage();assert.equal(page.pageIndex,0);
+});
+test('Mac page request switches the band page once and invalid pages are rejected',()=>{
+ const {page,channel,sent}=harness();page.onShow();
+ const base={v:1,type:'snapshot',session:'page',seq:1,text:'',value:0,cpu:42,page:1};
+ channel.onmessage({data:JSON.stringify(base)});assert.equal(page.pageIndex,1);assert.equal(sent.at(-1).data.page,1);
+ channel.onmessage({data:JSON.stringify({...base,seq:2,page:undefined})});assert.equal(page.pageIndex,1);
+ channel.onmessage({data:JSON.stringify({...base,seq:3,page:0})});assert.equal(page.pageIndex,0);
+ channel.onmessage({data:JSON.stringify({...base,seq:4,page:2})});assert.equal(page.pageIndex,0);assert.equal(page.errorText,'Invalid message');
 });
 test('long press exit terminates once, stops timers and releases screen lock',()=>{
  const {page,requests,timers,exits}=harness();page.onShow();page.exitApp();page.exitApp();

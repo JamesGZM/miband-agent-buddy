@@ -13,7 +13,7 @@ pub async fn open_login(
     if !["cn", "sg", "de", "us", "ru", "i2"].contains(&region.as_str()) {
         return Err("服務地區無效".into());
     }
-    {
+    let title = {
         let s = state.lock().map_err(|_| "狀態不可用")?;
         if s.busy {
             return Err("請等待目前操作完成".into());
@@ -21,7 +21,8 @@ pub async fn open_login(
         if s.credentials.is_some() {
             return Err("切換帳號前請先登出目前帳號".into());
         }
-    }
+        crate::i18n::labels(crate::i18n::current(&s.prefs.language)).login_title
+    };
     if let Some(w) = app.get_webview_window("xiaomi-login") {
         let _ = w.set_focus();
         return Ok(());
@@ -35,7 +36,7 @@ pub async fn open_login(
                 .unwrap(),
         ),
     )
-    .title("登入小米帳號 · account.xiaomi.com")
+    .title(title)
     .inner_size(480.0, 720.0)
     .incognito(true)
     .user_agent(UA)

@@ -69,7 +69,11 @@ pub fn action(
         .map_err(|_| "無法更改登入啟動設定".into()),
         action => {
             let logout = matches!(action, Action::Logout);
+            let relabel = matches!(action, Action::Preferences(_));
             services::perform(&mut s, action)?;
+            if relabel {
+                crate::app::apply_language(&app, &s.prefs.language);
+            }
             if logout {
                 if let Some(w) = app.get_webview_window("xiaomi-login") {
                     let _ = w.destroy();

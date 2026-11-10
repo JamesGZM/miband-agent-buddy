@@ -1,5 +1,5 @@
 use crate::{
-    application::{battery, install, sync_app},
+    application::{battery, device_status, install, sync_app},
     connection::connect,
     error::classify_error,
     protocol::{Command, Credentials, Operation},
@@ -39,6 +39,7 @@ pub async fn run(mut rx: tokio::sync::mpsc::Receiver<Value>) -> Result<()> {
                         Ok(())
                     }.await,
                     Operation::Ping=>battery(addr.clone()).await,
+                    Operation::DeviceStatus=>device_status(addr.clone()).await,
                     Operation::LaunchBuddy=>async {
                         tokio::time::timeout(Duration::from_secs(6),sync_app(addr.clone())).await??;
                         ready=true;

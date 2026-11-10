@@ -110,3 +110,15 @@ test("a missing storage callback times out and can be retried", () => {
   last.success();
   assert.equal(store.snapshot(config).settingsApplied, true);
 });
+test("DeepSeek theme and half-hour wake lease pass the band decoder", () => {
+  let write, seen;
+  const store = createSettings({ get: (c) => c.fail(), set: (c) => (write = c) }, (v) => (seen = v));
+  store.load();
+  const deepseek = { ...config, buddyTheme: "deepseek" };
+  store.apply(deepseek);
+  write.success();
+  assert.equal(seen.buddyTheme, "deepseek");
+  const base = { ...require("../../packages/buddy-shared/fixtures/v1.json").snapshot, buddyTheme: "deepseek", wakeId: "w-1" };
+  assert.equal(decodeMessage(JSON.stringify({ ...base, wakeHoldMs: 1800000 })).wakeHoldMs, 1800000);
+  assert.throws(() => decodeMessage(JSON.stringify({ ...base, wakeHoldMs: 1800001 })));
+});

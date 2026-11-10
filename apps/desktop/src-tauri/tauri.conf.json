@@ -12,10 +12,12 @@
       {
         "label": "main",
         "title": "MiBand Agent Buddy",
-        "width": 820,
-        "height": 660,
+        "width": 960,
+        "height": 680,
         "minWidth": 720,
-        "minHeight": 560
+        "minHeight": 560,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

@@ -23,7 +23,7 @@ function createKeepScreen(api, clock, schedule, cancel, report) {
     show:function(){clearHold();visible=true;stats.shows+=1;request(true);},
     hide:function(){clearHold();visible=false;stats.hides+=1;request(false);},
     hold:function(id,ms){
-      if(typeof id!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(id)||typeof ms!=='number'||ms<1000||ms>30000||ms%1!==0||seen.indexOf(id)>=0)return false;
+      if(typeof id!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(id)||typeof ms!=='number'||ms<1000||ms>1800000||ms%1!==0||seen.indexOf(id)>=0)return false;
       seen.push(id);if(seen.length>32)seen.shift();
       clearHold();wakeId=id;holdUntil=clock()+ms;visible=true;request(true);
       holdTimer=schedule(function(){holdTimer=null;holdUntil=0;visible=false;request(false);},ms);
