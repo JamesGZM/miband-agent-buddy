@@ -10,7 +10,7 @@ An independent macOS companion for **Xiaomi Smart Band 9**. Turn the band into *
 - Install/update Buddy from the locally built RPK. No AstroBox app or plugin is required.
 - Continuously send current Mac metrics and sanitized Codex lifecycle events; confirm delivery with matching application ACKs.
 - Independent **Mac appearance** (Claude / ChatGPT / DeepSeek, light / dark / system) and **Buddy themes** (ChatGPT / Claude). Band themes are manually applied and confirmed; they never follow the active AI tool automatically.
-- Tray controls, background operation, optional login startup, bounded reconnection and foreground keep-screen requests.
+- Tray controls, background operation, optional login startup, bounded reconnection and event-driven 20-second display leases followed by natural sleep.
 
 Only Codex activity is currently integrated. A Claude visual theme does **not** provide Claude Code integration. The Mac preview recreates the band's artwork and data; it is not a screen capture from the device.
 
@@ -25,12 +25,12 @@ python3 --version  # Must be 3.10 or newer; macOS /usr/bin/python3 may be too ol
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-npm ci --prefix quickapp
+npm ci --prefix apps/band
 npm run bootstrap
 npm run build
 npm test
 npm run build:desktop
-open 'desktop/dist/MiBand Agent Buddy.app'
+open 'apps/desktop/dist/MiBand Agent Buddy.app'
 ```
 
 `bootstrap` fetches pinned upstream sources and applies the checked-in Core build patch. Generated artwork, downloaded sources, private credentials and build outputs are not committed.
@@ -65,10 +65,10 @@ Close the window to continue in the tray when background operation is enabled. *
 | Xiaomi Smart Band 9 standard | Yes | Not yet tested on a physical standard model |
 | Band 9 Pro / Active, other generations | No | Not supported in this release |
 
-Foreground keep-screen calls are refreshed conservatively. A successful API callback is not proof of an indefinitely illuminated panel; firmware, power and lifecycle behavior require device testing. See [architecture and protocol](docs/open-source/ARCHITECTURE.md) and [validation](docs/open-source/VALIDATION.md).
+Buddy 0.5.1 uses a band-local 20-second display lease on qualifying wakes. A successful API callback is not proof of physical illumination; firmware, power and lifecycle behavior require device testing. See [architecture and protocol](docs/open-source/ARCHITECTURE.md) and [validation](docs/open-source/VALIDATION.md).
 
 ## Source and license
 
 Our code is distributed under [AGPL-3.0](LICENSE). Preserve third-party copyright and attribution notices; upstream components retain their applicable terms. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) identifies the AstroBox protocol/account sources and all local adaptations. Agent Buddy inspired the lifecycle-driven desktop companion approach; the active band artwork in this release is generated from this repository's geometry.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). There is no analytics or telemetry service.
+See the [repository map and development workflow](docs/development/README.md), [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). There is no analytics or telemetry service.

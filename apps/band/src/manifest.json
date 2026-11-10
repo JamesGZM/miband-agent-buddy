@@ -1,0 +1,40 @@
+{
+  "package": "com.macprobe.band9",
+  "name": "Buddy",
+  "versionName": "0.5.1",
+  "versionCode": 13,
+  "minAPILevel": 1,
+  "icon": "/common/icon.png",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.app"
+    },
+    {
+      "name": "system.brightness"
+    },
+    {
+      "name": "system.interconnect"
+    },
+    {
+      "name": "system.storage"
+    }
+  ],
+  "config": {
+    "designWidth": 192,
+    "logLevel": "warn"
+  },
+  "router": {
+    "entry": "pages/index",
+    "pages": {
+      "pages/index": {
+        "component": "index"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#000000"
+  }
+}

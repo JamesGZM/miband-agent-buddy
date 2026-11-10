@@ -1,0 +1,64 @@
+<template>
+  <stack class="page" onclick="togglePage" onlongpress="exitApp">
+    <stack class="page" show="{{ pageIndex === 0 }}">
+      <image class="layer" src="/common/capsule/face-track.png" />
+      <image class="layer" src="{{ ringSource }}" style="opacity: {{ ringOpacity }};" />
+      <image class="layer" src="{{ loadingSource }}" style="opacity: {{ loadingOpacity }};" />
+      <image class="layer" src="{{ symbolSource }}" style="left: {{ symbolLeft }}px;" />
+    </stack>
+    <stack class="page" show="{{ pageIndex === 1 }}">
+      <image class="layer" src="/common/capsule/resource-tracks.png" />
+      <image class="layer" src="{{ diskRing }}" />
+      <image class="layer" src="{{ memoryRing }}" />
+      <image class="layer" src="{{ cpuRing }}" />
+      <div class="numbers">
+        <div class="column"><text class="label disk">DISK</text><text class="value">{{ diskText }}</text><text class="detail">{{ diskDetail }} GB</text></div>
+        <div class="column"><text class="label memory">MEM</text><text class="value">{{ memoryText }}</text><text class="detail">{{ memoryDetail }} GiB</text></div>
+        <div class="column"><text class="label cpu">CPU</text><text class="value">{{ cpuText }}</text><text class="detail">TOTAL LOAD</text></div>
+      </div>
+    </stack>
+  </stack>
+</template>
+<script>
+import brightness from '@system.brightness';
+import interconnect from '@system.interconnect';
+import application from '@system.app';
+import storage from '@system.storage';
+var createPageController=require('../../controllers/page-controller').createPageController;
+var controller=null;
+export default {
+  private: {
+    pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
+    ringSource: '/common/capsule/ring-idle.png', ringOpacity: .32,
+    loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
+    symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
+    diskRing: '/common/capsule/disk-000.png', memoryRing: '/common/capsule/memory-000.png', cpuRing: '/common/capsule/cpu-000.png',
+    cpuText: '—', memoryText: '—', diskText: '—', memoryDetail: '—', diskDetail: '—', cpuWidth: 0, memoryWidth: 0, diskWidth: 0
+  },
+  onInit(){
+    controller=createPageController({brightness:brightness,interconnect:interconnect,application:application,storage:storage});
+    controller.onInit.call(this);
+  },
+  onShow(){controller.onShow.call(this);},
+  onHide(){controller.onHide.call(this);},
+  onBackPress(){return controller.onBackPress.call(this);},
+  onDestroy(){controller.onDestroy.call(this);controller=null;},
+  exitApp(){controller.exitApp.call(this);},
+  togglePage(){controller.togglePage.call(this);},
+  act(action){controller.act.call(this,action);},
+  releaseKeep(){controller.releaseKeep.call(this);},
+  tick(){controller.tick.call(this);}
+};
+</script>
+<style>
+.page { width: 192px; height: 490px; background-color: #000000; }
+.layer { width: 192px; height: 490px; left: 0px; top: 0px; object-fit: contain; }
+.numbers { position: absolute; left: 192px; top: 0px; width: 490px; height: 192px; transform-origin: 0px 0px; transform: rotate(90deg); padding-left: 86px; padding-top: 49px; }
+.column { width: 106px; height: 94px; flex-direction: column; align-items: center; }
+.label { font-size: 16px; width: 106px; height: 24px; text-align: center; }
+.disk { color: #647FFF; }
+.memory { color: #A192FF; }
+.cpu { color: #78EDFF; }
+.value { font-size: 38px; color: #F0F4F0; width: 106px; height: 46px; text-align: center; }
+.detail { font-size: 14px; color: #B9C5C0; width: 106px; height: 24px; text-align: center; }
+</style>

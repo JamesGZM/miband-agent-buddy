@@ -1,0 +1,266 @@
+{
+  "snapshot": {
+    "v": 1,
+    "type": "snapshot",
+    "session": "fixture-session",
+    "seq": 1,
+    "text": "Mac monitor",
+    "value": 42,
+    "cpu": 42,
+    "memory": {
+      "usedBytes": 8,
+      "totalBytes": 16,
+      "percent": 50
+    },
+    "disk": {
+      "usedBytes": 60,
+      "totalBytes": 100,
+      "percent": 60
+    },
+    "character": "codex",
+    "mode": "thinking",
+    "buddyTheme": "chatgpt",
+    "settingsRevision": 2,
+    "keepScreen": false,
+    "wakeId": "wake-fixture",
+    "wakeHoldMs": 20000
+  },
+  "ack": {
+    "v": 1,
+    "type": "ack",
+    "session": "fixture-session",
+    "seq": 1,
+    "received": 1,
+    "keepScreen": "on",
+    "appVersion": "0.5.1",
+    "buddyTheme": "chatgpt",
+    "settingsRevision": 2,
+    "settingsApplied": true,
+    "wakeDisplay": {
+      "id": "wake-fixture",
+      "remainingMs": 20000
+    },
+    "keepDiagnostics": {
+      "visible": true
+    },
+    "page": 0,
+    "mode": "thinking"
+  },
+  "credentials": {
+    "address": "fixture-device",
+    "key": "00000000000000000000000000000000"
+  },
+  "runtimeCommands": [
+    {
+      "op": "connect",
+      "address": "fixture-device",
+      "key": "00000000000000000000000000000000",
+      "settings": {
+        "buddyTheme": "chatgpt",
+        "revision": 2,
+        "keepScreen": false
+      }
+    },
+    {
+      "op": "configure",
+      "settings": {
+        "buddyTheme": "chatgpt",
+        "revision": 2,
+        "keepScreen": false
+      }
+    },
+    {
+      "op": "pause",
+      "value": true
+    },
+    {
+      "op": "install"
+    },
+    {
+      "op": "disconnect"
+    }
+  ],
+  "transportCommands": [
+    {
+      "op": "snapshot",
+      "id": 1,
+      "payload": {
+        "v": 1,
+        "type": "snapshot",
+        "session": "fixture-session",
+        "seq": 1,
+        "text": "Mac monitor",
+        "value": 42,
+        "cpu": 42,
+        "memory": {
+          "usedBytes": 8,
+          "totalBytes": 16,
+          "percent": 50
+        },
+        "disk": {
+          "usedBytes": 60,
+          "totalBytes": 100,
+          "percent": 60
+        },
+        "character": "codex",
+        "mode": "thinking",
+        "buddyTheme": "chatgpt",
+        "settingsRevision": 2,
+        "keepScreen": false,
+        "wakeId": "wake-fixture",
+        "wakeHoldMs": 20000
+      }
+    },
+    {
+      "op": "launch_buddy",
+      "id": "wake-fixture"
+    },
+    {
+      "op": "ping",
+      "id": "link-ping"
+    },
+    {
+      "op": "install",
+      "id": "install",
+      "path": "/fixture/buddy.debug.rpk"
+    },
+    {
+      "op": "disconnect"
+    }
+  ],
+  "transportEvents": [
+    {
+      "event": "authenticated"
+    },
+    {
+      "event": "transport"
+    },
+    {
+      "event": "battery",
+      "percent": 80
+    },
+    {
+      "event": "progress",
+      "progress": 0.5
+    },
+    {
+      "event": "ack",
+      "ack": {
+        "v": 1,
+        "type": "ack",
+        "session": "fixture-session",
+        "seq": 1,
+        "received": 1,
+        "keepScreen": "on",
+        "appVersion": "0.5.1",
+        "buddyTheme": "chatgpt",
+        "settingsRevision": 2,
+        "settingsApplied": true,
+        "wakeDisplay": {
+          "id": "wake-fixture",
+          "remainingMs": 20000
+        },
+        "keepDiagnostics": {
+          "visible": true
+        },
+        "page": 0,
+        "mode": "thinking"
+      }
+    },
+    {
+      "event": "result",
+      "id": "install",
+      "ok": false,
+      "code": "install_receipt_missing"
+    },
+    {
+      "event": "conflict"
+    },
+    {
+      "event": "error",
+      "code": "auth_rejected",
+      "message": "fixture"
+    }
+  ],
+  "runtimeState": {
+    "event": "state",
+    "connection": "connected",
+    "ack": {
+      "v": 1,
+      "type": "ack",
+      "session": "fixture-session",
+      "seq": 1,
+      "received": 1,
+      "keepScreen": "on",
+      "appVersion": "0.5.1",
+      "buddyTheme": "chatgpt",
+      "settingsRevision": 2,
+      "settingsApplied": true,
+      "wakeDisplay": {
+        "id": "wake-fixture",
+        "remainingMs": 20000
+      },
+      "keepDiagnostics": {
+        "visible": true
+      },
+      "page": 0,
+      "mode": "thinking"
+    },
+    "paused": false,
+    "settings": {
+      "buddyTheme": "chatgpt",
+      "revision": 2,
+      "keepScreen": false
+    },
+    "agent": {
+      "state": "thinking",
+      "stale": false
+    },
+    "metrics": {
+      "cpu": 42
+    },
+    "wake": {
+      "status": "confirmed"
+    },
+    "installed": true
+  },
+  "actions": [
+    {
+      "operation": "connect",
+      "value": 0
+    },
+    {
+      "operation": "disconnect",
+      "value": null
+    },
+    {
+      "operation": "pause",
+      "value": true
+    },
+    {
+      "operation": "install",
+      "value": null
+    },
+    {
+      "operation": "logout",
+      "value": null
+    },
+    {
+      "operation": "theme",
+      "value": "claude"
+    },
+    {
+      "operation": "preferences",
+      "value": {
+        "appTheme": "deepseek",
+        "appearance": "dark",
+        "background": true,
+        "keepScreen": false
+      }
+    },
+    {
+      "operation": "autostart",
+      "value": false
+    }
+  ]
+}

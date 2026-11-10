@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const {createKeepScreen}=createRequire(import.meta.url)('../../apps/band/src/common/keep-screen.js');
+function harness(){let now=1000,id=0;const tasks=new Map(),calls=[],reports=[];const controller=createKeepScreen(o=>calls.push(o),()=>now,(fn,delay)=>{tasks.set(++id,{fn,at:now+delay});return id;},id=>tasks.delete(id),s=>reports.push(s));return {controller,calls,reports,advance(ms){const end=now+ms;while(true){let next=[...tasks].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>end)break;now=next[1].at;tasks.delete(next[0]);next[1].fn();}now=end;}};}
+test('visible app refreshes every 30 seconds independent of rendering or incoming data',()=>{const h=harness();h.controller.show();h.calls[0].success();h.advance(29999);assert.equal(h.calls.length,1);h.advance(1);assert.equal(h.calls.length,2);h.calls[1].success();assert.equal(h.controller.snapshot().successes,2);});
+test('hiding cancels renewal and ignores old callbacks',()=>{const h=harness();h.controller.show();h.controller.hide();h.calls[0].success();h.calls[1].success();h.advance(90000);assert.equal(h.calls.length,2);assert.equal(h.controller.snapshot().state,'off');assert.equal(h.controller.snapshot().visible,false);});
+test('missing callback times out with bounded retry; no per-frame requests',()=>{const h=harness();h.controller.show();h.advance(5000);assert.equal(h.controller.snapshot().failures,1);h.advance(29999);assert.equal(h.calls.length,1);h.advance(1);assert.equal(h.calls.length,2);h.calls[0].success();assert.equal(h.controller.snapshot().successes,0);h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');});
+test('show following hide invalidates delayed release callback',()=>{const h=harness();h.controller.show();h.calls[0].success();h.controller.hide();h.controller.show();h.calls[2].success();h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');assert.equal(h.controller.snapshot().shows,2);});
+test('wake hold expires on the band without further packets, including missing API callback',()=>{
+ for(const callback of [true,false]){
+  const h=harness();assert.equal(h.controller.hold('event-1',20000),true);
+  if(callback)h.calls[0].success();
+  h.advance(19999);assert.equal(h.controller.display().remainingMs,1);
+  h.advance(1);assert.equal(h.calls.at(-1).keepScreenOn,false);assert.equal(h.controller.display().remainingMs,0);
+  h.advance(120000);assert.equal(h.calls.length,2);
+ }
+});
+test('duplicate wake and ordinary time cannot extend a lease; exit cancels it',()=>{
+ const h=harness();h.controller.hold('event-1',20000);h.calls[0].success();h.advance(10000);
+ assert.equal(h.controller.hold('event-1',20000),false);assert.equal(h.controller.display().remainingMs,10000);
+ h.controller.hide();h.calls.at(-1).success();h.advance(60000);assert.equal(h.calls.length,2);assert.equal(h.controller.snapshot().state,'off');
+});
+test('new event replaces the lease, while invalid durations never acquire screen lock',()=>{
+ const h=harness();assert.equal(h.controller.hold('bad',60000),false);assert.equal(h.calls.length,0);
+ h.controller.hold('event-1',20000);h.calls[0].success();h.advance(10000);h.controller.hold('event-2',20000);h.calls[1].success();
+ h.advance(19999);assert.equal(h.calls.length,2);h.advance(1);assert.equal(h.calls.length,3);assert.equal(h.calls[2].keepScreenOn,false);
+});
