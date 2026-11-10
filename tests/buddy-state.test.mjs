@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   acceptAck,
+  canRetryTransportError,
   confirmedSettings,
   reconnectDelay,
 } from "../mac/buddy-state.mjs";
@@ -40,4 +41,11 @@ test("reconnection is bounded and eventually requires manual intervention", () =
   assert.equal(reconnectDelay(1), 2000);
   assert.equal(reconnectDelay(8), 30000);
   assert.equal(reconnectDelay(9), null);
+});
+
+test("invalid authentication and competing clients require user action rather than retries", () => {
+  assert.equal(canRetryTransportError("auth_rejected"), false);
+  assert.equal(canRetryTransportError("conflict"), false);
+  assert.equal(canRetryTransportError("timeout"), true);
+  assert.equal(canRetryTransportError(undefined), true);
 });

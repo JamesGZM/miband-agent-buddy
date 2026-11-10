@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { createSampler } from "./metrics.mjs";
 import { createCodexState } from "./codex-state.mjs";
-import { acceptAck, reconnectDelay } from "./buddy-state.mjs";
+import { acceptAck, reconnectDelay, canRetryTransportError } from "./buddy-state.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const sample = createSampler(),
   agent = createCodexState();
@@ -173,7 +173,13 @@ function connect() {
       child.kill();
     }
     if (event.event === "error") {
+      state.operationError = event.code;
       state.error = event.message;
+      if (!canRetryTransportError(event.code)) {
+        desired = false;
+        state.connection = "error";
+        state.error = "手環拒絕認證，請重新登入小米帳號並確認手環綁定";
+      }
       publish();
     }
   });
@@ -188,7 +194,7 @@ function connect() {
     clearTimeout(installDeadline);
     clearPending();
     state.progress = null;
-    state.connection = "disconnected";
+    state.connection = !desired && state.error ? "error" : "disconnected";
     publish();
     retry();
   });

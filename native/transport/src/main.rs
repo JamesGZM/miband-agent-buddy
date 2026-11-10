@@ -238,9 +238,9 @@ fn main() {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let result = runtime.block_on(run(rx));
-        if result.is_err() {
+        if let Err(error) = &result {
             emit(
-                json!({"event":"error","message":"連線操作失敗，請檢查裝置距離、認證與其他連線程式"}),
+                json!({"event":"error","code":classify_error(error),"message":"連線操作失敗，請檢查裝置距離、認證與其他連線程式"}),
             );
         }
         std::process::exit(if result.is_ok() { 0 } else { 1 });
@@ -251,7 +251,9 @@ fn main() {
 // Only fixed diagnostic codes cross IPC; upstream errors may contain device identifiers.
 fn classify_error(error: &anyhow::Error) -> &'static str {
     let text = format!("{error:#}");
-    if text.contains("install result") {
+    if text.contains("Device rejected authentication") {
+        "auth_rejected"
+    } else if text.contains("install result") {
         "install_receipt_missing"
     } else if text.contains("third-party app install failed") {
         "install_rejected"
@@ -270,6 +272,16 @@ fn classify_error(error: &anyhow::Error) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_authentication_rejection_is_terminal() {
+        let error = anyhow::anyhow!("Device rejected authentication: account error 4")
+            .context("Core authentication failed");
+        assert_eq!(classify_error(&error), "auth_rejected");
+        assert_eq!(
+            classify_error(&anyhow::anyhow!("deadline has elapsed")),
+            "timeout"
+        );
+    }
     #[test]
     fn installation_result_timeout_is_not_a_generic_timeout() {
         assert_eq!(

@@ -724,13 +724,6 @@ fn seed_xiaomi_login_cookies(
         extract_cookie_value(cookie_header, "userId").filter(|user_id| !user_id.trim().is_empty())
     });
 
-    if let Some(user_id) = provided_user_id.as_deref() {
-        log::info!(
-            "[MiAccount.Login] using userId from seeded cookie: {}",
-            user_id
-        );
-    }
-
     for domain in [
         "https://mi.com",
         "https://xiaomi.com",
@@ -1161,19 +1154,11 @@ pub async fn fetch_mi_user_core_info_with_user_agent(
                     {
                         Ok(profile) => return Ok(profile),
                         Err(err) => {
-                            log::warn!(
-                                "[MiAccount.Profile] passportapi core info request failed: {}",
-                                err
-                            );
                             last_error = Some(err);
                         }
                     }
                 }
                 Err(err) => {
-                    log::warn!(
-                        "[MiAccount.Profile] failed to obtain passportapi service token: {}",
-                        err
-                    );
                     last_error = Some(err);
                 }
             }
@@ -1470,34 +1455,10 @@ pub async fn login_mi_account_with_options(
     let cookie_device_id = cookie_header
         .as_deref()
         .and_then(|cookie_header| extract_cookie_value(cookie_header, "deviceId"));
-    if let (Some(explicit_device_id), Some(cookie_device_id)) =
-        (device_id.as_ref(), cookie_device_id.as_ref())
-    {
-        if explicit_device_id != cookie_device_id {
-            log::warn!(
-                "[MiAccount.Login] explicit device_id={} differs from cookie deviceId={}",
-                explicit_device_id,
-                cookie_device_id
-            );
-        }
-    }
     let device_id = device_id
         .or(cookie_device_id)
         .unwrap_or_else(random_device_id);
     let sdk_version = XIAOMI_ACCOUNT_SDK_VERSION;
-
-    log::info!(
-        "[MiAccount.Login] begin username={} device_id={} retry_with_cookie={}",
-        username,
-        device_id,
-        cookie_header.is_some()
-    );
-    if let Some(cookie_header) = cookie_header.as_deref() {
-        log::info!(
-            "[MiAccount.Login] retry cookie header for account.xiaomi.com: {}",
-            cookie_header
-        );
-    }
 
     let cookie_store = Arc::new(CookieStoreMutex::new(CookieStore::default()));
     let client = crate::net::default_client_builder()
@@ -1530,16 +1491,6 @@ pub async fn login_mi_account_with_options(
     let sign = match service_login {
         ServiceLoginSession::NeedCredential { sign } => sign,
         ServiceLoginSession::Authenticated(auth_resp) => {
-            log::info!(
-                "[MiAccount.Login] serviceLogin returned authenticated session directly code={} description={} notification_url={:?} device_id={} ssecurity_present={} c_user_id_present={} nonce={}",
-                auth_resp.code,
-                auth_resp.description,
-                auth_resp.notification_url,
-                device_id,
-                !auth_resp.ssecurity.trim().is_empty(),
-                !auth_resp.c_user_id.trim().is_empty(),
-                auth_resp.nonce
-            );
 
             return finish_login_with_auth_response(
                 &client,
@@ -1553,12 +1504,6 @@ pub async fn login_mi_account_with_options(
         }
     };
 
-    log::info!(
-        "[MiAccount.Login] serviceLogin succeeded for username={} device_id={} sign_present={}",
-        username,
-        device_id,
-        !sign.is_empty()
-    );
 
     // --- Step 2: serviceLoginAuth2 ---
     let mut md5 = Md5::default();
@@ -1598,16 +1543,6 @@ pub async fn login_mi_account_with_options(
             }
         };
 
-    log::info!(
-        "[MiAccount.Login] serviceLoginAuth2 code={} description={} notification_url={:?} device_id={} ssecurity_present={} c_user_id_present={} nonce={}",
-        auth_resp.code,
-        auth_resp.description,
-        auth_resp.notification_url,
-        device_id,
-        !auth_resp.ssecurity.trim().is_empty(),
-        !auth_resp.c_user_id.trim().is_empty(),
-        auth_resp.nonce
-    );
 
     finish_login_with_auth_response(&client, &cookie_store, auth_resp, ua, &username, &device_id)
         .await
@@ -1652,12 +1587,6 @@ async fn refresh_mi_account_token_for_sid(
     }
     let cookie_header = cookie_parts.join("; ");
 
-    log::info!(
-        "[MiAccount.Refresh] begin service token refresh sid={} user_id={} device_id={}",
-        sid,
-        user_id,
-        device_id
-    );
 
     let cookie_store = Arc::new(CookieStoreMutex::new(CookieStore::default()));
     let client = crate::net::default_client_builder()
@@ -1735,13 +1664,6 @@ async fn refresh_mi_account_token_for_sid(
         refreshed.psecurity = token.psecurity;
     }
 
-    log::info!(
-        "[MiAccount.Refresh] service token refreshed sid={} user_id={} device_id={} service_token_len={}",
-        sid,
-        refreshed.user_id,
-        refreshed.device_id,
-        refreshed.service_token.len()
-    );
 
     Ok(refreshed)
 }
@@ -1752,27 +1674,11 @@ pub async fn fetch_2fa_session_with_cookie(
     device_id: Option<String>,
 ) -> Result<ServiceLoginAuthRespone> {
     let cookie_device_id = extract_cookie_value(&cookie_header, "deviceId");
-    if let (Some(explicit_device_id), Some(cookie_device_id)) =
-        (device_id.as_ref(), cookie_device_id.as_ref())
-    {
-        if explicit_device_id != cookie_device_id {
-            log::warn!(
-                "[MiAccount.Login] explicit device_id={} differs from cookie deviceId={}",
-                explicit_device_id,
-                cookie_device_id
-            );
-        }
-    }
     let device_id = device_id
         .or(cookie_device_id)
         .unwrap_or_else(random_device_id);
     let sdk_version = XIAOMI_ACCOUNT_SDK_VERSION;
 
-    log::info!(
-        "[MiAccount.Login] refreshing verified 2FA session from cookie device_id={} cookie_len={}",
-        device_id,
-        cookie_header.len()
-    );
 
     let cookie_store = Arc::new(CookieStoreMutex::new(CookieStore::default()));
     let client = crate::net::default_client_builder()
@@ -1809,23 +1715,12 @@ pub async fn fetch_2fa_session_with_cookie(
         match parse_service_login_session(&step1_body, &step1_headers, "verified 2FA session")? {
             ServiceLoginSession::Authenticated(auth_resp) => auth_resp,
             ServiceLoginSession::NeedCredential { .. } => {
-                log::warn!(
-                    "[MiAccount.Login] verified 2FA cookie still returned _sign device_id={}",
-                    device_id
-                );
                 return Err(anyhow!(
                     "verified 2FA cookie session still requires credential step"
                 ));
             }
         };
 
-    log::info!(
-        "[MiAccount.Login] fetched verified 2FA session code={} ssecurity_present={} notification_url={:?} device_id={}",
-        auth_resp.code,
-        !auth_resp.ssecurity.trim().is_empty(),
-        auth_resp.notification_url,
-        device_id
-    );
 
     if auth_resp.code != 0 {
         return Err(anyhow!(
@@ -1855,18 +1750,10 @@ pub async fn fetch_notification_auth_result(
     ua: String,
     cookie_header: Option<String>,
 ) -> Result<MiNotificationAuthResult> {
-    log::info!(
-        "[MiAccount.Login] fetching notification auth result from sts url={}",
-        sts_url
-    );
 
     let client = crate::net::default_client_builder().build()?;
     let mut request = client.get(&sts_url).header("User-Agent", ua);
     if let Some(cookie_header) = cookie_header.filter(|value| !value.trim().is_empty()) {
-        log::info!(
-            "[MiAccount.Login] attaching verified 2FA cookie header to notification auth request len={}",
-            cookie_header.len()
-        );
         request = request.header("Cookie", cookie_header);
     }
     let response = request.send().await?;
@@ -1893,13 +1780,6 @@ pub async fn fetch_notification_auth_result(
         .or_else(|| extract_header_by_suffix(&headers, "_slh"))
         .unwrap_or_default();
 
-    log::info!(
-        "[MiAccount.Login] notification auth result user_id={} service_token_len={} ph_present={} slh_present={}",
-        user_id,
-        service_token.len(),
-        !psecurity_ph.is_empty(),
-        !psecurity_slh.is_empty()
-    );
 
     Ok(MiNotificationAuthResult {
         user_id,
@@ -1936,12 +1816,6 @@ pub async fn complete_2fa_login_with_sts_url(
         .as_ref()
         .filter(|value| !value.trim().is_empty())
         .cloned();
-    log::info!(
-        "[MiAccount.Login] finalizing 2FA session through sts url nonce={} c_user_id={} url={}",
-        nonce,
-        c_user_id,
-        sts_url
-    );
 
     let client = crate::net::default_client_builder().build()?;
     let mut request = client
@@ -1952,10 +1826,6 @@ pub async fn complete_2fa_login_with_sts_url(
         ])
         .header("User-Agent", ua);
     if let Some(cookie_header) = request_cookie_header {
-        log::info!(
-            "[MiAccount.Login] attaching verified 2FA cookie header to sts finalize request len={}",
-            cookie_header.len()
-        );
         request = request.header("Cookie", cookie_header);
     }
     let response = request.send().await?;
@@ -1977,12 +1847,6 @@ pub async fn complete_2fa_login_with_sts_url(
     let response_user_id = extract_header_value(&headers, "userId");
     let response_c_user_id = extract_header_value(&headers, "cUserId");
 
-    log::info!(
-        "[MiAccount.Login] 2FA sts url finalized service_token_len={} user_id={:?} c_user_id={}",
-        service_token.len(),
-        response_user_id,
-        c_user_id
-    );
 
     Ok(MiAccountToken {
         user_id: response_user_id.unwrap_or_default(),
@@ -2011,12 +1875,6 @@ pub async fn complete_2fa_login_with_cookie(
         .or_else(|| extract_cookie_value(&cookie_header, "deviceId"))
         .unwrap_or_else(random_device_id);
 
-    log::info!(
-        "[MiAccount.Login] finalizing 2FA session with cookie device_id={} c_user_id={} location={}",
-        device_id,
-        c_user_id,
-        location
-    );
 
     if location.trim().is_empty() {
         return Err(anyhow!("2FA location missing"));
@@ -2065,11 +1923,6 @@ pub async fn complete_2fa_login_with_cookie(
         .map(|ck| ck.value().to_string())
         .ok_or_else(|| anyhow!("serviceToken cookie missing after 2FA finalize"))?;
 
-    log::info!(
-        "[MiAccount.Login] 2FA session finalized device_id={} service_token_len={}",
-        device_id,
-        service_token.len()
-    );
 
     Ok(MiAccountToken {
         user_id: String::new(),
@@ -2109,12 +1962,6 @@ async fn finish_login_with_auth_response(
         .as_deref()
         .and_then(non_empty_str)
     {
-        log::warn!(
-            "[MiAccount.Login] 2FA required for username={} device_id={} url={}",
-            username,
-            device_id,
-            url
-        );
         return Err(anyhow!(
             "2-f-a={}\nuser-id={}\ndevice-id={}\nssecurity={}\nc-user-id={}\nlocation={}\nnonce={}\npsecurity={}\npass-token={}",
             url,
@@ -2146,7 +1993,7 @@ async fn finish_service_login_with_auth_response(
     cookie_store: &Arc<CookieStoreMutex>,
     auth_resp: ServiceLoginAuthRespone,
     ua: String,
-    username: &str,
+    _username: &str,
     device_id: &str,
     sid: &str,
 ) -> Result<MiAccountToken> {
@@ -2178,14 +2025,6 @@ async fn finish_service_login_with_auth_response(
         extract_sts_cookie_value(&step3_headers, cookie_store, &final_url, sid, "cUserId")
             .unwrap_or_else(|| auth_resp.c_user_id.clone());
 
-    log::info!(
-        "[MiAccount.Login] service login completed sid={} username={} device_id={} c_user_id={} service_token_len={}",
-        sid,
-        username,
-        device_id,
-        c_user_id,
-        service_token.len()
-    );
 
     Ok(MiAccountToken {
         user_id: (auth_resp.user_id != 0)
