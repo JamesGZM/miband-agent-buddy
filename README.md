@@ -16,11 +16,12 @@ Only Codex activity is currently integrated. A Claude visual theme does **not** 
 
 ## Build from source
 
-Requirements: macOS, Xcode Command Line Tools, Git, Node.js 22+, current stable Rust (edition 2024 support), Python 3 and Pillow. Keep the checkout in a stable location: this source-development app references its build-time checkout and Node executable. It is not a relocatable distribution bundle.
+Requirements: macOS, Xcode Command Line Tools, Git, Node.js 22+, current stable Rust (edition 2024 support), Python 3.10+ and Pillow. Keep the checkout in a stable location: this source-development app references its build-time checkout and Node executable. It is not a relocatable distribution bundle.
 
 ```sh
 git clone https://github.com/JamesGZM/miband-agent-buddy.git
 cd miband-agent-buddy
+python3 --version  # Must be 3.10 or newer; macOS /usr/bin/python3 may be too old
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt

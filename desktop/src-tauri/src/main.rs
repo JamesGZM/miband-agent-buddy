@@ -53,6 +53,25 @@ impl Default for Preferences {
         }
     }
 }
+impl Preferences {
+    fn update_local(
+        &mut self,
+        theme: &str,
+        appearance: &str,
+        keep: bool,
+        background: bool,
+    ) -> bool {
+        let band_changed = self.keep_screen != keep;
+        self.app_theme = theme.into();
+        self.appearance = appearance.into();
+        self.keep_screen = keep;
+        self.background = background;
+        if band_changed {
+            self.revision += 1;
+        }
+        band_changed
+    }
+}
 struct Session {
     credentials: Option<Credentials>,
     busy: bool,
@@ -307,17 +326,17 @@ fn action(
                 .ok_or("顯示模式無效")?;
             let keep = value["keepScreen"].as_bool().ok_or("亮屏設定無效")?;
             let background = value["background"].as_bool().ok_or("背景設定無效")?;
-            s.prefs.app_theme = theme.into();
-            s.prefs.appearance = appearance.into();
-            s.prefs.keep_screen = keep;
-            s.prefs.background = background;
-            s.prefs.revision += 1;
+            let band_changed = s.prefs.update_local(theme, appearance, keep, background);
             save(&s)?;
-            let rev = s.prefs.revision;
-            send(
-                &mut s,
-                json!({"op":"configure","settings":{"keepScreen":keep,"revision":rev}}),
-            )
+            if band_changed {
+                let rev = s.prefs.revision;
+                send(
+                    &mut s,
+                    json!({"op":"configure","settings":{"keepScreen":keep,"revision":rev}}),
+                )
+            } else {
+                Ok(())
+            }
         }
         "autostart" => {
             let enabled = value.as_bool().ok_or("設定無效")?;
@@ -526,6 +545,14 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Unable to start MiBand Agent Buddy")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = &event {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            }
             if let tauri::RunEvent::Exit = event {
                 let state = app.state::<Shared>();
                 let mut s = state.lock().unwrap();
@@ -562,6 +589,19 @@ mod tests {
             addr: String::new(),
             key: "0".repeat(32)
         }));
+    }
+    #[test]
+    fn local_appearance_does_not_write_band_settings() {
+        let mut p = Preferences::default();
+        p.revision = 10;
+        p.themes.insert("test-device".into(), "claude".into());
+        assert!(!p.update_local("deepseek", "dark", true, false));
+        assert_eq!(p.revision, 10);
+        assert_eq!(p.themes["test-device"], "claude");
+        assert!(p.update_local("deepseek", "dark", false, false));
+        assert_eq!(p.revision, 11);
+        assert!(!p.update_local("chatgpt", "light", false, true));
+        assert_eq!(p.revision, 11);
     }
     #[test]
     fn appearance_defaults_do_not_set_device_themes() {

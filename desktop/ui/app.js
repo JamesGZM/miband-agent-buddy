@@ -163,7 +163,7 @@ async function refresh() {
     const ack = state.runtime.ack;
     if (message === "已送出主題設定，等待手環確認" &&
         ack?.settingsApplied === true &&
-        ack.settingsRevision === state.preferences.revision &&
+        ack.settingsRevision === state.runtime.settings?.revision &&
         ack.buddyTheme === state.runtime.settings?.buddyTheme) {
       message = "主題已套用至手環";
     }
