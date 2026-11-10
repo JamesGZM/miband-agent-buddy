@@ -6,6 +6,11 @@ use std::{
     path::Path,
 };
 pub fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_with(path, bytes, true)
+}
+
+/// Preferences may skip fsync so theme switches stay responsive; credentials keep sync.
+pub fn write_with(path: &Path, bytes: &[u8], sync: bool) -> Result<(), String> {
     let parent = path.parent().ok_or("資料路徑無效")?;
     fs::create_dir_all(parent).map_err(|_| "無法建立 App 資料目錄")?;
     fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
@@ -26,7 +31,9 @@ pub fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
             .open(&tmp)
             .map_err(|_| "無法建立私有資料檔")?;
         file.write_all(bytes).map_err(|_| "資料保存失敗")?;
-        file.sync_all().map_err(|_| "資料保存失敗")?;
+        if sync {
+            file.sync_all().map_err(|_| "資料保存失敗")?;
+        }
         fs::rename(&tmp, path).map_err(|_| "資料保存失敗")?;
         Ok(())
     })();

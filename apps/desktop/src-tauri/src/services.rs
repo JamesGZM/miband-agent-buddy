@@ -184,7 +184,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 false,
                 value.background,
             );
-            save(s)?;
+            // Disk write happens in the async command after the session lock is released.
             if changed {
                 s.worker.send(RuntimeCommand::Configure {
                     settings: RuntimeSettings {

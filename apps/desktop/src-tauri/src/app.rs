@@ -5,13 +5,18 @@ use crate::{
     services,
     state::{Session, Shared},
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::time::Duration;
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Manager,
 };
+use tauri_plugin_autostart::ManagerExt;
 
 pub struct TrayItems {
     status: MenuItem<tauri::Wry>,
@@ -20,6 +25,11 @@ pub struct TrayItems {
     pause: MenuItem<tauri::Wry>,
     disconnect: MenuItem<tauri::Wry>,
     quit: MenuItem<tauri::Wry>,
+}
+
+struct TrayRefresh {
+    pending: AtomicBool,
+    last_signature: Mutex<String>,
 }
 
 fn band_ready(connection: Connection) -> bool {
@@ -43,6 +53,41 @@ fn battery_percent(runtime: &RuntimeState) -> Option<u32> {
         })
         .filter(|n| n.is_finite() && *n >= 0.0)
         .map(|n| n.round() as u32)
+}
+
+fn connection_key(connection: Connection) -> &'static str {
+    match connection {
+        Connection::Connected => "connected",
+        Connection::Standby => "standby",
+        Connection::Installing => "installing",
+        Connection::Connecting => "connecting",
+        Connection::Waiting => "waiting",
+        Connection::Retrying => "retrying",
+        Connection::Error => "error",
+        Connection::Disconnected => "disconnected",
+    }
+}
+
+fn device_name(s: &Session) -> String {
+    s.prefs
+        .selected
+        .and_then(|index| s.credentials.as_ref().and_then(|c| c.devices.get(index)))
+        .map(|d| d.name.clone())
+        .unwrap_or_default()
+}
+
+/// Stable signature so unchanged runtime frames skip menu churn.
+pub fn tray_signature(s: &Session) -> String {
+    format!(
+        "{}|{}|{}|{}|{}",
+        connection_key(s.runtime.connection),
+        s.runtime.paused,
+        battery_percent(&s.runtime)
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        device_name(s),
+        i18n::current(&s.prefs.language),
+    )
 }
 
 fn status_text(s: &Session) -> String {
@@ -87,36 +132,81 @@ fn status_text(s: &Session) -> String {
     parts.join(" · ")
 }
 
-/// Relabels the tray after language or runtime state changes.
-pub fn refresh_tray(app: &AppHandle) {
+fn apply_tray_items(app: &AppHandle) {
     let Some(items) = app.try_state::<TrayItems>() else {
+        return;
+    };
+    let Some(refresh) = app.try_state::<TrayRefresh>() else {
         return;
     };
     let shared = app.state::<Shared>();
     let Ok(s) = shared.lock() else {
         return;
     };
+    let signature = tray_signature(&s);
+    {
+        let Ok(mut last) = refresh.last_signature.lock() else {
+            return;
+        };
+        if *last == signature {
+            return;
+        }
+        *last = signature;
+    }
     let labels = i18n::labels(i18n::current(&s.prefs.language));
     let ready = band_ready(s.runtime.connection);
     let _ = items.status.set_text(status_text(&s));
     let _ = items.open.set_text(labels.open);
     let _ = items.wake.set_text(labels.wake);
     let _ = items.wake.set_enabled(ready);
-    let _ = items
-        .pause
-        .set_text(if s.runtime.paused {
-            labels.resume
-        } else {
-            labels.pause
-        });
+    let _ = items.pause.set_text(if s.runtime.paused {
+        labels.resume
+    } else {
+        labels.pause
+    });
     let _ = items.disconnect.set_text(labels.disconnect);
     let _ = items.disconnect.set_enabled(ready);
     let _ = items.quit.set_text(labels.quit);
 }
 
+/// Apply tray labels on the main thread immediately (menu callbacks / first paint).
+pub fn refresh_tray_now(app: &AppHandle) {
+    let app = app.clone();
+    let _ = app
+        .clone()
+        .run_on_main_thread(move || apply_tray_items(&app));
+}
+
+/// Coalesce bursty runtime frames onto one main-thread tray update.
+pub fn schedule_tray_refresh(app: &AppHandle) {
+    let Some(refresh) = app.try_state::<TrayRefresh>() else {
+        refresh_tray_now(app);
+        return;
+    };
+    if refresh.pending.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        if let Some(state) = app.try_state::<TrayRefresh>() {
+            state.pending.store(false, Ordering::Release);
+        }
+        let painted = app.clone();
+        let _ = app
+            .clone()
+            .run_on_main_thread(move || apply_tray_items(&painted));
+    });
+}
+
 /// Relabels the tray after the language preference changes.
 pub fn apply_language(app: &AppHandle, _choice: &str) {
-    refresh_tray(app);
+    if let Some(refresh) = app.try_state::<TrayRefresh>() {
+        if let Ok(mut last) = refresh.last_signature.lock() {
+            last.clear();
+        }
+    }
+    refresh_tray_now(app);
 }
 
 pub fn run() {
@@ -146,6 +236,12 @@ pub fn run() {
                 config,
             }));
             app.manage(shared.clone());
+            app.manage(TrayRefresh {
+                pending: AtomicBool::new(false),
+                last_signature: Mutex::new(String::new()),
+            });
+            let autostart = app.autolaunch().is_enabled().unwrap_or(false);
+            app.manage(crate::commands::AutostartCache(AtomicBool::new(autostart)));
             let language = shared.lock().unwrap().prefs.language.clone();
             runtime::start(shared, app.handle().clone());
             let labels = i18n::labels(i18n::current(&language));
@@ -200,14 +296,14 @@ pub fn run() {
                             let mut s = state.lock().unwrap();
                             let _ = services::perform(&mut s, crate::domain::Action::Wake);
                             drop(s);
-                            refresh_tray(app);
+                            refresh_tray_now(app);
                         }
                         "disconnect" => {
                             let state = app.state::<Shared>();
                             let mut s = state.lock().unwrap();
                             let _ = services::disconnect(&mut s);
                             drop(s);
-                            refresh_tray(app);
+                            refresh_tray_now(app);
                         }
                         "pause" => {
                             let state = app.state::<Shared>();
@@ -215,13 +311,13 @@ pub fn run() {
                             let paused = s.runtime.paused;
                             let _ = services::pause(&mut s, !paused);
                             drop(s);
-                            refresh_tray(app);
+                            refresh_tray_now(app);
                         }
                         _ => {}
                     }
                 })
                 .build(app)?;
-            refresh_tray(app.handle());
+            refresh_tray_now(app.handle());
             if std::env::args().any(|a| a == "--background") {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
@@ -269,8 +365,13 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{band_ready, battery_percent};
-    use crate::protocol::{Connection, RuntimeState};
+    use super::{band_ready, battery_percent, connection_key, tray_signature};
+    use crate::{
+        domain::Preferences,
+        protocol::{Connection, RuntimeState},
+        runtime::RuntimeClient,
+        state::Session,
+    };
     use serde_json::json;
 
     #[test]
@@ -291,5 +392,25 @@ mod tests {
         assert_eq!(battery_percent(&runtime), Some(76));
         runtime.fields.remove("battery");
         assert_eq!(battery_percent(&runtime), Some(41));
+    }
+
+    #[test]
+    fn tray_signature_changes_with_connection_and_pause() {
+        let mut s = Session {
+            credentials: None,
+            busy: false,
+            login_error: None,
+            prefs: Preferences::default(),
+            runtime: RuntimeState::default(),
+            worker: RuntimeClient::default(),
+            config: std::env::temp_dir().join("buddy-tray-signature.json"),
+        };
+        let idle = tray_signature(&s);
+        s.runtime.connection = Connection::Connected;
+        let linked = tray_signature(&s);
+        assert_ne!(idle, linked);
+        assert!(linked.contains(connection_key(Connection::Connected)));
+        s.runtime.paused = true;
+        assert_ne!(linked, tray_signature(&s));
     }
 }

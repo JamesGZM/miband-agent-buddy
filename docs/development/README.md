@@ -39,7 +39,7 @@ For protocol changes, update the shared synthetic v1 fixture and both Rust/JavaS
 
 `npm run check:architecture` is a lightweight static guard for authored sources: core/shared platform imports, cross-app imports, direct frontend Tauri access, retired directories and source-rewriting tests. It is not a full language parser or security boundary; code review remains responsible for dynamic imports and Rust module design.
 
-Never edit `apps/band/src/common/generated`, generated PNGs, desktop assets or downloaded upstream contents. Change canonical modules/generator code and rebuild. Preserve upstream attribution and isolated patches. Local `.agent` memory, `.legacy` archives and editor indexes are outside the product tree and CI.
+Never edit `apps/band/src/common/generated`, generated PNGs, desktop assets or downloaded upstream contents. Change canonical modules/generator code and rebuild. The approved desktop icon master is `apps/desktop/artwork/app-icon.png`; `scripts/prepare_desktop.py` derives the desktop and in-app icons and draws the matching monochrome menu-bar template. Both build commands run this preparation; band artwork remains owned by `scripts/render_band_ui.py`. Preserve upstream attribution and isolated patches. Local `.agent` memory, `.legacy` archives and editor indexes are outside the product tree and CI.
 
 ## Manual smoke acceptance
 

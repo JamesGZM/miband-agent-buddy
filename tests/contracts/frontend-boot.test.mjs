@@ -37,7 +37,7 @@ test('actual frontend boots, refreshes native state and renders every existing p
   await settle();
   assert.ok(calls.some(([command])=>command==='get_state'));
   assert.ok(node('#content').innerHTML.includes('<canvas'));
-  for (const [page,expected] of [['devices','Fixture Band 9'],['account','小米帳號已登入'],['settings','強調色'],['buddy','<canvas']]) {
+  for (const [page,expected] of [['devices','Fixture Band 9'],['account','小米帳號已登入'],['settings','主題'],['buddy','<canvas']]) {
     click({page});
     assert.ok(node('#content').innerHTML.includes(expected),page);
   }
@@ -118,8 +118,10 @@ test('actual frontend boots, refreshes native state and renders every existing p
 
   // Theme strip: apply sits in the section head; unsupported themes stay blocked until Buddy advertises them.
   html = node('#content').innerHTML;
+  assert.match(html,/class="section-head"[\s\S]*class="section-sub"[\s\S]*只影響手環畫面/);
   assert.match(html,/class="section-head"[\s\S]*data-action="theme"/);
   assert.ok(html.includes('class="theme-strip"'));
+  assert.doesNotMatch(html,/theme-strip[\s\S]*class="footnote"/);
   assert.deepEqual([...html.matchAll(/data-theme-choice="(\w+)"/g)].map(m=>m[1]),['chatgpt','claude','deepseek']);
   assert.match(html,/data-theme-choice="deepseek"[\s\S]*需要更新 Buddy/);
   click({themeChoice:'deepseek'});
@@ -199,6 +201,17 @@ test('actual frontend boots, refreshes native state and renders every existing p
   // Last sync is a clock time, never a relative "seconds ago" counter.
   assert.match(node('#last-sync').textContent,/^\d{2}:\d{2}:\d{2}$/);
   assert.ok(!node('#content').innerHTML.includes('秒前'));
+
+  // Mac theme switches the full palette, not just an accent chip.
+  assert.equal(globalThis.document.documentElement.dataset.theme,'claude');
+  state.preferences.appTheme='chatgpt';
+  await refresh();
+  assert.equal(globalThis.document.documentElement.dataset.theme,'chatgpt');
+  state.preferences.appTheme='deepseek';
+  await refresh();
+  assert.equal(globalThis.document.documentElement.dataset.theme,'deepseek');
+  state.preferences.appTheme='claude';
+  await refresh();
 
   // Switching language re-renders every label, including backend messages from the shared catalog.
   state.preferences.language = 'en';

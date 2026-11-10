@@ -94,15 +94,21 @@ pub fn labels(language: &str) -> Labels {
 
 /// First entry of macOS `AppleLanguages`, e.g. `zh-Hans-CN`.
 pub fn system_language() -> Option<String> {
-    let output = std::process::Command::new("/usr/bin/defaults")
-        .args(["read", "-g", "AppleLanguages"])
-        .output()
-        .ok()?;
-    let text = String::from_utf8(output.stdout).ok()?;
-    text.lines()
-        .map(|line| line.trim().trim_matches(|c| c == '"' || c == ',' || c == ' '))
-        .find(|line| !line.is_empty() && *line != "(" && *line != ")")
-        .map(str::to_string)
+    use std::sync::OnceLock;
+    static CACHED: OnceLock<Option<String>> = OnceLock::new();
+    CACHED
+        .get_or_init(|| {
+            let output = std::process::Command::new("/usr/bin/defaults")
+                .args(["read", "-g", "AppleLanguages"])
+                .output()
+                .ok()?;
+            let text = String::from_utf8(output.stdout).ok()?;
+            text.lines()
+                .map(|line| line.trim().trim_matches(|c| c == '"' || c == ',' || c == ' '))
+                .find(|line| !line.is_empty() && *line != "(" && *line != ")")
+                .map(str::to_string)
+        })
+        .clone()
 }
 
 pub fn current(choice: &str) -> &'static str {

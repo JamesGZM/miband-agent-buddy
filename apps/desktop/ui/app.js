@@ -222,7 +222,8 @@ function buddyPage() {
     return `<button class="theme-card ${previewTheme() === id ? "selected" : ""}" data-theme-choice="${id}" ${operationActive() ? "disabled" : ""}><span class="theme-thumb"><img alt="" src="assets/${id}-preview.png"></span><span class="theme-name">${name}</span>${!supported ? `<span class="theme-note">${t("需要更新 Buddy")}</span>` : appliedTheme() === id ? `<span class="theme-note">${t("使用中")}</span>` : ""}</button>`;
   }).join("");
   const selected = previewTheme();
-  return `<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}</section><section class="group"><div class="section-head"><h2>${t("手環主題")}</h2>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div><p class="footnote">${themeSupported(selected) ? t("只影響手環畫面。") : t("手環上的 Buddy 需要更新才能使用此主題。")}</p></section>`;
+  const themeTip = themeSupported(selected) ? t("只影響手環畫面。") : t("手環上的 Buddy 需要更新才能使用此主題。");
+  return `<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}</section><section class="group"><div class="section-head"><div class="section-titles"><h2>${t("手環主題")}</h2><p class="section-sub">${themeTip}</p></div>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div></section>`;
 }
 function devicesPage() {
   const r = state.runtime,
@@ -377,7 +378,7 @@ function settingsPage() {
         )}</select>`,
       ) +
       row(
-        t("強調色"),
+        t("主題"),
         "",
         `<select id="app-theme">${options(
           [
@@ -428,17 +429,40 @@ function settingsPage() {
     `<details class="diagnostics"><summary>${t("連線診斷")}</summary><pre>${escape(JSON.stringify({ connection: r.connection, version: r.ack?.appVersion, wake: r.wake, operation: r.operation, keepScreen: r.ack?.keepDiagnostics, settingsApplied: r.ack?.settingsApplied, capabilities: r.ack?.capabilities }, null, 2))}</pre></details>`
   );
 }
+function applyChrome() {
+  const p = state.preferences;
+  document.documentElement.lang = setLanguage(
+    resolveLanguage(p.language, globalThis.navigator?.languages),
+  );
+  document.documentElement.dataset.theme = ["claude", "chatgpt", "deepseek"].includes(p.appTheme)
+    ? p.appTheme
+    : "claude";
+  document.documentElement.dataset.dark = String(
+    p.appearance === "dark" ||
+      (p.appearance === "system" && matchMedia("(prefers-color-scheme: dark)").matches),
+  );
+}
+// Theme/appearance only flip CSS variables; persist in the background.
+function savePreferences(next, { relayout = false } = {}) {
+  state.preferences = { ...state.preferences, ...next };
+  applyChrome();
+  if (relayout) render();
+  if (!bridge.available) return;
+  bridge
+    .action("preferences", {
+      appTheme: state.preferences.appTheme,
+      appearance: state.preferences.appearance,
+      language: state.preferences.language,
+      keepScreen: false,
+      background: state.preferences.background,
+    })
+    .catch((e) => toast.show("error", t(String(e))));
+}
 function render() {
   const p = state.preferences,
     r = state.runtime,
     device = selectedDevice();
-  document.documentElement.lang = setLanguage(resolveLanguage(p.language, globalThis.navigator?.languages));
-  document.documentElement.dataset.theme = p.appTheme;
-  document.documentElement.dataset.dark = String(
-    p.appearance === "dark" ||
-      (p.appearance === "system" &&
-        matchMedia("(prefers-color-scheme: dark)").matches),
-  );
+  applyChrome();
   $("#navigation").innerHTML = ["buddy", "devices", "account", "settings"]
     .map(
       (k) =>
@@ -560,13 +584,14 @@ async function refresh() {
       state.autostart,
       refreshingSince,
     ]);
-    if (
-      next !== signature &&
-      !busyAction &&
-      !["SELECT", "INPUT"].includes(document.activeElement?.tagName)
-    ) {
+    if (next !== signature) {
       signature = next;
-      render();
+      if (
+        !busyAction &&
+        !["SELECT", "INPUT"].includes(document.activeElement?.tagName)
+      )
+        render();
+      else updateLive();
     } else updateLive();
   } catch {
     $("#notice").textContent = t("無法讀取本機服務狀態");
@@ -664,14 +689,17 @@ document.addEventListener("change", (e) => {
     perform("autostart", e.target.checked);
     return;
   }
-  if (page === "settings")
-    perform("preferences", {
+  if (page !== "settings") return;
+  const languageChanged = $("#language").value !== state.preferences.language;
+  savePreferences(
+    {
       appTheme: $("#app-theme").value,
       appearance: $("#appearance").value,
       language: $("#language").value,
-      keepScreen: false,
       background: $("#background").checked,
-    });
+    },
+    { relayout: languageChanged || e.target.id === "language" },
+  );
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 render();

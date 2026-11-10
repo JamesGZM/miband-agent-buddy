@@ -6,7 +6,8 @@ use std::path::Path;
 
 pub fn save_preferences(path: &Path, prefs: &Preferences) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(prefs).map_err(|_| "設定編碼失敗")?;
-    vault::write(path, &bytes)
+    // Theme/appearance toggles are interactive; skip fsync so the UI thread/worker stays snappy.
+    vault::write_with(path, &bytes, false)
 }
 pub fn save_credentials(config: &Path, credentials: &Credentials) -> Result<(), String> {
     let bytes = serde_json::to_vec(credentials).map_err(|_| "認證編碼失敗")?;

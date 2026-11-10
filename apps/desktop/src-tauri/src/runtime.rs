@@ -101,7 +101,7 @@ pub fn start(shared: Shared, app: tauri::AppHandle) {
                         }
                         services::accept_runtime(&mut s, state);
                         drop(s);
-                        crate::app::refresh_tray(&tray_app);
+                        crate::app::schedule_tray_refresh(&tray_app);
                     }
                 }
                 if let Ok(mut s) = reader_state.lock() {
@@ -112,7 +112,7 @@ pub fn start(shared: Shared, app: tauri::AppHandle) {
                         ..Default::default()
                     };
                 }
-                crate::app::refresh_tray(&tray_app);
+                crate::app::schedule_tray_refresh(&tray_app);
             });
             if let Ok(mut s) = shared.lock() {
                 if let Some(index) = s.prefs.selected {

@@ -114,23 +114,14 @@ for name,color in [('symbols','#7E95FF'),('symbols-offline','#6C7A9C')]:
    if on=='1':d.rectangle(((left+x*size)*S,(top+y*size)*S,(left+(x+1)*size)*S-1,(top+(y+1)*size)*S-1),fill=color)
  save(im,'deepseek-'+name+'.png')
  if name=='symbols':save_nudge(im,'deepseek-'+name)
-# Application icon is original geometry; it is not a third-party brand asset.
-# Band capsule with a status dot — no terminal prompt.
-icon=Image.new('RGBA',(256,256),(0,0,0,0));d=ImageDraw.Draw(icon)
-d.rounded_rectangle((8,8,248,248),radius=52,fill='#272522')
-d.rounded_rectangle((36,92,220,164),radius=36,fill='#EBA270')
-d.rounded_rectangle((48,104,208,152),radius=24,fill='#1A1816')
-d.ellipse((112,116,144,148),fill='#EBA270')
+# Band application icon is original geometry; desktop branding is prepared separately.
+# Full-bleed opaque canvas (macOS masks the squircle). Solid shapes, not hairlines.
+icon=Image.new('RGBA',(256,256),(18,20,26,255));d=ImageDraw.Draw(icon)
+silver=(232,236,244,255);blue=(74,144,255,255);blue_hi=(130,180,255,255)
+d.rounded_rectangle((48,150,208,198),radius=24,fill=silver)
+d.rounded_rectangle((58,160,198,188),radius=14,fill=(18,20,26,255))
+d.ellipse((148,158,188,198),fill=blue)
+d.ellipse((158,166,170,178),fill=blue_hi)
+d.polygon([(72,160),(108,174),(72,188),(80,174)],fill=silver)
+d.rounded_rectangle((108,170,148,178),radius=4,fill=(120,130,150,255))
 icon.save(ROOT/'apps/band/src/common/icon.png')
-icons=ROOT/'apps/desktop/src-tauri/icons'
-icons.mkdir(parents=True,exist_ok=True)
-icon.save(icons/'icon.png')
-# Menu-bar template: black-on-transparent capsule; macOS recolors it.
-tray=Image.new('RGBA',(32,32),(0,0,0,0));td=ImageDraw.Draw(tray)
-td.rounded_rectangle((1,9,31,23),radius=7,fill='#000000')
-hole=Image.new('L',(32,32),0);hd=ImageDraw.Draw(hole)
-hd.rounded_rectangle((4,11,28,21),radius=5,fill=255)
-tray.paste(Image.new('RGBA',(32,32),(0,0,0,0)),mask=hole)
-td=ImageDraw.Draw(tray)
-td.ellipse((13,12,19,18),fill='#000000')
-tray.save(icons/'tray-template.png')

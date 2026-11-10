@@ -52,6 +52,6 @@ Buddy ACKs advertise `capabilities` (maximum lease, themes, page support). Theme
 
 ## Build and compatibility
 
-`scripts/prepare_shared.py` stages canonical shared source for Vela and wraps unchanged CommonJS source for browser ESM. It never rewrites export strings. App-local copies and artwork are ignored build outputs; `scripts/render_band_ui.py` remains the geometric artwork source.
+`scripts/prepare_shared.py` stages canonical shared source for Vela and wraps unchanged CommonJS source for browser ESM. It never rewrites export strings. App-local copies and artwork are generated build outputs; `scripts/render_band_ui.py` remains the geometric band artwork source. Desktop branding uses the approved master `apps/desktop/artwork/app-icon.png`; `scripts/prepare_desktop.py` generates its app/UI sizes and the monochrome menu-bar template.
 
 The desktop embeds its source-checkout path and build-time Node executable; it is not a relocatable distribution bundle. `mac/codex-hook.mjs` and `mac/buddy-runtime.mjs` retain old executable paths. Data location, preferences, Hook endpoint, package identity and public npm commands are unchanged. Rust packages and Quick App dependencies stay independently locked; no workspace manager or runtime rewrite is introduced.
