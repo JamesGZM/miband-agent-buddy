@@ -1,0 +1,12 @@
+{
+  "name": "buddy-band",
+  "version": "0.5.0",
+  "private": true,
+  "scripts": {
+    "build": "aiot build"
+  },
+  "devDependencies": {
+    "aiot-toolkit": "2.0.5"
+  },
+  "license": "AGPL-3.0-only"
+}

@@ -1,0 +1,22 @@
+diff --git a/src/rpc/device.rs b/src/rpc/device.rs
+index 6aa122c..b976b88 100644
+--- a/src/rpc/device.rs
++++ b/src/rpc/device.rs
+@@ -252,6 +252,7 @@ pub struct NetworkSpeed {
+ 
+ pub async fn network_speed(args: Addr, _: Option<Progress>) -> anyhow::Result<NetworkSpeed> {
+     use crate::device::vivo::components::erpc::ErpcSystem;
++    #[cfg(feature = "xiaomi-network-stack")]
+     use crate::device::xiaomi::components::network::NetworkSystem;
+ 
+     let addr = args.addr;
+@@ -262,6 +263,9 @@ pub async fn network_speed(args: Addr, _: Option<Progress>) -> anyhow::Result<Ne
+                 .map(|device| device.kind())
+                 .unwrap_or(DeviceKind::Xiaomi);
+             match kind {
++                #[cfg(not(feature = "xiaomi-network-stack"))]
++                DeviceKind::Xiaomi => Err(anyhow!("Network stack disabled")),
++                #[cfg(feature = "xiaomi-network-stack")]
+                 DeviceKind::Xiaomi => {
+                     let system = world
+                         .get_mut::<NetworkSystem>(entity)

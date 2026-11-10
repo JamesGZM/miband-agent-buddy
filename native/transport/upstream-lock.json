@@ -1,0 +1,27 @@
+[
+  {
+    "directory": "bluetooth",
+    "url": "https://github.com/AstralSightStudios/AstroBox-NG-Module-Bluetooth.git",
+    "commit": "6bf8b59c5a2d9dcdad2c978d07e16f53f3ae2aba"
+  },
+  {
+    "directory": "btclassic-spp",
+    "url": "https://github.com/AstralSightStudios/AstroBox-NG-Plugin-BtClassicSpp",
+    "commit": "b7ca7b3ae4440ed468f76c7940366e99fe754158"
+  },
+  {
+    "directory": "core",
+    "url": "https://github.com/AstralSightStudios/AstroBox-NG-Module-Core.git",
+    "commit": "6b9b82ddc875212a4ec4dd1deb68f39016460f61"
+  },
+  {
+    "directory": "pb",
+    "url": "https://github.com/AstralSightStudios/AstroBox-NG-Module-Pb.git",
+    "commit": "03a92010056dd41af114f6f46fd612104b27bd7b"
+  },
+  {
+    "directory": "vivo_msgpack",
+    "url": "https://github.com/AstralSightStudios/AstroBox-NG-Module-Vivo-MsgPack.git",
+    "commit": "baa814b3d90454c127008a85ac307acf92b4914f"
+  }
+]

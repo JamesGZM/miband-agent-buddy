@@ -1,0 +1,18 @@
+{
+  "name": "miband-agent-buddy",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Independent macOS companion for Xiaomi Smart Band 9: Mac resources and Codex activity",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/codex.test.mjs tests/keep-screen.test.mjs tests/lifecycle.test.mjs tests/native-ui.test.mjs tests/settings.test.mjs tests/buddy-state.test.mjs",
+    "build": "python3 tools/build.py",
+    "build:desktop": "python3 desktop/build.py",
+    "bootstrap": "python3 native/transport/bootstrap.py",
+    "hooks:install": "node tools/install_codex_hooks.mjs"
+  },
+  "license": "AGPL-3.0-only"
+}
