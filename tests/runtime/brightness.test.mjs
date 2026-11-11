@@ -5,7 +5,7 @@ import {runtimeHarness} from '../helpers/runtime.mjs';
 const {createPageController}=createRequire(import.meta.url)('../../apps/band/src/controllers/page-controller.js');
 
 test('brightness operation requires durable settings plus native success; power saving restores saved value after reload',async t=>{
-  const saved=new Map(),writes=[];let page,child,native=170;
+  const saved=new Map(),writes=[];let page,child,native=170,nativeMode=0;
   const channel={send:c=>child.later({event:'ack',ack:c.data})};
   const h=runtimeHarness({onWrite(c,target){
     child=target;
@@ -14,7 +14,7 @@ test('brightness operation requires durable settings plus native success; power 
   }});
   function mount(){
     const c=createPageController({now:h.clock.now,schedule:h.clock.schedule,cancel:h.clock.cancel,
-      brightness:{setKeepScreenOn:c=>c.success(),getValue:c=>c.success({value:native}),setValue:c=>writes.push(c)},
+      brightness:{getMode:c=>c.success({mode:nativeMode}),setMode:c=>{nativeMode=c.mode;c.success();},setKeepScreenOn:c=>c.success(),getValue:c=>c.success({value:native}),setValue:c=>writes.push(c)},
       storage:{get:c=>c.success(saved.get(c.key)||''),set:c=>{saved.set(c.key,c.value);c.success();}},
       interconnect:{instance:()=>channel},application:{terminate(){}}});
     page=Object.assign({},c,c.private);page.onInit();page.onShow();
@@ -39,5 +39,17 @@ test('brightness operation requires durable settings plus native success; power 
   const beforeRetry=writes.length;
   await h.runtime.dispatch({op:'configure',settings:{bandBrightness:80},request:'native-retry'});
   await h.clock.advance(2000);assert.equal(writes.length,beforeRetry+1);
-  writes.at(-1).success();await h.clock.advance(2000);assert.equal(h.state.operation.status,'done');
+  native=80;writes.at(-1).success();await h.clock.advance(2000);assert.equal(h.state.operation.status,'done');
+  const beforeAuto=writes.length;
+  await h.runtime.dispatch({op:'configure',settings:{bandAutoBrightness:true},request:'auto-on'});await h.clock.advance(4000);
+  assert.equal(h.state.operation.status,'done');assert.equal(nativeMode,1);assert.equal(writes.length,beforeAuto);
+  await h.runtime.dispatch({op:'configure',settings:{powerSaving:true},request:'power-auto-on'});await h.clock.advance(2000);
+  assert.equal(nativeMode,0);assert.equal(writes.at(-1).value,25);native=25;writes.at(-1).success();await h.clock.advance(2000);
+  assert.equal(h.state.operation.status,'done');
+  await h.runtime.dispatch({op:'configure',settings:{powerSaving:false},request:'power-auto-off'});await h.clock.advance(4000);
+  assert.equal(h.state.operation.status,'done');assert.equal(nativeMode,1);assert.equal(h.state.ack.bandBrightness,80);
+  await h.runtime.dispatch({op:'configure',settings:{bandAutoBrightness:false},request:'auto-off'});await h.clock.advance(2000);
+  assert.equal(writes.at(-1).value,80);native=80;writes.at(-1).success();await h.clock.advance(2000);
+  assert.equal(h.state.operation.status,'done');assert.equal(nativeMode,0);
+
 });

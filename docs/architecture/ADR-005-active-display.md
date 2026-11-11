@@ -30,6 +30,12 @@ Some clients do not emit a terminal event when a task is cancelled, including ce
 
 The `reset_activity` command clears tracked sessions and pending/in-flight Hook event wakes while preserving historical event counters. A desktop reset includes a request ID, wakes Buddy once and completes from a matching display/snapshot receipt, including while synchronization is off. The legacy request-less command remains local-only. Reset does not terminate or grant permissions to external AI tasks.
 
+## Charging overlays and transient status failures
+
+A failed device-status probe is not sufficient proof that Bluetooth disconnected. One rejected/timed-out probe keeps the transport and retries after 5 seconds; two consecutive probe failures still trigger recovery. A matching Buddy ACK cancels an outstanding probe and ignores its late failure. Valid battery/status replies or Buddy ACKs reset the failure count.
+
+A charging transition from false to true can request one recovery after a 2-second settling delay, when synchronization/task keep-awake are enabled, a task remains active, and Buddy was displayed earlier in this connection. Hidden charging-page ACKs do not erase that prior display context. Initial/repeated charging samples do not relaunch it. Pause, task reset, disabling keep-awake, unplugging, disconnect and install cancel pending recovery. Transport generation and task/settings checks also apply before launch. Ordinary battery samples never periodically reopen Buddy.
+
 ## Alternatives
 
 - An unlimited persistent keep-screen setting has no band-local recovery after host failure.

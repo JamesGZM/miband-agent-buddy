@@ -42,6 +42,7 @@ pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
             power_saving: Some(s.prefs.power_saving),
             buddy_fps: Some(s.prefs.buddy_fps),
             band_brightness: s.prefs.band_brightness,
+            band_auto_brightness: s.prefs.band_auto_brightness,
             completion_vibration: Some(s.prefs.completion_vibration),
             completion_vibration_mode: Some(s.prefs.completion_vibration_mode),
         },
@@ -205,6 +206,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                     power_saving: None,
                     buddy_fps: None,
                     band_brightness: None,
+                    band_auto_brightness: None,
                     completion_vibration: None,
                     completion_vibration_mode: None,
                 },
@@ -249,6 +251,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                         power_saving: None,
                         buddy_fps: None,
                         band_brightness: None,
+                        band_auto_brightness: None,
                         completion_vibration: None,
                         completion_vibration_mode: None,
                     },
@@ -279,6 +282,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             };
@@ -307,6 +311,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             };
@@ -325,6 +330,24 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                     .send(RuntimeCommand::ResetActivity { request: None })
             }
         }
+        Action::BandAutoBrightness(value) => {
+            setting_operation_allowed(s)?;
+            s.prefs.band_auto_brightness = Some(value);
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: None,
+                buddy_fps: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
+                band_brightness: None,
+                band_auto_brightness: Some(value),
+            };
+            save_band_setting(s, "band_auto_brightness", settings)
+        }
         Action::BandBrightness(value) => {
             setting_operation_allowed(s)?;
             s.prefs.band_brightness = Some(value);
@@ -339,6 +362,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 completion_vibration: None,
                 completion_vibration_mode: None,
                 band_brightness: Some(value),
+                band_auto_brightness: None,
             };
             save_band_setting(s, "band_brightness", settings)
         }
@@ -357,6 +381,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: None,
                 buddy_fps: Some(fps),
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             };
@@ -374,6 +399,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: Some(enabled),
                 completion_vibration_mode: None,
             };
@@ -391,6 +417,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: Some(enabled),
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             };
@@ -408,6 +435,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: Some(mode),
             };
@@ -469,6 +497,7 @@ pub struct PreferencesView<'a> {
     power_saving: bool,
     buddy_fps: u8,
     band_brightness: Option<u8>,
+    band_auto_brightness: Option<bool>,
     completion_vibration: bool,
     completion_vibration_mode: VibrationMode,
     sync_enabled: bool,
@@ -529,6 +558,7 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
             power_saving: s.prefs.power_saving,
             buddy_fps: s.prefs.buddy_fps,
             band_brightness: s.prefs.band_brightness,
+            band_auto_brightness: s.prefs.band_auto_brightness,
             completion_vibration: s.prefs.completion_vibration,
             completion_vibration_mode: s.prefs.completion_vibration_mode,
             sync_enabled: s.prefs.sync_enabled,
@@ -866,6 +896,32 @@ mod tests {
         assert_eq!(
             perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(),
             "背景程序未啟動，請重新開啟 App"
+        );
+    }
+    #[test]
+    fn automatic_brightness_is_optional_typed_and_preserved_by_power_saving() {
+        let mut s = session();
+        assert_eq!(s.prefs.band_auto_brightness, None);
+        for enabled in [true, false] {
+            perform(&mut s, Action::BandAutoBrightness(enabled)).unwrap();
+            assert_eq!(
+                persistence::load(&s.config).0.band_auto_brightness,
+                Some(enabled)
+            );
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["bandAutoBrightness"],
+                enabled
+            );
+        }
+        perform(&mut s, Action::BandAutoBrightness(true)).unwrap();
+        perform(&mut s, Action::PowerSaving(true)).unwrap();
+        perform(&mut s, Action::PowerSaving(false)).unwrap();
+        assert_eq!(s.prefs.band_auto_brightness, Some(true));
+        assert!(
+            serde_json::from_value::<Action>(
+                json!({"operation":"band_auto_brightness","value":"true"})
+            )
+            .is_err()
         );
     }
     #[test]

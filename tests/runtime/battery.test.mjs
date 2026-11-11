@@ -28,3 +28,8 @@ test('battery events update charging before device info, poll while paused and r
   child=h.children.at(-1);child.event({event:'authenticated'});child.event({event:'device',battery:18,charging:false});
   assert.equal(h.state.lowBattery.sequence,1);
 });
+
+test('charging fallback is queried within a few seconds while activity synchronization is paused',async t=>{
+  const h=runtimeHarness();t.after(()=>h.runtime.stop());await h.connect();await h.runtime.dispatch({op:'pause',value:true});
+  await h.clock.advance(6000);assert.equal(h.calls.filter(c=>c.id==='battery-poll').length,1);
+});

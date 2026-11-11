@@ -56,6 +56,7 @@ test('actual frontend boots, refreshes native state and renders every existing p
       if (command === 'action' && args.operation === 'activity_keep_awake') state.preferences.activityKeepAwake = args.value;
       if (command === 'action' && args.operation === 'completion_vibration') state.preferences.completionVibration = args.value;
       if (command === 'action' && args.operation === 'completion_vibration_mode') state.preferences.completionVibrationMode = args.value;
+      if (command === 'action' && args.operation === 'band_auto_brightness') state.preferences.bandAutoBrightness = args.value;
       if (command === 'action' && args.operation === 'band_brightness') state.preferences.bandBrightness = args.value;
       if (command === 'action' && args.operation === 'buddy_fps') state.preferences.buddyFps = args.value;
       if (command === 'action' && args.operation === 'power_saving') state.preferences.powerSaving = args.value;
@@ -388,6 +389,10 @@ test('actual frontend boots, refreshes native state and renders every existing p
   handlers.get('change')({target:{id:'band-brightness',value:'173'}});await settle();
   assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='band_brightness').at(-1),['action',{operation:'band_brightness',value:173}]);
   assert.equal(state.preferences.bandBrightness,173);
+  handlers.get('change')({target:{id:'band-auto-brightness',checked:true}});await settle();
+  assert.equal(state.preferences.bandAutoBrightness,true);
+  assert.match(node('#content').innerHTML,/id="band-brightness"[^>]*disabled/);
+  const manualCalls=calls.length;handlers.get('change')({target:{id:'band-brightness',value:'80'}});await settle();assert.equal(calls.length,manualCalls);
   assert.doesNotMatch(node('#content').innerHTML, /id="power-saving"[^>]* checked/);
   handlers.get('change')({target:{id:'power-saving',checked:true}});
   await settle();
@@ -400,6 +405,12 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.match(node('#content').innerHTML, /id="power-saving"[^>]* checked/);
   handlers.get('change')({target:{id:'power-saving',checked:false}});
   await settle();
+
+  assert.equal(state.preferences.bandAutoBrightness,true);
+  assert.match(node('#content').innerHTML,/id="band-auto-brightness"[^>]*checked/);
+  handlers.get('change')({target:{id:'band-auto-brightness',checked:false}});await settle();
+  assert.equal(state.preferences.bandAutoBrightness,false);
+  assert.doesNotMatch(node('#content').innerHTML,/id="band-brightness"[^>]*disabled/);
 
   // Keep the user's choice while saving, and discard a poll started before that choice.
   let releaseRead, releaseAction;

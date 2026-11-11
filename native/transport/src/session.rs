@@ -1,5 +1,5 @@
 use crate::{
-    application::{battery, buddy_status, device_status, install, sync_app},
+    application::{battery, buddy_status, cached_battery, device_status, install, sync_app},
     connection::connect,
     error::classify_error,
     protocol::{Command, Credentials, Operation},
@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use corelib::{device::DeviceKind, events::CoreEvent};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 pub async fn run(mut rx: tokio::sync::mpsc::Receiver<Value>) -> Result<()> {
@@ -21,6 +21,7 @@ pub async fn run(mut rx: tokio::sync::mpsc::Receiver<Value>) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(50), connect(addr.clone(), key)).await??;
     let _ = battery(addr.clone()).await;
     let mut ready = false;
+    let mut last_battery_update = None;
     loop {
         tokio::select! {
             command=rx.recv()=>{
@@ -58,6 +59,11 @@ pub async fn run(mut rx: tokio::sync::mpsc::Receiver<Value>) -> Result<()> {
             event=events.recv()=>match event? {
                 CoreEvent::InterconnectMessage(m) if m.device_addr==addr && m.pkg_name=="com.macprobe.band9"=> {
                     if let Ok(ack)=serde_json::from_slice::<Value>(&m.payload) {emit(json!({"event":"ack","ack":ack}));}
+                }
+                CoreEvent::DeviceStateChanged(change) if change.device_addr==addr=> {
+                    if let Some(record)=cached_battery(addr.clone()).await {
+                        if last_battery_update.as_ref()!=Some(&record){last_battery_update=Some(record.clone());emit(record);}
+                    }
                 }
                 CoreEvent::SharedLinkDetected(_)=>{emit(json!({"event":"conflict"}));break;}
                 _=>{}

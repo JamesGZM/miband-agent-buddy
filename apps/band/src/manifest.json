@@ -1,8 +1,8 @@
 {
   "package": "com.macprobe.band9",
   "name": "Buddy",
-  "versionName": "0.5.7",
-  "versionCode": 29,
+  "versionName": "0.5.10",
+  "versionCode": 32,
   "minAPILevel": 1,
   "icon": "/common/icon.png",
   "deviceTypeList": [

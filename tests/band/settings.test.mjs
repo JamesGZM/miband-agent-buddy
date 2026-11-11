@@ -197,3 +197,19 @@ test('native brightness baseline is durable, legacy-safe and never overwrites a 
   assert.equal(store.snapshot(config).bandBrightness,255);
   assert.equal(changed.at(-1).powerSaving,true);store.close();
 });
+
+test('unreleased unverified baseline is not migrated into a user brightness choice',()=>{
+  const store=createSettings({get:c=>c.success(JSON.stringify({...config,bandBrightness:0})),set:c=>c.success()},()=>{});
+  store.load();assert.equal(store.snapshot(config).bandBrightness,null);
+  store.apply({...config,bandBrightness:0});assert.equal(store.snapshot({...config,bandBrightness:0}).bandBrightness,0);
+  store.close();
+});
+
+test('auto brightness is durable and legacy/power updates retain the selected mode',()=>{
+  let saved;const store=createSettings({get:c=>c.fail(),set:c=>{saved=JSON.parse(c.value);c.success();}},()=>{});
+  store.load();assert.equal(store.snapshot(config).bandAutoBrightness,null);
+  store.apply({...config,bandAutoBrightness:true,bandBrightness:200});
+  assert.equal(store.snapshot({...config,bandAutoBrightness:true}).settingsApplied,true);
+  store.apply({...config,powerSaving:true});assert.equal(saved.bandAutoBrightness,true);assert.equal(saved.bandBrightness,200);
+  store.close();
+});

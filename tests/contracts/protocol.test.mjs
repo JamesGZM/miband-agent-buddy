@@ -158,3 +158,18 @@ test('brightness is additive and validates integer 0–255 at both boundaries',(
   }
   assert.throws(()=>decodeTransportEvent({event:'battery',percent:19,charging:'yes'}));
 });
+
+test('auto brightness accepts only additive booleans',()=>{
+  const require=createRequire(import.meta.url);
+  const {decodeMessage}=require('../../packages/buddy-shared/protocol/snapshot.js');
+  const {decodeRuntimeCommand}=require('../../packages/buddy-shared/protocol/runtime.js');
+  const base={v:1,type:'snapshot',session:'auto-brightness',seq:1,text:'',value:0,cpu:0};
+  for(const value of [true,false]){
+    assert.equal(decodeMessage(JSON.stringify({...base,bandAutoBrightness:value})).bandAutoBrightness,value);
+    assert.equal(decodeRuntimeCommand({op:'configure',settings:{bandAutoBrightness:value}}).settings.bandAutoBrightness,value);
+  }
+  for(const value of [null,0,1,'true']){
+    assert.throws(()=>decodeMessage(JSON.stringify({...base,bandAutoBrightness:value})));
+    assert.throws(()=>decodeRuntimeCommand({op:'configure',settings:{bandAutoBrightness:value}}));
+  }
+});

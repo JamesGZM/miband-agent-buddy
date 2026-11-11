@@ -14,6 +14,7 @@ function validSettings(value) {
     (value.wakeHoldMs === undefined || integer(value.wakeHoldMs, 5000, 1800000)) &&
     (value.keepScreen === undefined || typeof value.keepScreen === 'boolean') &&
     (value.activityKeepAwake === undefined || typeof value.activityKeepAwake === 'boolean') &&
+    (value.bandAutoBrightness === undefined || typeof value.bandAutoBrightness==='boolean') &&
     (value.bandBrightness === undefined || integer(value.bandBrightness,0,255)) &&
     (value.buddyFps === undefined || integer(value.buddyFps,10,30)) &&
     (value.powerSaving === undefined || typeof value.powerSaving === 'boolean') &&

@@ -74,6 +74,8 @@ pub struct RuntimeSettings {
     pub completion_vibration_mode: Option<VibrationMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub band_brightness: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub band_auto_brightness: Option<bool>,
 }
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -148,6 +150,7 @@ mod tests {
                 power_saving: Some(false),
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: Some(false),
                 completion_vibration_mode: Some(VibrationMode::Short),
             },
@@ -167,6 +170,7 @@ mod tests {
                     power_saving: None,
                     buddy_fps: None,
                     band_brightness: None,
+                    band_auto_brightness: None,
                     completion_vibration: None,
                     completion_vibration_mode: None,
                 },
@@ -196,6 +200,7 @@ mod tests {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             },
@@ -226,6 +231,7 @@ mod tests {
                 power_saving: None,
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             },
@@ -263,6 +269,7 @@ mod tests {
                 power_saving: Some(true),
                 buddy_fps: None,
                 band_brightness: None,
+                band_auto_brightness: None,
                 completion_vibration: None,
                 completion_vibration_mode: None,
             },

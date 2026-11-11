@@ -45,6 +45,7 @@ function decodeMessage(raw) {
       (msg.completionVibration !== undefined && typeof msg.completionVibration !== 'boolean') ||
       (msg.completionVibrationMode !== undefined && ['short','long'].indexOf(msg.completionVibrationMode)<0) ||
       (msg.completion !== undefined && (!msg.completion || Array.isArray(msg.completion) || msg.completionVibration!==true || typeof msg.completion.id!=='string' || !/^[a-zA-Z0-9-]{1,64}$/.test(msg.completion.id) || typeof msg.completion.count!=='number' || !isFinite(msg.completion.count) || msg.completion.count%1!==0 || msg.completion.count<1 || msg.completion.count>128)) ||
+      (msg.bandAutoBrightness !== undefined && typeof msg.bandAutoBrightness!=='boolean') ||
       (msg.bandBrightness !== undefined && (typeof msg.bandBrightness!=='number'||!isFinite(msg.bandBrightness)||msg.bandBrightness%1!==0||msg.bandBrightness<0||msg.bandBrightness>255)) ||
       (msg.buddyFps !== undefined && (typeof msg.buddyFps!=='number'||!isFinite(msg.buddyFps)||msg.buddyFps%1!==0||msg.buddyFps<10||msg.buddyFps>30)) ||
       (msg.powerSaving !== undefined && typeof msg.powerSaving !== 'boolean') ||

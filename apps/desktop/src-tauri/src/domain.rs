@@ -26,6 +26,7 @@ pub struct Preferences {
     pub completion_vibration_mode: VibrationMode,
     pub buddy_fps: u8,
     pub band_brightness: Option<u8>,
+    pub band_auto_brightness: Option<bool>,
     pub sync_enabled: bool,
     pub background: bool,
     pub selected: Option<usize>,
@@ -47,6 +48,7 @@ impl Default for Preferences {
             completion_vibration_mode: VibrationMode::Short,
             buddy_fps: 10,
             band_brightness: None,
+            band_auto_brightness: None,
             sync_enabled: true,
             background: true,
             selected: None,
@@ -203,6 +205,8 @@ pub enum Action {
     BuddyFps(u8),
     #[serde(rename = "band_brightness")]
     BandBrightness(u8),
+    #[serde(rename = "band_auto_brightness")]
+    BandAutoBrightness(bool),
     #[serde(rename = "refresh_device")]
     RefreshDevice,
     #[serde(rename = "check_buddy")]

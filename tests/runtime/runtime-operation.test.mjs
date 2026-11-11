@@ -251,10 +251,10 @@ test('a manual setting waits for an outstanding link probe before sending its sn
   const h = runtimeHarness({onWrite(c,child) { if (c.op !== 'ping') band.onWrite(c,child); }});
   t.after(() => h.runtime.stop());
   await h.connect(); await h.clock.advance(5000); band.awake=false;
-  for (let i=0;i<60&&!h.calls.some(c=>c.op==='ping');i++) await h.clock.advance(1000);
-  assert.ok(h.calls.some(c=>c.op==='ping'));
+  for (let i=0;i<60&&!h.calls.some(c=>c.id==='link-ping');i++) await h.clock.advance(1000);
+  assert.ok(h.calls.some(c=>c.id==='link-ping'));
   const launches=band.launches.length;
-  const old=h.calls.filter(c=>c.op==='snapshot').at(-1).payload;
+  const old=h.calls.filter(c=>c.op==='snapshot')[0].payload;
   await h.runtime.dispatch({op:'configure',settings:{wakeHoldMs:60000},request:'op-probe'});
   assert.equal(band.launches.length,launches);
   h.children[0].event(ack(old));

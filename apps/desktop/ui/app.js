@@ -102,6 +102,7 @@ const operationDone = {
   power_saving: "省電設定已套用到手環",
   completion_vibration: "震動設定已套用到手環",
   band_brightness: "亮度已套用到手環",
+  band_auto_brightness: "自動亮度設定已套用到手環",
   completion_vibration_mode: "震動模式已套用到手環",
   reset_activity: "任務顯示已重設",
   check_buddy: "Buddy 檢查完成",
@@ -206,7 +207,7 @@ function bytes(value) {
   return value >= 1e9 ? (value / 1e9).toFixed(1) + " GB" : (value / 1e6).toFixed(value >= 1e8 ? 0 : 1) + " MB";
 }
 const spinner = '<span class="spinner" aria-hidden="true"></span>';
-const bandActions = new Set(["theme", "page", "wake", "wake_hold", "activity_keep_awake", "power_saving", "buddy_fps", "band_brightness", "completion_vibration", "completion_vibration_mode", "reset_activity", "check_buddy", "install"]);
+const bandActions = new Set(["theme", "page", "wake", "wake_hold", "activity_keep_awake", "power_saving", "buddy_fps", "band_brightness", "band_auto_brightness", "completion_vibration", "completion_vibration_mode", "reset_activity", "check_buddy", "install"]);
 function actionProgress(action) {
   if (action === "install" && state.runtime.connection === "installing") return t("安裝中…");
   if (operationActive() && operation().kind === action)
@@ -430,6 +431,7 @@ function settingsPage() {
   const version = escape(state.appVersion || update.currentVersion || "—");
   const versionButton = `<button class="version-button" data-action="update_details" aria-expanded="${updateExpanded}" aria-controls="desktop-update" aria-label="${t(updateView.hasUpdate ? "版本 {version}，有可用更新" : "版本 {version}，檢查更新", { version })}">${version}${updateView.hasUpdate ? '<span class="update-dot" aria-hidden="true"></span>' : ""}${["checking", "downloading"].includes(update.status) ? spinner : ""}</button>`;
   const updatePanel = updateExpanded ? `<div id="desktop-update" class="update-panel" role="region" aria-label="${t("版本更新")}"><p role="status">${updateDetail}</p>${updateView.progress !== null ? `<progress class="progress" max="100" value="${updateView.progress}" aria-label="${t("下載進度")}"></progress>` : ""}<div class="update-actions">${updateControls}${update.releaseUrl ? actionButton(t("版本說明"), "open_release") : ""}</div></div>` : "";
+  const automaticBrightness = p.bandAutoBrightness ?? r.ack?.bandAutoBrightness ?? (r.ack?.brightness?.mode === 1);
   const vibrationProgress = actionProgress("completion_vibration_mode");
   const options = (pairs, current) =>
     pairs
@@ -438,9 +440,9 @@ function settingsPage() {
           `<option value="${v}" ${current === v ? "selected" : ""}>${text}</option>`,
       )
       .join("");
-  const toggle = (id, checked, label, action = id) => {
+  const toggle = (id, checked, label, action = id, disabled = false) => {
     const progress = actionProgress(action);
-    return `<span class="toggle-control">${progress ? `<span class="control-status" role="status">${spinner}${progress}</span>` : ""}<input id="${id}" class="switch" type="checkbox" aria-label="${escape(label)}" ${checked ? "checked" : ""}${busyAction || (bandActions.has(action) && operationActive()) ? ' disabled' : ''}${progress ? ' aria-busy="true"' : ''}></span>`;
+    return `<span class="toggle-control">${progress ? `<span class="control-status" role="status">${spinner}${progress}</span>` : ""}<input id="${id}" class="switch" type="checkbox" aria-label="${escape(label)}" ${checked ? "checked" : ""}${disabled || busyAction || (bandActions.has(action) && operationActive()) ? ' disabled' : ''}${progress ? ' aria-busy="true"' : ''}></span>`;
   };
   return (
     group(
@@ -517,9 +519,14 @@ function settingsPage() {
           toggle("power-saving", p.powerSaving === true, t("省電模式"), "power_saving"),
         ) +
         row(
+          t("自動亮度"),
+          t("開啟後由手環調整亮度，停用手動滑桿。省電時暫時關閉，結束後恢復。"),
+          toggle("band-auto-brightness", p.powerSaving ? false : automaticBrightness, t("自動亮度"), "band_auto_brightness", p.powerSaving === true),
+        ) +
+        row(
           t("手環亮度"),
-          t("範圍 0–255。省電模式固定為 25，關閉後恢復選定亮度。"),
-          `<span class="brightness-control"><input id="band-brightness" type="range" min="0" max="255" step="1" aria-label="${t("手環亮度")}" value="${p.powerSaving ? 25 : p.bandBrightness ?? r.ack?.bandBrightness ?? 128}" ${p.powerSaving || busyAction || operationActive() ? "disabled" : ""}><output id="brightness-value" for="band-brightness">${p.powerSaving ? 25 : p.bandBrightness ?? r.ack?.bandBrightness ?? "—"}</output>${actionProgress("band_brightness") ? `<span class="control-status" role="status">${spinner}${actionProgress("band_brightness")}</span>` : ""}</span>`,
+          t("範圍 0–255。省電模式固定為 25，關閉後恢復選定亮度。") + (r.ack?.brightness?.status === "error" ? " " + t("手環未能套用亮度，請重試") : ""),
+          `<span class="brightness-control"><input id="band-brightness" type="range" min="0" max="255" step="1" aria-label="${t("手環亮度")}" value="${p.powerSaving ? 25 : p.bandBrightness ?? r.ack?.bandBrightness ?? 128}" ${p.powerSaving || automaticBrightness || busyAction || operationActive() ? "disabled" : ""}><output id="brightness-value" for="band-brightness">${p.powerSaving ? 25 : automaticBrightness ? t("自動") : p.bandBrightness ?? r.ack?.bandBrightness ?? "—"}</output>${actionProgress("band_brightness") ? `<span class="control-status" role="status">${spinner}${actionProgress("band_brightness")}</span>` : ""}</span>`,
         ) +
         row(
           t("Buddy 幀率"),
@@ -819,7 +826,7 @@ async function perform(op, value, success = "") {
     return;
   }
   const region = $("#region")?.value || state.region || "cn";
-  const preference = { activity_keep_awake: "activityKeepAwake", power_saving: "powerSaving", buddy_fps: "buddyFps", band_brightness: "bandBrightness", completion_vibration: "completionVibration", completion_vibration_mode: "completionVibrationMode", wake_hold: "wakeHoldSeconds", pause: "syncEnabled" }[op];
+  const preference = { activity_keep_awake: "activityKeepAwake", power_saving: "powerSaving", buddy_fps: "buddyFps", band_brightness: "bandBrightness", band_auto_brightness: "bandAutoBrightness", completion_vibration: "completionVibration", completion_vibration_mode: "completionVibrationMode", wake_hold: "wakeHoldSeconds", pause: "syncEnabled" }[op];
   const revision = preference ? setPendingPreferences({ [preference]: op === "pause" ? !value : value }) : ++stateEpoch;
   if (op === "autostart") {
     pendingAutostart = { value, previous: state.autostart };
@@ -969,9 +976,13 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", (e) => {
   if (busyAction || e.target.disabled) return;
+  if(e.target.id === "band-auto-brightness"){
+    if(!state.preferences.powerSaving)perform("band_auto_brightness",e.target.checked);
+    return;
+  }
   if (e.target.id === "band-brightness") {
     const value=Number(e.target.value);
-    if(!state.preferences.powerSaving && !operationActive() && Number.isInteger(value) && value>=0 && value<=255)perform("band_brightness",value);
+    if(!state.preferences.powerSaving && !(state.preferences.bandAutoBrightness ?? state.runtime.ack?.bandAutoBrightness ?? (state.runtime.ack?.brightness?.mode===1)) && !operationActive() && Number.isInteger(value) && value>=0 && value<=255)perform("band_brightness",value);
     return;
   }
   if (e.target.id === "region" || e.target.id === "wake-hold") return;

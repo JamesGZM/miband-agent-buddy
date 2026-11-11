@@ -1,5 +1,10 @@
 // Keys are the Traditional Chinese source strings used by the UI, runtime and Rust services.
 const pairs = [
+  ["自動亮度", "自动亮度", "Automatic brightness"],
+  ["自動", "自动", "Auto"],
+  ["自動亮度設定已套用到手環", "自动亮度设置已应用到手环", "Automatic brightness applied to the band"],
+  ["開啟後由手環調整亮度，停用手動滑桿。省電時暫時關閉，結束後恢復。", "开启后由手环调整亮度，停用手动滑杆。省电时暂时关闭，结束后恢复。", "Lets the band adjust brightness and disables the manual slider. Power saving temporarily overrides it, then restores your choice."],
+
   ["手環未能套用亮度，請重試", "手环未能应用亮度，请重试", "The band could not apply brightness. Please retry."],
   ["手環亮度", "手环亮度", "Band brightness"],
   ["範圍 0–255。省電模式固定為 25，關閉後恢復選定亮度。", "范围 0–255。省电模式固定为 25，关闭后恢复选定亮度。", "Range 0–255. Power saving uses 25; turning it off restores your selected brightness."],
