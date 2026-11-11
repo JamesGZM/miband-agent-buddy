@@ -35,6 +35,7 @@ function decodeMessage(raw) {
       ((msg.wakeId!=null||msg.wakeHoldMs!=null)&&(typeof msg.wakeId!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(msg.wakeId)||(typeof msg.wakeHoldMs!=='number'||msg.wakeHoldMs%1!==0)||msg.wakeHoldMs<1000||msg.wakeHoldMs>MAX_WAKE_HOLD_MS)) ||
       !validActivityHold(msg) ||
       !validSessionCounts(msg.sessionCounts) ||
+      (msg.powerSaving !== undefined && typeof msg.powerSaving !== 'boolean') ||
       (msg.command != null && msg.command !== 'exit') ||
       (msg.page != null && msg.page !== 0 && msg.page !== 1) ||
       (msg.mode !== undefined && msg.mode !== null && ['idle','thinking','working','attention','complete','sleep','offline','error'].indexOf(msg.mode) < 0)) {

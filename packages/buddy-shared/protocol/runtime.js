@@ -13,6 +13,8 @@ function validSettings(value) {
     (value.buddyTheme === undefined || ['chatgpt', 'claude', 'deepseek'].indexOf(value.buddyTheme) >= 0) &&
     (value.wakeHoldMs === undefined || integer(value.wakeHoldMs, 5000, 1800000)) &&
     (value.keepScreen === undefined || typeof value.keepScreen === 'boolean') &&
+    (value.activityKeepAwake === undefined || typeof value.activityKeepAwake === 'boolean') &&
+    (value.powerSaving === undefined || typeof value.powerSaving === 'boolean') &&
     (value.revision === undefined || (typeof value.revision === 'number' && isFinite(value.revision) && value.revision >= 0 && value.revision % 1 === 0));
 }
 function validRequest(value) {
@@ -39,8 +41,9 @@ function decodeRuntimeCommand(value) {
       if (typeof value.value !== 'boolean') throw new Error('Invalid pause');
       break;
     case 'disconnect': case 'install': case 'refresh_device': break;
-    case 'reset_activity':
-      if (Object.keys(value).length !== 1) throw new Error('Invalid activity reset');
+    case 'reset_activity': case 'check_buddy':
+      if ((value.request !== undefined && !validRequest(value.request)) ||
+          Object.keys(value).some(function(key) { return key !== 'op' && key !== 'request'; })) throw new Error('Invalid Buddy operation');
       break;
     default: throw new Error('Unknown command');
   }
@@ -58,6 +61,10 @@ function decodeTransportEvent(value) {
       break;
     case 'ack':
       if (!object(value.ack)) throw new Error('Invalid ACK');
+      break;
+    case 'buddy':
+      if (typeof value.installed !== 'boolean' ||
+          (value.installed ? !integer(value.versionCode, 0, 4294967295) : value.versionCode != null)) throw new Error('Invalid Buddy inventory');
       break;
     case 'device':
       if (!optionalInteger(value.battery, 0, 100) ||

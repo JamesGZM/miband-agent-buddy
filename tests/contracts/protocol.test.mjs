@@ -19,11 +19,22 @@ test('canonical v1 snapshot, ACK and both IPC boundaries consume the same fixtur
   assert.throws(() => protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 2})));
   assert.equal(protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 1})).page, 1);
   for (const c of [{op:'pause',value:'true'}, {op:'configure',settings:{revision:-1}}, {op:'connect',address:'x',key:'bad'}, {op:'unknown'},
-    {op:'configure',settings:{revision:1},request:'bad id'}, {op:'show_page',page:2,request:'op-1'}, {op:'show_page',page:1}, {op:'wake'}, {op:'reset_activity',value:true}]) {
+    {op:'configure',settings:{revision:1},request:'bad id'}, {op:'show_page',page:2,request:'op-1'}, {op:'show_page',page:1}, {op:'wake'}, {op:'reset_activity',value:true},
+    {op:'reset_activity',request:'bad id'}, {op:'check_buddy',request:true}]) {
     assert.throws(() => wire.decodeRuntimeCommand(c));
   }
   for (const e of [{event:'battery',percent:101}, {event:'ack',ack:null}, {event:'result',id:1,ok:'yes'}]) {
     assert.throws(() => wire.decodeTransportEvent(e));
+  }
+});
+test('activity keep-awake settings accept only booleans at the runtime boundary', () => {
+  for (const activityKeepAwake of [true, false]) {
+    const command = {op: 'configure', settings: {activityKeepAwake}};
+    assert.deepEqual(wire.decodeRuntimeCommand(command), command);
+  }
+  for (const activityKeepAwake of ['true', 0, 1, null, {}, []]) {
+    assert.throws(() => wire.decodeRuntimeCommand({op: 'configure', settings: {activityKeepAwake}}));
+    assert.throws(() => wire.decodeRuntimeCommand({op: 'connect', address: 'fixture', key: '0'.repeat(32), settings: {activityKeepAwake}}));
   }
 });
 test('activity lease fields are additive, paired and bounded at the band boundary', () => {

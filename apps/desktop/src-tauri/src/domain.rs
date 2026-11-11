@@ -20,6 +20,9 @@ pub struct Preferences {
     pub app_theme: String,
     pub appearance: String,
     pub keep_screen: bool,
+    pub activity_keep_awake: bool,
+    pub power_saving: bool,
+    pub sync_enabled: bool,
     pub background: bool,
     pub selected: Option<usize>,
     pub themes: HashMap<String, String>,
@@ -34,6 +37,9 @@ impl Default for Preferences {
             app_theme: "claude".into(),
             appearance: "system".into(),
             keep_screen: false,
+            activity_keep_awake: false,
+            power_saving: false,
+            sync_enabled: true,
             background: true,
             selected: None,
             themes: HashMap::new(),
@@ -170,8 +176,24 @@ pub enum Action {
     Autostart(bool),
     #[serde(rename = "wake_hold")]
     WakeHold(u32),
+    #[serde(rename = "activity_keep_awake")]
+    ActivityKeepAwake(bool),
+    #[serde(rename = "power_saving")]
+    PowerSaving(bool),
     #[serde(rename = "refresh_device")]
     RefreshDevice,
+    #[serde(rename = "check_buddy")]
+    CheckBuddy,
+    #[serde(rename = "check_update")]
+    CheckUpdate,
+    #[serde(rename = "download_update")]
+    DownloadUpdate,
+    #[serde(rename = "install_update")]
+    InstallUpdate,
+    #[serde(rename = "open_project")]
+    OpenProject,
+    #[serde(rename = "open_release")]
+    OpenRelease,
     #[serde(rename = "reset_activity")]
     ResetActivity,
 }
@@ -215,11 +237,17 @@ mod tests {
         let p = Preferences::default();
         assert_eq!(p.app_theme, "claude");
         assert!(!p.keep_screen);
+        assert!(!p.activity_keep_awake);
+        assert!(!p.power_saving);
+        assert!(p.sync_enabled);
         assert!(p.themes.is_empty());
         assert!(p.selected.is_none());
         assert_eq!(p.wake_hold_seconds, 20);
         let legacy: Preferences = serde_json::from_str(r#"{"revision":4}"#).unwrap();
         assert_eq!((legacy.revision, legacy.wake_hold_seconds), (4, 20));
         assert_eq!(legacy.language, "system");
+        assert!(!legacy.activity_keep_awake);
+        assert!(!legacy.power_saving);
+        assert!(legacy.sync_enabled);
     }
 }

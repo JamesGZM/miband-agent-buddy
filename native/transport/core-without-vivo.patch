@@ -1,0 +1,392 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -40,7 +40,7 @@
+ web-time = "1"
+ bevy_ecs = "0.14"
+ pb = { path = "../pb" }
+-vivo-msgpack = { path = "../vivo_msgpack" }
++vivo-msgpack = { path = "../vivo_msgpack", optional = true }
+ prost = "0.14.1"
+ nanorand = "0.8"
+ hex = "0.4.3"
+@@ -48,7 +48,9 @@
+ tar = { version = "0.4.44", default-features = false }
+ 
+ [features]
+-default = ["xiaomi-network-stack"]
++default = ["xiaomi-network-stack", "rpc", "vivo"]
++rpc = ["vivo"]
++vivo = ["dep:vivo-msgpack"]
+ xiaomi-network-stack = [
+     "dep:ipstack",
+     "dep:udp-stream",
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -8,7 +8,7 @@
+ pub mod error;
+ pub mod logger;
+ pub mod models;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(all(not(target_arch = "wasm32"), feature = "rpc"))]
+ pub mod rpc;
+ pub mod tools;
+ 
+diff --git a/src/device.rs b/src/device.rs
+--- a/src/device.rs
++++ b/src/device.rs
+@@ -1,3 +1,4 @@
++#[cfg(feature = "vivo")]
+ use crate::device::vivo::{
+     VivoConnectType, VivoDevice, VivoDeviceConfig,
+     components::auth::{AuthComponent as VivoAuthComponent, AuthSystem as VivoAuthSystem},
+@@ -49,7 +50,9 @@
+ use crate::device::xiaomi::r#type::ConnectType;
+ use crate::device::xiaomi::{SendError, XiaomiDevice, cleanup_cached_state};
+ use crate::ecs::Component;
+-use anyhow::{Context, bail};
++use anyhow::Context;
++#[cfg(feature = "vivo")]
++use anyhow::bail;
+ use serde::{Deserialize, Serialize};
+ use std::future::Future;
+ use tokio::runtime::Handle;
+@@ -57,6 +60,7 @@
+ mod crpack;
+ pub mod canopus;
+ pub mod data;
++#[cfg(feature = "vivo")]
+ pub mod install;
+ pub mod notification;
+ #[cfg(not(target_arch = "wasm32"))]
+@@ -64,6 +68,7 @@
+ pub mod resource;
+ pub mod sync;
+ pub mod thirdparty_app;
++#[cfg(feature = "vivo")]
+ pub mod vivo;
+ pub mod watchface;
+ pub mod xiaomi;
+@@ -71,6 +76,7 @@
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+ pub enum DeviceKind {
+     Xiaomi,
++    #[cfg(feature = "vivo")]
+     Vivo,
+ }
+ 
+@@ -116,6 +122,7 @@
+ pub fn cleanup_device_state(kind: DeviceKind, addr: &str) {
+     match kind {
+         DeviceKind::Xiaomi => cleanup_cached_state(addr),
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => vivo::cleanup_cached_state(addr),
+     }
+ }
+@@ -166,6 +173,7 @@
+ {
+     let binding = options.local_bind.is_some();
+     match device_kind {
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             bail!(
+                 "Vivo devices require create_vivo_device because they do not use Xiaomi authkey/SAR options"
+@@ -316,6 +324,7 @@
+     }
+ }
+ 
++#[cfg(feature = "vivo")]
+ pub async fn create_vivo_device<F, Fut>(
+     tk_handle: Handle,
+     name: String,
+diff --git a/src/device/data.rs b/src/device/data.rs
+--- a/src/device/data.rs
++++ b/src/device/data.rs
+@@ -1,3 +1,8 @@
++#[cfg(feature = "vivo")]
++use crate::device::vivo::components::info::{
++    InfoComponent as VivoInfoComponent, InfoSystem as VivoInfoSystem,
++};
++
+ use serde::{Deserialize, Serialize};
+ use tokio::sync::oneshot;
+ 
+@@ -5,9 +10,6 @@
+     anyhow_site,
+     device::{
+         Device, DeviceKind,
+-        vivo::components::info::{
+-            InfoComponent as VivoInfoComponent, InfoSystem as VivoInfoSystem,
+-        },
+         xiaomi::components::info::InfoSystem as XiaomiInfoSystem,
+     },
+ };
+@@ -92,6 +94,7 @@
+ 
+     match kind {
+         DeviceKind::Xiaomi => request_xiaomi_device_data_json(addr, data_type).await,
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => request_vivo_device_data_json(addr, data_type).await,
+     }
+ }
+@@ -129,6 +132,7 @@
+     }
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn request_vivo_device_data_json(
+     addr: String,
+     data_type: DeviceDataType,
+@@ -169,6 +173,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_info_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoInfoSystem) -> R + Send + 'static,
+@@ -193,6 +198,7 @@
+     rx.await.map_err(|_| anyhow_site!("{missing_msg}"))?
+ }
+ 
++#[cfg(feature = "vivo")]
+ pub async fn read_cached_vivo_device_info(addr: String) -> Option<DeviceInfoData> {
+     crate::ecs::with_rt_mut(move |rt| {
+         rt.with_device_mut(&addr, |world, entity| {
+diff --git a/src/device/resource.rs b/src/device/resource.rs
+--- a/src/device/resource.rs
++++ b/src/device/resource.rs
+@@ -1,10 +1,13 @@
++#[cfg(feature = "vivo")]
++use crate::device::vivo::components::resource::ResourceSystem as VivoResourceSystem;
++
+ use tokio::sync::oneshot;
+ 
+ use crate::{
+     anyhow_site,
+     asyncrt::{Duration, timeout},
+     device::{
+-        Device, DeviceKind, vivo::components::resource::ResourceSystem as VivoResourceSystem,
++        Device, DeviceKind,
+         xiaomi::components::resource::ResourceSystem as XiaomiResourceSystem,
+     },
+ };
+@@ -16,6 +19,7 @@
+             let items = await_slot(rx, "Watchface list response not received").await?;
+             serde_json::to_value(items).map_err(Into::into)
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx = with_vivo_resource_system(addr, |sys| sys.request_watchface_list()).await?;
+             let items = await_slot(rx, "Vivo watchface list response not received").await?;
+@@ -31,6 +35,7 @@
+             let items = await_slot(rx, "Quick app list response not received").await?;
+             serde_json::to_value(items).map_err(Into::into)
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx = with_vivo_resource_system(addr, |sys| sys.request_quick_app_list()).await?;
+             let items = await_slot(rx, "Vivo quick app list response not received").await?;
+@@ -44,6 +49,7 @@
+         DeviceKind::Xiaomi => {
+             anyhow::bail!("Xiaomi dial free storage uses the generic storage endpoint")
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx = with_vivo_resource_system(addr, |sys| sys.request_dial_free_storage()).await?;
+             let free = await_slot(rx, "Vivo dial free storage response not received").await?;
+@@ -79,6 +85,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_resource_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoResourceSystem) -> R + Send + 'static,
+diff --git a/src/device/sync.rs b/src/device/sync.rs
+--- a/src/device/sync.rs
++++ b/src/device/sync.rs
+@@ -1,7 +1,10 @@
++#[cfg(feature = "vivo")]
++use crate::device::vivo::components::sync::SyncSystem as VivoSyncSystem;
++
+ use crate::{
+     anyhow_site,
+     device::{
+-        Device, DeviceKind, vivo::components::sync::SyncSystem as VivoSyncSystem,
++        Device, DeviceKind,
+         xiaomi::components::sync::SyncSystem as XiaomiSyncSystem,
+     },
+     models::sync::TimeSyncProps,
+@@ -16,6 +19,7 @@
+             })
+             .await
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => with_vivo_sync_system(addr, move |sys| sys.sync_time(props)).await,
+     }
+ }
+@@ -29,6 +33,7 @@
+             })
+             .await
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => with_vivo_sync_system(addr, move |sys| sys.set_language(locale)).await,
+     }
+ }
+@@ -60,6 +65,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_sync_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoSyncSystem) -> anyhow::Result<R> + Send + 'static,
+diff --git a/src/device/thirdparty_app.rs b/src/device/thirdparty_app.rs
+--- a/src/device/thirdparty_app.rs
++++ b/src/device/thirdparty_app.rs
+@@ -1,13 +1,16 @@
++#[cfg(feature = "vivo")]
++use crate::device::vivo::components::{
++    cloud_bridge::CloudBridgeSystem as VivoCloudBridgeSystem,
++    thirdparty_app::ThirdpartyAppSystem as VivoThirdpartyAppSystem,
++};
++
++#[cfg(feature = "vivo")]
+ use anyhow::bail;
+ 
+ use crate::{
+     anyhow_site,
+     device::{
+         Device, DeviceKind,
+-        vivo::components::{
+-            cloud_bridge::CloudBridgeSystem as VivoCloudBridgeSystem,
+-            thirdparty_app::ThirdpartyAppSystem as VivoThirdpartyAppSystem,
+-        },
+         xiaomi::components::{
+             resource::ResourceComponent as XiaomiResourceComponent,
+             thirdparty_app::{
+@@ -30,6 +33,7 @@
+             })
+             .await
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let msg = String::from_utf8(payload)
+                 .map_err(|err| anyhow_site!("vivo cloud message must be UTF-8: {err}"))?;
+@@ -48,6 +52,7 @@
+             let info = xiaomi_app_info(&addr, &package_name).await?;
+             with_xiaomi_thirdparty_app_system(addr, move |sys| sys.launch_app(&info, &page)).await
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             bail!(
+                 "vivo quick-app launch command is not implemented; use BID 47 cloud bridge when available"
+@@ -62,6 +67,7 @@
+             let info = xiaomi_app_info(&addr, &package_name).await?;
+             with_xiaomi_thirdparty_app_system(addr, move |sys| sys.uninstall_app(&info)).await
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx =
+                 with_vivo_thirdparty_app_system(addr, move |sys| sys.uninstall_app(&package_name))
+@@ -122,6 +128,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_thirdparty_app_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoThirdpartyAppSystem) -> anyhow::Result<R> + Send + 'static,
+@@ -139,6 +146,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_cloud_bridge_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoCloudBridgeSystem) -> anyhow::Result<R> + Send + 'static,
+diff --git a/src/device/watchface.rs b/src/device/watchface.rs
+--- a/src/device/watchface.rs
++++ b/src/device/watchface.rs
+@@ -1,19 +1,21 @@
++#[cfg(feature = "vivo")]
++use crate::device::vivo::{
++    components::{
++        file_v2_transfer::{
++            FileV2SendParams, FileV2SendProgress, ProgressCb, compute_file_id_v2,
++            send_file_v2,
++        },
++        watchface::WatchfaceSystem as VivoWatchfaceSystem,
++    },
++    dial_manifest::parse_vivo_dial_manifest,
++};
++
+ use crate::{
+     anyhow_site,
+     asyncrt::{Duration, timeout},
+     bail_site,
+     device::{
+         Device, DeviceKind,
+-        vivo::{
+-            components::{
+-                file_v2_transfer::{
+-                    FileV2SendParams, FileV2SendProgress, ProgressCb, compute_file_id_v2,
+-                    send_file_v2,
+-                },
+-                watchface::WatchfaceSystem as VivoWatchfaceSystem,
+-            },
+-            dial_manifest::parse_vivo_dial_manifest,
+-        },
+         xiaomi::components::{
+             mass::{SendMassCallbackData, send_file_for_owner_with_known_slice_length},
+             watchface::WatchfaceSystem as XiaomiWatchfaceSystem,
+@@ -38,6 +40,7 @@
+             await_watchface_response(rx, "Xiaomi set-current watchface response not received")
+                 .await?;
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx = with_vivo_watchface_system(addr, move |sys| sys.set_watchface(&watchface_id))
+                 .await?;
+@@ -57,6 +60,7 @@
+             await_watchface_response(rx, "Xiaomi uninstall watchface response not received")
+                 .await?;
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             let rx =
+                 with_vivo_watchface_system(addr, move |sys| sys.uninstall_watchface(&watchface_id))
+@@ -73,6 +77,7 @@
+ /// `dial_id_override` 为 `Some` 时使用调用方提供的 dialId；为 `None` 时从 rpk
+ /// `manifest.json` 里抽。Vivo 表盘 install 命令必须带真实 dialId，传 0 会被静默
+ /// 丢弃（无任何回包）。
++#[cfg(feature = "vivo")]
+ pub async fn install_local_zip_vivo(
+     addr: String,
+     zip_data: Vec<u8>,
+@@ -195,6 +200,7 @@
+     .await
+ }
+ 
++#[cfg(feature = "vivo")]
+ async fn with_vivo_watchface_system<F, R>(addr: String, f: F) -> anyhow::Result<R>
+ where
+     F: FnOnce(&mut VivoWatchfaceSystem) -> anyhow::Result<R> + Send + 'static,
+@@ -430,6 +436,7 @@
+                 .map_err(|_| anyhow_site!("Xiaomi watchface edit response not received"))??;
+             Ok(EditResponseInfo::from(resp))
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => bail_site!("watchface edit is only supported on Xiaomi devices"),
+     }
+ }
+@@ -545,6 +552,7 @@
+             rx.await
+                 .map_err(|_| anyhow_site!("Xiaomi watchface support data not received"))?
+         }
++        #[cfg(feature = "vivo")]
+         DeviceKind::Vivo => {
+             bail_site!("watchface support data is only supported on Xiaomi devices")
+         }

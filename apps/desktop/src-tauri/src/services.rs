@@ -36,6 +36,8 @@ pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
             revision: s.prefs.revision,
             keep_screen: Some(s.prefs.keep_screen),
             wake_hold_ms: Some(u64::from(s.prefs.wake_hold_seconds) * 1000),
+            activity_keep_awake: Some(s.prefs.activity_keep_awake),
+            power_saving: Some(s.prefs.power_saving),
         },
     })
 }
@@ -64,7 +66,12 @@ pub fn disconnect(s: &mut Session) -> Result<(), String> {
     s.worker.send(RuntimeCommand::Disconnect)
 }
 pub fn pause(s: &mut Session, value: bool) -> Result<(), String> {
-    s.worker.send(RuntimeCommand::Pause { value })
+    s.prefs.sync_enabled = !value;
+    save(s)?;
+    s.runtime.paused = value;
+    // Keep the user's intent even when the worker is temporarily unavailable.
+    let _ = s.worker.send(RuntimeCommand::Pause { value });
+    Ok(())
 }
 pub fn save(s: &Session) -> Result<(), String> {
     persistence::save_preferences(&s.config, &s.prefs)
@@ -102,6 +109,35 @@ fn start_operation(
         json!({"id": request, "kind": kind, "status": "waking", "requestedAt": now_ms()}),
     );
     Ok(())
+}
+fn can_apply_to_band(s: &Session) -> bool {
+    matches!(
+        s.runtime.connection,
+        Connection::Connected | Connection::Waiting | Connection::Standby
+    )
+}
+fn save_band_setting(s: &mut Session, kind: &str, settings: RuntimeSettings) -> Result<(), String> {
+    save(s)?;
+    if can_apply_to_band(s) {
+        start_operation(s, kind, |request| RuntimeCommand::Configure {
+            settings,
+            request: Some(request),
+        })
+    } else {
+        // Store intent while unavailable; reconnect/resume applies the saved settings.
+        let _ = s.worker.send(RuntimeCommand::Configure {
+            settings,
+            request: None,
+        });
+        Ok(())
+    }
+}
+fn setting_operation_allowed(s: &Session) -> Result<(), String> {
+    if operation_active(s) {
+        Err("請等待目前操作完成".into())
+    } else {
+        Ok(())
+    }
 }
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -159,6 +195,8 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                     revision,
                     keep_screen: None,
                     wake_hold_ms: None,
+                    activity_keep_awake: None,
+                    power_saving: None,
                 },
                 request: Some(request),
             })
@@ -168,7 +206,10 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 return Err("不支援的手環頁面".into());
             }
             band_operation_allowed(s)?;
-            start_operation(s, "page", |request| RuntimeCommand::ShowPage { page, request })
+            start_operation(s, "page", |request| RuntimeCommand::ShowPage {
+                page,
+                request,
+            })
         }
         Action::Wake => {
             band_operation_allowed(s)?;
@@ -184,7 +225,9 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 false,
                 value.background,
             );
-            // Disk write happens in the async command after the session lock is released.
+            // Serialize every preference write with its mutation on the blocking pool.
+            // Saving a detached snapshot could overwrite a newer band preference.
+            save(s)?;
             if changed {
                 s.worker.send(RuntimeCommand::Configure {
                     settings: RuntimeSettings {
@@ -192,6 +235,8 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                         revision: s.prefs.revision,
                         keep_screen: Some(false),
                         wake_hold_ms: None,
+                        activity_keep_awake: None,
+                        power_saving: None,
                     },
                     request: None,
                 })
@@ -200,26 +245,77 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
             }
         }
         Action::Autostart(_) => Err("登入啟動設定需要桌面平台".into()),
+        Action::CheckUpdate
+        | Action::DownloadUpdate
+        | Action::InstallUpdate
+        | Action::OpenProject
+        | Action::OpenRelease => Err("不支援的操作或設定".into()),
         Action::WakeHold(seconds) => {
             if !WAKE_HOLD_SECONDS.contains(&seconds) {
                 return Err("亮屏時長需為 5 到 1800 秒的整數".into());
             }
+            setting_operation_allowed(s)?;
             s.prefs.wake_hold_seconds = seconds;
-            save(s)?;
-            // Saved preferences apply on the next connection when no worker is reachable.
-            let _ = s.worker.send(RuntimeCommand::Configure {
-                settings: RuntimeSettings {
-                    buddy_theme: None,
-                    revision: s.prefs.revision,
-                    keep_screen: None,
-                    wake_hold_ms: Some(u64::from(seconds) * 1000),
-                },
-                request: None,
-            });
-            Ok(())
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: Some(u64::from(seconds) * 1000),
+                activity_keep_awake: None,
+                power_saving: None,
+            };
+            save_band_setting(s, "wake_hold", settings)
         }
         Action::RefreshDevice => s.worker.send(RuntimeCommand::RefreshDevice),
-        Action::ResetActivity => s.worker.send(RuntimeCommand::ResetActivity),
+        Action::CheckBuddy => {
+            setting_operation_allowed(s)?;
+            if can_apply_to_band(s) {
+                start_operation(s, "check_buddy", |request| RuntimeCommand::CheckBuddy {
+                    request: Some(request),
+                })
+            } else {
+                s.worker.send(RuntimeCommand::CheckBuddy { request: None })
+            }
+        }
+        Action::ActivityKeepAwake(enabled) => {
+            setting_operation_allowed(s)?;
+            s.prefs.activity_keep_awake = enabled;
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: Some(enabled),
+                power_saving: None,
+            };
+            save_band_setting(s, "activity_keep_awake", settings)
+        }
+        Action::ResetActivity => {
+            setting_operation_allowed(s)?;
+            if can_apply_to_band(s) {
+                start_operation(s, "reset_activity", |request| {
+                    RuntimeCommand::ResetActivity {
+                        request: Some(request),
+                    }
+                })
+            } else {
+                s.worker
+                    .send(RuntimeCommand::ResetActivity { request: None })
+            }
+        }
+        Action::PowerSaving(enabled) => {
+            setting_operation_allowed(s)?;
+            s.prefs.power_saving = enabled;
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: Some(enabled),
+            };
+            save_band_setting(s, "power_saving", settings)
+        }
     }
 }
 pub fn finish_login(
@@ -272,6 +368,9 @@ pub struct PreferencesView<'a> {
     buddy_theme: Option<&'a str>,
     appearance: &'a str,
     keep_screen: bool,
+    activity_keep_awake: bool,
+    power_saving: bool,
+    sync_enabled: bool,
     background: bool,
     selected: Option<usize>,
     wake_hold_seconds: u32,
@@ -317,12 +416,17 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
         busy: s.busy,
         preferences: PreferencesView {
             app_theme: &s.prefs.app_theme,
-            buddy_theme: s.prefs.selected
+            buddy_theme: s
+                .prefs
+                .selected
                 .and_then(|index| s.credentials.as_ref()?.devices.get(index))
                 .and_then(|device| s.prefs.themes.get(&device.addr))
                 .map(String::as_str),
             appearance: &s.prefs.appearance,
             keep_screen: s.prefs.keep_screen,
+            activity_keep_awake: s.prefs.activity_keep_awake,
+            power_saving: s.prefs.power_saving,
+            sync_enabled: s.prefs.sync_enabled,
             background: s.prefs.background,
             selected: s.prefs.selected,
             wake_hold_seconds: s.prefs.wake_hold_seconds,
@@ -382,14 +486,20 @@ mod tests {
     #[test]
     fn ui_projection_restores_only_the_selected_devices_saved_theme() {
         let mut s = session();
-        s.prefs.themes.insert("11:22:33:44:55:66".into(), "claude".into());
+        s.prefs
+            .themes
+            .insert("11:22:33:44:55:66".into(), "claude".into());
         let output = serde_json::to_value(view(&s, false)).unwrap();
         assert_eq!(output["preferences"]["buddyTheme"], "claude");
         assert!(output["runtime"]["ack"].is_null());
         s.prefs.selected = None;
-        assert!(serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null());
+        assert!(
+            serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null()
+        );
         s.prefs.selected = Some(99);
-        assert!(serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null());
+        assert!(
+            serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null()
+        );
     }
     #[test]
     fn only_durable_current_revision_ack_updates_device_theme() {
@@ -416,25 +526,45 @@ mod tests {
         let mut s = session();
         s.runtime.connection = Connection::Disconnected;
         assert_eq!(perform(&mut s, Action::Wake).unwrap_err(), "請先連線手環");
-        for connection in [Connection::Standby, Connection::Waiting, Connection::Connected] {
+        for connection in [
+            Connection::Standby,
+            Connection::Waiting,
+            Connection::Connected,
+        ] {
             s.runtime.connection = connection;
             // The fixture has no worker, so reaching the send proves the state gate passed.
-            assert_eq!(perform(&mut s, Action::Page(1)).unwrap_err(), "背景程序未啟動，請重新開啟 App");
+            assert_eq!(
+                perform(&mut s, Action::Page(1)).unwrap_err(),
+                "背景程序未啟動，請重新開啟 App"
+            );
         }
-        assert_eq!(perform(&mut s, Action::Page(2)).unwrap_err(), "不支援的手環頁面");
-        s.runtime.fields.insert("operation".into(), json!({"id":"op-9","status":"applying"}));
+        assert_eq!(
+            perform(&mut s, Action::Page(2)).unwrap_err(),
+            "不支援的手環頁面"
+        );
+        s.runtime
+            .fields
+            .insert("operation".into(), json!({"id":"op-9","status":"applying"}));
         let revision = s.prefs.revision;
-        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Claude)).unwrap_err(), "請等待目前操作完成");
+        assert_eq!(
+            perform(&mut s, Action::Theme(BuddyTheme::Claude)).unwrap_err(),
+            "請等待目前操作完成"
+        );
         assert_eq!(s.prefs.revision, revision);
     }
     #[test]
     fn requested_operation_survives_an_older_worker_frame() {
         let mut s = session();
-        s.runtime.fields.insert("operation".into(), json!({"id":"op-1","status":"waking","requestedAt":now_ms()}));
+        s.runtime.fields.insert(
+            "operation".into(),
+            json!({"id":"op-1","status":"waking","requestedAt":now_ms()}),
+        );
         accept_runtime(&mut s, RuntimeState::default());
         assert_eq!(s.runtime.fields["operation"]["id"], "op-1");
         let mut reported = RuntimeState::default();
-        reported.fields.insert("operation".into(), json!({"id":"op-1","status":"done"}));
+        reported
+            .fields
+            .insert("operation".into(), json!({"id":"op-1","status":"done"}));
         accept_runtime(&mut s, reported);
         assert_eq!(s.runtime.fields["operation"]["status"], "done");
     }
@@ -446,8 +576,112 @@ mod tests {
         }
         assert_eq!(s.prefs.wake_hold_seconds, 20);
         perform(&mut s, Action::WakeHold(300)).unwrap();
-        let saved: Preferences = serde_json::from_str(&std::fs::read_to_string(&s.config).unwrap()).unwrap();
+        let saved: Preferences =
+            serde_json::from_str(&std::fs::read_to_string(&s.config).unwrap()).unwrap();
         assert_eq!(saved.wake_hold_seconds, 300);
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn activity_keep_awake_is_opt_in_persisted_and_projected() {
+        let mut s = session();
+        assert!(!s.prefs.activity_keep_awake);
+        assert_eq!(
+            serde_json::to_value(view(&s, false)).unwrap()["preferences"]["activityKeepAwake"],
+            false
+        );
+        for enabled in [true, false] {
+            perform(&mut s, Action::ActivityKeepAwake(enabled)).unwrap();
+            let (saved, _, _) = persistence::load(&s.config);
+            assert_eq!(saved.activity_keep_awake, enabled);
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["activityKeepAwake"],
+                enabled
+            );
+            assert_eq!(saved.revision, 2);
+            assert_eq!(saved.wake_hold_seconds, 20);
+        }
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn power_saving_is_opt_in_persisted_and_projected() {
+        let mut s = session();
+        assert!(!s.prefs.power_saving);
+        assert_eq!(
+            serde_json::to_value(view(&s, false)).unwrap()["preferences"]["powerSaving"],
+            false
+        );
+        for enabled in [true, false] {
+            perform(&mut s, Action::PowerSaving(enabled)).unwrap();
+            let (saved, _, _) = persistence::load(&s.config);
+            assert_eq!(saved.power_saving, enabled);
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["powerSaving"],
+                enabled
+            );
+            assert_eq!(saved.revision, 2);
+            assert!(!saved.activity_keep_awake);
+        }
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn activity_sync_choice_survives_restart_without_a_running_worker() {
+        let mut s = session();
+        assert!(s.prefs.sync_enabled);
+        for paused in [true, false] {
+            perform(&mut s, Action::Pause(paused)).unwrap();
+            let (saved, _, _) = persistence::load(&s.config);
+            assert_eq!(saved.sync_enabled, !paused);
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["syncEnabled"],
+                !paused
+            );
+            assert_eq!(s.runtime.paused, paused);
+            assert_eq!(saved.revision, 2);
+        }
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn local_preferences_save_with_the_mutation_and_preserve_band_choices() {
+        let mut s = session();
+        let appearance = |language| {
+            serde_json::from_value::<Action>(json!({
+            "operation":"preferences", "value":{"appTheme":"claude", "appearance":"dark", "background":true, "language":language}
+        })).unwrap()
+        };
+        perform(&mut s, appearance("en")).unwrap();
+        assert_eq!(persistence::load(&s.config).0.language, "en");
+        perform(&mut s, Action::ActivityKeepAwake(true)).unwrap();
+        perform(&mut s, Action::PowerSaving(true)).unwrap();
+        perform(&mut s, Action::Pause(true)).unwrap();
+        perform(&mut s, appearance("zh-Hant")).unwrap();
+        let saved = persistence::load(&s.config).0;
+        assert!(saved.activity_keep_awake);
+        assert!(saved.power_saving);
+        assert!(!saved.sync_enabled);
+        assert_eq!(saved.language, "zh-Hant");
+        assert_eq!(saved.appearance, "dark");
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn manual_band_settings_are_allowed_while_sync_is_paused_but_do_not_overlap() {
+        let mut s = session();
+        s.runtime.connection = Connection::Standby;
+        s.runtime.paused = true;
+        assert!(can_apply_to_band(&s));
+        // Reaching send proves pause did not gate the explicit operation.
+        assert_eq!(
+            perform(&mut s, Action::PowerSaving(true)).unwrap_err(),
+            "背景程序未啟動，請重新開啟 App"
+        );
+        assert!(persistence::load(&s.config).0.power_saving);
+        s.runtime
+            .fields
+            .insert("operation".into(), json!({"id":"op-9","status":"applying"}));
+        assert_eq!(
+            perform(&mut s, Action::ActivityKeepAwake(true)).unwrap_err(),
+            "請等待目前操作完成"
+        );
+        assert!(!s.prefs.activity_keep_awake);
         std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
     }
     #[test]
@@ -460,9 +694,17 @@ mod tests {
             ..Default::default()
         };
         s.runtime.ack = Some(ack(json!({})));
-        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(), "需要更新 Buddy 才能使用 DeepSeek 主題");
+        assert_eq!(
+            perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(),
+            "需要更新 Buddy 才能使用 DeepSeek 主題"
+        );
         assert_eq!(s.prefs.revision, 2);
-        s.runtime.ack = Some(ack(json!({"capabilities":{"themes":["chatgpt","claude","deepseek"]}})));
-        assert_eq!(perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(), "背景程序未啟動，請重新開啟 App");
+        s.runtime.ack = Some(ack(
+            json!({"capabilities":{"themes":["chatgpt","claude","deepseek"]}}),
+        ));
+        assert_eq!(
+            perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(),
+            "背景程序未啟動，請重新開啟 App"
+        );
     }
 }

@@ -1,5 +1,5 @@
 //! Tauri authorization and wire decoding; application behavior lives in services.
-use crate::{domain::Action, login, persistence, services, state::Shared};
+use crate::{domain::Action, login, services, state::Shared};
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, State, WebviewWindow};
@@ -30,7 +30,11 @@ pub async fn get_state(
         .map(|c| c.0.load(Ordering::Relaxed))
         .unwrap_or(false);
     let s = state.lock().map_err(|_| "狀態不可用")?;
-    serde_json::to_value(services::view(&s, autostart)).map_err(|_| "狀態編碼失敗".into())
+    let mut view =
+        serde_json::to_value(services::view(&s, autostart)).map_err(|_| "狀態編碼失敗")?;
+    view["appVersion"] = json!(env!("CARGO_PKG_VERSION"));
+    view["desktopUpdate"] = crate::updater::view(&app);
+    Ok(view)
 }
 
 #[tauri::command]
@@ -67,6 +71,14 @@ pub async fn action(
     local(&window)?;
     let action: Action = serde_json::from_value(json!({"operation":operation,"value":value}))
         .map_err(|_| "不支援的操作或設定")?;
+    match action {
+        Action::CheckUpdate => return crate::updater::check(app),
+        Action::DownloadUpdate => return crate::updater::download(app),
+        Action::InstallUpdate => return crate::updater::install(app),
+        Action::OpenProject => return crate::updater::open_project(),
+        Action::OpenRelease => return crate::updater::open_release(&app),
+        _ => {}
+    }
     if let Action::Autostart(enabled) = action {
         let result = if enabled {
             app.autolaunch().enable()
@@ -82,31 +94,19 @@ pub async fn action(
         return result;
     }
     let shared = state.inner().clone();
-    let (logout, relabel, language, prefs_snapshot) =
-        tauri::async_runtime::spawn_blocking(move || {
-            let mut s = shared.lock().map_err(|_| "狀態不可用".to_string())?;
-            if s.busy {
-                return Err("請等待目前操作完成".into());
-            }
-            let logout = matches!(action, Action::Logout);
-            let relabel = matches!(action, Action::Preferences(_));
-            let needs_prefs_write = matches!(action, Action::Preferences(_));
-            services::perform(&mut s, action)?;
-            let language = s.prefs.language.clone();
-            let prefs_snapshot = if needs_prefs_write {
-                Some((s.config.clone(), s.prefs.clone()))
-            } else {
-                None
-            };
-            Ok::<_, String>((logout, relabel, language, prefs_snapshot))
-        })
-        .await
-        .map_err(|_| "操作執行失敗".to_string())??;
-    if let Some((path, prefs)) = prefs_snapshot {
-        tauri::async_runtime::spawn_blocking(move || persistence::save_preferences(&path, &prefs))
-            .await
-            .map_err(|_| "設定保存失敗".to_string())??;
-    }
+    let (logout, relabel, language) = tauri::async_runtime::spawn_blocking(move || {
+        let mut s = shared.lock().map_err(|_| "狀態不可用".to_string())?;
+        if s.busy {
+            return Err("請等待目前操作完成".into());
+        }
+        let logout = matches!(action, Action::Logout);
+        let relabel = matches!(action, Action::Preferences(_));
+        services::perform(&mut s, action)?;
+        let language = s.prefs.language.clone();
+        Ok::<_, String>((logout, relabel, language))
+    })
+    .await
+    .map_err(|_| "操作執行失敗".to_string())??;
     if relabel {
         crate::app::apply_language(&app, &language);
     }

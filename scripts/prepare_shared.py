@@ -6,6 +6,7 @@ MODULES = {
     'protocol': 'protocol/snapshot.js',
     'display': 'presentation/display.js',
     'native-ui': 'presentation/native-ui.js',
+    'activity-ring': 'presentation/activity-ring.js',
 }
 
 

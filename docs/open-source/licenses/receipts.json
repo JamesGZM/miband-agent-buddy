@@ -1,0 +1,412 @@
+{
+  "alloc-stdlib-0.3.0": {
+    "license": "BSD-3-Clause",
+    "revision": "0a81fd6928ea3b33c8cd484aa4575d50ffb98012",
+    "manifestSource": "https://github.com/dropbox/rust-alloc-no-stdlib/blob/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/alloc-stdlib/Cargo.toml",
+    "basis": "Upstream repository-root license omitted from the published subcrate.",
+    "files": [
+      {
+        "path": "alloc-stdlib-LICENSE",
+        "sha256": "2672dc5eb3b2f8edf39fdfb23c314bf916939d18ad37e773a3d2c93751617bfb",
+        "source": "https://github.com/dropbox/rust-alloc-no-stdlib/blob/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE",
+        "gitBlob": "cd496ba72eb37e83a44958358d1f89a8a28cbc15"
+      }
+    ]
+  },
+  "block2-0.6.2": {
+    "license": "MIT",
+    "revision": "b4167b582b2f75f9a1be75495c41b765344fd03c",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/b4167b582b2f75f9a1be75495c41b765344fd03c/crates/block2/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "dispatch2-0.3.1": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "8852b424193ca41602281b3d7540d7c8ed51e49a",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/8852b424193ca41602281b3d7540d7c8ed51e49a/crates/dispatch2/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-0.6.5": {
+    "license": "MIT",
+    "revision": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/crates/objc2/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-app-kit-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-app-kit/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-core-foundation-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-core-foundation/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-core-graphics-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-core-graphics/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-encode-4.1.0": {
+    "license": "MIT",
+    "revision": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/crates/objc2-encode/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-exception-helper-0.1.1": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/crates/objc2-exception-helper/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-foundation-0.3.2": {
+    "license": "MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-foundation/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-io-surface-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-io-surface/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-quartz-core-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-quartz-core/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-security-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-security/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-service-management-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-service-management/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-web-kit-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-web-kit/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "selectors-0.38.0": {
+    "license": "MPL-2.0",
+    "revision": "572ecba2d1600e7c3d490586692a209faf703baa",
+    "manifestSource": "https://github.com/servo/stylo/blob/572ecba2d1600e7c3d490586692a209faf703baa/selectors/Cargo.toml",
+    "basis": "Original per-file source headers declare MPL-2.0; complete unmodified crate source accompanies standard MPL text.",
+    "files": [
+      {
+        "path": "MPL-2.0-standard.txt",
+        "sha256": "1a389c0a135f37855baa2fb879f86ed111d7facf8b0d5188330b35a22c4428a1",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MPL-2.0.txt",
+        "gitBlob": "ee6256cdb62a765749a71aae3abea32884301cd1"
+      }
+    ]
+  },
+  "dispatch-0.2.0": {
+    "license": "MIT",
+    "revision": "82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748",
+    "manifestSource": "https://github.com/SSheldon/rust-dispatch/blob/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748/Cargo.toml",
+    "basis": "Pinned Cargo manifest declares MIT; that published source/revision includes no separate license file. Complete crate source and author metadata are included with the unmodified SPDX standard terms.",
+    "files": [
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-core-bluetooth-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-core-bluetooth/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-io-bluetooth-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-io-bluetooth/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "objc2-io-kit-0.3.2": {
+    "license": "Zlib OR Apache-2.0 OR MIT",
+    "revision": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "manifestSource": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/framework-crates/objc2-io-kit/Cargo.toml",
+    "basis": "Pinned upstream licensing declaration links to the standard MIT terms. Published crate source and all original publisher metadata are included; standard template placeholders are not assertions about copyright ownership.",
+    "files": [
+      {
+        "path": "objc2-LICENSE.md",
+        "sha256": "5901c82bb42bfbe9015097ebed64a7756eb617c7d403b1ae598990fca9a42e27",
+        "source": "https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+      },
+      {
+        "path": "MIT-standard.txt",
+        "sha256": "9f420f8e43bbd65bddb84463a5f96db1f030fc7ecd4f0b35523b9610e8c3fa21",
+        "source": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+        "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+      }
+    ]
+  },
+  "pbjson-0.8.0": {
+    "license": "MIT",
+    "revision": "3587e007496f87790afd7ac7b5ff45cfe1df3297",
+    "manifestSource": "https://github.com/influxdata/pbjson/blob/3587e007496f87790afd7ac7b5ff45cfe1df3297/pbjson/Cargo.toml",
+    "basis": "Upstream repository-root license omitted from the published crate.",
+    "files": [
+      {
+        "path": "pbjson-LICENSE",
+        "sha256": "0e2c1c54cb1c7398e5c6f0b7b947d5a9e6adcf34bbbc5043d41c7b016377cad8",
+        "source": "https://github.com/influxdata/pbjson/blob/3587e007496f87790afd7ac7b5ff45cfe1df3297/LICENSE",
+        "gitBlob": "42d41dfd83f6fd1083a41ed35f6d2d994a2e9dcc"
+      }
+    ]
+  },
+  "pbjson-types-0.8.0": {
+    "license": "MIT",
+    "revision": "3587e007496f87790afd7ac7b5ff45cfe1df3297",
+    "manifestSource": "https://github.com/influxdata/pbjson/blob/3587e007496f87790afd7ac7b5ff45cfe1df3297/pbjson-types/Cargo.toml",
+    "basis": "Upstream repository-root license omitted from the published crate.",
+    "files": [
+      {
+        "path": "pbjson-LICENSE",
+        "sha256": "0e2c1c54cb1c7398e5c6f0b7b947d5a9e6adcf34bbbc5043d41c7b016377cad8",
+        "source": "https://github.com/influxdata/pbjson/blob/3587e007496f87790afd7ac7b5ff45cfe1df3297/LICENSE",
+        "gitBlob": "42d41dfd83f6fd1083a41ed35f6d2d994a2e9dcc"
+      }
+    ]
+  }
+}

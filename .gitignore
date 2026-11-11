@@ -20,6 +20,8 @@ dist/
 apps/.temp_band/
 .DS_Store
 .agent/
+.agents/
+.codex/
 .legacy/
 .codegraph/
 .cursor/
@@ -30,3 +32,7 @@ apps/.temp_band/
 *.pem
 *.key
 *.p12
+
+# Local investigation history, retained on the developer's machine.
+docs/open-source/VALIDATION.md
+docs/development/REFACTOR.md

@@ -1,54 +1,108 @@
-# Development
+# Development guide
 
-Run commands from the repository root. Requirements and first-time installation are in the root README.
+This guide is for contributors building MiBand Agent Buddy from source. For installation and everyday use, see the [project README](../../README.md). Read [CONTRIBUTING.md](../../CONTRIBUTING.md) and the [architecture](../architecture/README.md) before making a change.
+
+## Requirements
+
+- macOS with Xcode Command Line Tools and Git.
+- Node.js 22 or later and npm. Desktop packaging also needs the license file from the Node distribution being bundled.
+- A current stable Rust toolchain with edition 2024 support.
+- Python 3.10 or later; artwork generation uses the pinned Pillow version in `requirements.txt`.
+
+A compatible band is needed for physical testing, but not for the automated suites or builds. Use the same Mac architecture for Node, Rust and the desktop package being built.
+
+## First build
+
+Run commands from the repository root:
 
 ```sh
+git clone https://github.com/JamesGZM/miband-agent-buddy.git
+cd miband-agent-buddy
+python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 npm ci --prefix apps/band
 npm run bootstrap
 npm run build
-npm test
-npm run check:architecture
-cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
-cargo test --locked --manifest-path native/transport/Cargo.toml
 npm run build:desktop
 open 'apps/desktop/dist/MiBand Agent Buddy.app'
 ```
 
-`bootstrap` is the explicit network-fetch step for pinned upstream sources. Offline development can add `--offline` to Cargo commands after dependencies are available. The build commands generate assets/packages but do not install Buddy, change hooks, start services or connect devices. `npm run hooks:install` is a separate explicit setup action; it retains the stable compatibility Hook path.
+Check that `python3 --version` reports at least 3.10; the Python supplied with macOS may be older. The desktop builder looks for the Node license at `../LICENSE` relative to the resolved Node executable's directory. If your installation stores it elsewhere, set `BUDDY_NODE_LICENSE` to that distribution's actual license file before building:
 
-New users can follow the desktop Buddy checklist and **AI connections** page. The [project Hooks skill](../../skills/buddy-hooks/SKILL.md) provides Codex and Claude Code setup in an existing project and a generic harness sender; [Hooks development](hooks.md) documents supported lifecycle events, scope conflicts and privacy. Configured hooks, host trust, received events and physical display response are distinct checks.
+```sh
+export BUDDY_NODE_LICENSE=/absolute/path/to/node/LICENSE
+npm run build:desktop
+```
 
-The checklist follows the account → device → application → integration progression used in [AstroBox's device connection guide](https://abox.run/docs/usage/connection), while retaining this app's existing official account flow. It derives completion from current account, connection, Buddy ACK and event evidence. A fresh runtime waits for a new Hook event instead of treating an old installation as proof of a live connection.
+`npm run bootstrap` downloads pinned upstream sources and applies the recorded patches. `npm run build` generates shared modules and artwork and compiles the band app. `npm run build:desktop` builds a relocatable macOS app containing its runtime dependencies. Build commands do not install Buddy on a band, configure AI Hooks or connect a device.
 
-Branch/PR CI generates test resources and runs source checks without packaging. Published GitHub Releases run the macOS build and attach only redistributable band artifacts; see [release policy](../open-source/RELEASING.md). The checkout-bound desktop bundle is not a portable download.
+The development app is written to `apps/desktop/dist/MiBand Agent Buddy.app`. An optimized build is available with `npm run build:desktop -- --release`. Distribution packaging and version tags are covered by the [release process](../open-source/RELEASING.md).
 
-## Layout and change workflow
+## Project layout
 
-Read root `AGENTS.md` and the [architecture](../architecture/README.md). Applications live in `apps`, Node backend in `services/runtime`, native SPP in `native/transport`, canonical shared code in `packages/buddy-shared`, and all build entrypoints in `scripts`.
+| Path | Responsibility |
+| --- | --- |
+| `apps/desktop` | Tauri shell, account flow, preferences, tray and desktop interface |
+| `apps/band` | Vela adapters, page controller and band views |
+| `services/runtime` | Local AI integration, Mac metrics and connection/wake coordination |
+| `native/transport` | macOS Bluetooth adapter and pinned upstream integration |
+| `packages/buddy-shared` | Platform-independent protocol and presentation functions |
+| `scripts` | Build, resource generation, packaging and local setup tools |
+| `tests` | Runtime, band, contract and architecture suites |
+| `mac` | Supported compatibility entrypoints |
+| `skills/buddy-hooks` | Project-level AI integration instructions |
 
-1. Identify the behavior and affected boundary; preserve existing uncommitted changes.
-2. Make a focused change. Keep platform effects in adapters and business rules testable through injected dependencies.
-3. Run the smallest relevant suite, then architecture/contract checks and affected builds.
-4. Update the canonical documentation and add an ADR for consequential dependency/interface decisions.
-5. Record physical results separately from automated checks; report what was not exercised.
+The [architecture document](../architecture/README.md) defines ownership and dependency direction. [AGENTS.md](../../AGENTS.md) summarizes repository rules for automated coding tools.
 
-For protocol changes, update the shared synthetic v1 fixture and both Rust/JavaScript consumers. Do not add real device identifiers or credentials. Do not raise component versions merely for file moves.
+## Validation
 
-## Tests and generated files
+Generate resources with `npm run build` once in a fresh checkout before running artwork-dependent tests. Use targeted tests during development, for example:
 
-- `tests/runtime`: pure state/wake policy, sampler parsing, loopback Hook and injected coordinator scenarios.
-- `tests/band`: display/settings/keep-screen and the actual controller with fake Vela APIs.
-- `tests/contracts`: canonical/generated module parity, IPC fixture, bridge and compatibility entrypoints.
-- `tests/architecture`: boundary-checker positive and negative cases; Rust tests stay in owned modules.
+```sh
+node --test tests/contracts/preview-animation.test.mjs
+node --test tests/runtime/runtime-operation.test.mjs
+```
 
-`npm test` first stages shared modules. Artwork-dependent tests require `npm run build` once in a fresh checkout. Runtime tests use fake clocks and transports, never edited source copies. Timeouts remain named production settings rather than test-only source replacements.
+Then run the common checks and affected Rust suites:
 
-`npm run check:architecture` is a lightweight static guard for authored sources: core/shared platform imports, cross-app imports, direct frontend Tauri access, retired directories and source-rewriting tests. It is not a full language parser or security boundary; code review remains responsible for dynamic imports and Rust module design.
+```sh
+npm test
+npm run check:architecture
+cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+cargo test --locked --manifest-path native/transport/Cargo.toml
+cargo test --locked --manifest-path native/transport/Cargo.toml -p corelib device::xiaomi::sar::tests
+```
 
-Never edit `apps/band/src/common/generated`, generated PNGs, desktop assets or downloaded upstream contents. Change canonical modules/generator code and rebuild. The approved desktop icon master is `apps/desktop/artwork/app-icon.png`; `scripts/prepare_desktop.py` derives the desktop and in-app icons and draws the matching monochrome menu-bar template. Both build commands run this preparation; band artwork remains owned by `scripts/render_band_ui.py`. Preserve upstream attribution and isolated patches. Local `.agent` memory, `.legacy` archives and editor indexes are outside the product tree and CI.
+Rebuild `npm run build` when changing band code, shared modules or artwork. Rebuild `npm run build:desktop` when changing the desktop, runtime, transport or bundled resources. After dependencies are cached, Cargo supports `--offline` for local checks.
 
-## Manual smoke acceptance
+`npm test` stages shared modules before testing. Runtime tests use injected dependencies and fake clocks; do not alter production source to substitute timeouts. Tests use synthetic fixtures and must not read personal account data or contact a physical device. Tests that need a local listener bind only to loopback.
 
-After both builds pass, use the rebuilt app to confirm startup/selected-device restoration, connection ACK, one event wake and roughly 20-second natural sleep, pause/resume and explicit-quit worker cleanup. If band controller/protocol code changed, install the rebuilt local RPK for that smoke test. Confirm the physical display with the user; health ACK alone is insufficient. Preserve historical failures and untested device/firmware conditions in the validation record.
+Architecture checks cover platform imports, cross-app access, direct Tauri calls outside `ui/bridge.js`, compatibility entrypoints and generated-module boundaries. They supplement code review rather than replacing it.
 
-The [architecture migration map](REFACTOR.md) lists renamed paths and compatibility behavior.
+For a UI change, verify first launch, an existing user's saved settings, loading/error states and keyboard access. For device behavior, report the model, firmware and the physical result separately from builds and software receipts. See [testing and known limitations](../testing.md) for the current verification scope. The archive-relocation integration test is separately gated; follow the release process when validating a distributable app.
+
+## Implementation workflow
+
+1. Identify the user-facing behavior and affected component. Keep the change focused.
+2. Add a regression test for a behavior fix, or update the relevant contract fixtures when the protocol changes.
+3. Implement within the existing ownership boundaries. Add an ADR for a consequential architecture decision.
+4. Run targeted checks, the common suites and affected builds.
+5. Update user-facing and contributor documentation, and describe unverified conditions in the pull request.
+
+UI text lives in `apps/desktop/ui/locales.js`; update English, Simplified Chinese and Traditional Chinese together. Mac appearance, Buddy theme and AI host configuration are separate settings.
+
+## Generated files and local data
+
+Change canonical source, not generated copies. In particular, do not hand-edit generated shared modules, band PNGs, desktop assets or downloaded upstream trees. The desktop icon master is `apps/desktop/artwork/app-icon.png`; `scripts/prepare_desktop.py` produces its app and tray assets. Band artwork is generated by `scripts/render_band_ui.py`.
+
+Upstream revisions are pinned in `native/transport/upstream-lock.json`. Adaptations belong in recorded patches and [third-party notices](../../THIRD_PARTY_NOTICES.md). Keep the downloaded licenses intact.
+
+Do not commit build products, dependencies, credentials, editor caches, local backups or `.agent` notes. Never include prompts, transcripts, raw tool arguments, real device identifiers or account secrets in fixtures or diagnostics.
+
+## AI integrations and releases
+
+The [Hooks guide](hooks.md) documents supported events, setup, verification and removal. Hook installation is an explicit action separate from building or testing the app; use a disposable project when testing installer behavior.
+
+Ordinary branch and pull-request CI runs source checks without producing release packages. Version-tagged releases build the supported Mac architectures and publish their artifacts after validation. Follow the [release process](../open-source/RELEASING.md) for versioning, source archives, licenses and publication.

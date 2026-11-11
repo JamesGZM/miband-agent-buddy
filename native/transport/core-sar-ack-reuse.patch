@@ -1,0 +1,58 @@
+diff --git a/src/device/xiaomi/sar/mod.rs b/src/device/xiaomi/sar/mod.rs
+--- a/src/device/xiaomi/sar/mod.rs
++++ b/src/device/xiaomi/sar/mod.rs
+@@ -387,9 +387,9 @@
+     fn alloc_seq(&mut self) -> u8 {
+         let seq = self.tx_next_seq;
+         self.tx_next_seq = self.tx_next_seq.wrapping_add(1);
+-        if self.tx_next_seq == 0 {
+-            self.acked.clear();
+-        }
++        // MASS may still be consuming ACKs from the previous batch at wrap.
++        // Only this reused slot is stale; a session reset clears the whole set.
++        self.acked.remove(&seq);
+         seq
+     }
+ 
+@@ -1144,6 +1144,41 @@
+     }
+ 
+     #[tokio::test]
++    async fn ack_sequence_wrap_preserves_unconsumed_mass_acknowledgements() {
++        let (mut sar, _sent) = new_controller("test_mass_ack_wrap", SarLinkParams::SPP);
++        sar.on_l1_packet(&start_rsp());
++        let mut previous = Vec::new();
++        // MASS queues a new batch before consuming ACKs from the previous one.
++        for batch in 0..80 {
++            let current = sar.enqueue_batch((0..16).map(|_| vec![L2Channel::Mass as u8, 1]));
++            for seq in previous {
++                assert!(sar.is_acked(seq), "batch {batch} lost an unconsumed ACK for {seq}");
++                sar.mark_ack_consumed(seq);
++            }
++            sar.on_l1_packet(&L1Packet::new(L1DataType::Ack, false, *current.last().unwrap(), vec![]));
++            previous = current;
++            tokio::task::yield_now().await;
++        }
++        for seq in previous {
++            assert!(sar.is_acked(seq));
++        }
++    }
++
++    #[tokio::test]
++    async fn ack_sequence_reuse_invalidates_only_the_allocated_slot() {
++        let (mut sar, _sent) = new_controller("test_ack_slot_reuse", SarLinkParams::SPP);
++        sar.tx_next_seq = 255;
++        sar.acked.extend([7, 255]);
++        assert_eq!(sar.alloc_seq(), 255);
++        assert!(!sar.is_acked(255), "a reused sequence must wait for its own ACK");
++        assert!(sar.is_acked(7), "another pending consumer still owns this ACK");
++        sar.acked.insert(0);
++        assert_eq!(sar.alloc_seq(), 0);
++        assert!(!sar.is_acked(0));
++        assert!(sar.is_acked(7));
++    }
++
++    #[tokio::test]
+     async fn start_req_advertises_link_params() {
+         let (_sar, sent) = new_controller("test_start_req", SarLinkParams::ble(244));
+         let packets = flushed(&sent).await;

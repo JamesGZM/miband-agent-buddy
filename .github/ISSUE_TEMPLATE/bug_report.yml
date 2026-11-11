@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible problem with the app or band.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. For a security vulnerability, follow SECURITY.md instead of posting details here.
+        Do not include account credentials, device keys, Bluetooth addresses, raw traffic, prompts or conversation content.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: The version shown in Settings → About.
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: macOS version and Mac architecture
+      placeholder: macOS version; Apple Silicon or Intel
+    validations:
+      required: true
+  - type: input
+    id: band
+    attributes:
+      label: Band model and firmware
+      description: Required for band-related problems; do not include device identifiers.
+  - type: dropdown
+    id: context
+    attributes:
+      label: When did this happen?
+      options:
+        - First-time setup
+        - Updating the app or Buddy
+        - Reconnecting an existing band
+        - Normal use
+        - Development build
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the actions needed to reproduce the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Sanitized screenshots, error text, frequency or a workaround. Review attachments for private information.

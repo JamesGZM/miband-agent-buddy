@@ -38,6 +38,25 @@ test('out-of-range hold settings are rejected at the runtime boundary', async t 
   assert.equal(h.state.settings.wakeHoldMs, 20000);
 });
 
+test('power saving defaults off and is only sent to a band advertising the capability', async t => {
+  for (const supported of [false, true]) {
+    const h = runtimeHarness({onWrite: band(supported ? {powerSaving:true} : null)});
+    t.after(() => h.runtime.stop());
+    await h.connect(); await h.clock.advance(7000);
+    const snapshots = () => h.calls.filter(c => c.op === 'snapshot').map(c => c.payload);
+    assert.equal(h.state.settings.powerSaving, false);
+    assert.equal(Object.hasOwn(snapshots()[0], 'powerSaving'), false);
+    assert.equal(snapshots().at(-1).powerSaving, supported ? false : undefined);
+    for (const value of ['true', 1, null]) await h.runtime.dispatch({op:'configure',settings:{powerSaving:value}});
+    assert.equal(h.state.settings.powerSaving, false);
+    await h.runtime.dispatch({op:'configure',settings:{powerSaving:true}}); await h.clock.advance(4000);
+    assert.equal(h.state.settings.powerSaving, true);
+    assert.equal(snapshots().at(-1).powerSaving, supported ? true : undefined);
+    await h.runtime.dispatch({op:'configure',settings:{powerSaving:false}}); await h.clock.advance(4000);
+    assert.equal(snapshots().at(-1).powerSaving, supported ? false : undefined);
+  }
+});
+
 test('device status is requested after authentication, on refresh and every five minutes', async t => {
   const h = runtimeHarness({onWrite: band(null)}); t.after(() => h.runtime.stop());
   await h.connect();

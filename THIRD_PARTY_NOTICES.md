@@ -2,23 +2,25 @@
 
 ## AstroBox — AstralSightStudios
 
-This project uses the publicly available AstroBox protocol implementations. It does not require the AstroBox application. Preserve the upstream AGPL-3.0 license and additional attribution notices.
+MiBand Agent Buddy uses protocol and account components from [AstralSightStudios](https://github.com/AstralSightStudios). Their AGPL-3.0 licenses and additional attribution notices are preserved.
 
 | Component | Repository | Revision / adaptation |
 |---|---|---|
 | Account | https://github.com/AstralSightStudios/AstroBox-NG-Module-Account | `dae3188a9c3a9c757555f51d00a6774ab13f1257`; vendored account code replaces private hostio HTTP with reqwest; bounded, restricted redirects; no upstream logger. License and NOTICE accompany the source. |
-| Core | https://github.com/AstralSightStudios/AstroBox-NG-Module-Core | Pinned in `native/transport/upstream-lock.json`; feature-gating patch retained. |
+| Core | https://github.com/AstralSightStudios/AstroBox-NG-Module-Core | Pinned in `native/transport/upstream-lock.json`; `core-no-network.patch` and `core-without-vivo.patch` isolate optional functionality. Original default features retain network, RPC and Vivo support; this Xiaomi-only app disables them. `core-sar-ack-reuse.patch` preserves unconsumed MASS acknowledgements across sequence wrap while invalidating the exact reused sequence, with focused regression tests. |
 | Classic SPP | https://github.com/AstralSightStudios/AstroBox-NG-Plugin-BtClassicSpp | Pinned in upstream lock; macOS implementation reused with its original source/license. |
 | Bluetooth | https://github.com/AstralSightStudios/AstroBox-NG-Module-Bluetooth | Pinned build dependency; original license retained by bootstrap. |
 | Protocol buffers | https://github.com/AstralSightStudios/AstroBox-NG-Module-Pb | Pinned build dependency; original license retained by bootstrap. |
-| Vivo MsgPack | https://github.com/AstralSightStudios/AstroBox-NG-Module-Vivo-MsgPack | Pinned transitive Core dependency; no standalone LICENSE was present in the inspected revision. Source is fetched from upstream, not redistributed here. Resolve its redistribution terms before publishing bundled binaries. Vivo functionality is not exposed by this app. |
+| Vivo MsgPack | https://github.com/AstralSightStudios/AstroBox-NG-Module-Vivo-MsgPack | Pinned optional Core dependency; no standalone LICENSE was present in the inspected revision. Bootstrap fetches its source for upstream feature compatibility, but this app disables the `vivo` and `rpc` features. It is absent from the app's Cargo lock/dependency tree and is not included in desktop packages. Do not enable or distribute it without resolving its redistribution terms. |
 
-The upstream Core/Bluetooth/SPP READMEs request author and repository attribution in addition to their AGPL terms. This notice and the in-app About page provide that attribution. Downloaded sources and their licenses stay intact; this repository commits the lock and patch, not the downloaded trees.
+The upstream Core/Bluetooth/SPP READMEs request author and repository attribution in addition to their AGPL terms. This notice and the in-app About page provide that attribution. Downloaded sources and their licenses stay intact; this repository commits the lock and patches, not the downloaded trees. The Vivo/RPC exclusion is an isolated local build adaptation, not an upstream change or additional permission to redistribute Vivo MsgPack.
 
 ## Other dependencies
 
-Tauri and its plugins, Rust dependencies and the Vela `aiot-toolkit` development tool retain their own licenses. Exact versions are recorded in Cargo.lock and apps/band/package-lock.json. Python Pillow is used only for local artwork generation. This release publishes source rather than a bundle of these dependencies.
+The desktop builder runs `scripts/collect_licenses.py` to include the resolved macOS Rust dependencies' license texts and attribution under `Contents/Resources/licenses/rust`. Reviewed supplements are recorded in [the license receipts](docs/open-source/licenses/README.md). Packages whose published crates omit full license files, MPL packages, and locally adapted upstream crates include their corresponding package source in that directory. Account-module notices and the bundled official Node distribution's license are included separately.
+
+Tauri and its plugins, Rust dependencies and the Vela `aiot-toolkit` development tool retain their own licenses. Exact versions are recorded in Cargo.lock and apps/band/package-lock.json. Python Pillow is used only for local artwork generation. Portable macOS bundles include the official Node distribution license and upstream component notices under `Contents/Resources/licenses`. Exact project source is available in the matching GitHub release tag; additional release source archives include patched upstream sources and linked Rust package sources. Pinned upstream source and its isolated patches are identified by `native/transport/upstream-lock.json` and the bootstrap script. The build rejects non-system dylib dependencies, and release packaging rejects an active Vivo MsgPack dependency.
 
 ## Inspiration and artwork
 
-Agent Buddy by Dan Wahlin (https://github.com/DanWahlin/agent-buddy) inspired the lifecycle-driven companion workflow. Legacy sprite experiments are not included in the published runtime. Current capsule, glyph, ring and original geometric Claude-inspired buddy assets are reproducibly generated by `scripts/render_band_ui.py`. Brand/tool names describe themes and integrations and do not imply endorsement or trademark permission.
+[Agent Buddy by Dan Wahlin](https://github.com/DanWahlin/agent-buddy) inspired the lifecycle-driven companion workflow. Capsule, glyph, ring and geometric Buddy assets are generated by `scripts/render_band_ui.py`. Brand and tool names describe themes and integrations and do not imply endorsement or trademark permission.

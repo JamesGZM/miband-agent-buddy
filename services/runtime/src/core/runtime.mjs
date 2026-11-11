@@ -1,13 +1,19 @@
 import { createWakePolicy } from './wake-policy.mjs';
 import { createCodexState } from './codex-state.mjs';
+import { initialBuddyState, checkedBuddyState, acknowledgedBuddyState } from './band-package-state.mjs';
 import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
 import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
 
 export const DEFAULT_TIMINGS = Object.freeze({
   sample: 2000, ack: 8000, probe: 30000, connect: 55000,
   wake: 15000, launch: 1000, failedSend: 10000, install: 310000,
-  cooldown: 10000, ttl: 60000, operation: 25000, device: 300000,
+  cooldown: 10000, ttl: 60000, operation: 25000, device: 300000, buddy: 30000,
 });
+export function installationTimeout(sizeBytes) {
+  if (!Number.isInteger(sizeBytes) || sizeBytes < 0 || sizeBytes >= 16 * 1024 * 1024) return DEFAULT_TIMINGS.install;
+  // Match native install_timeout, with ten seconds to receive its final result.
+  return (Math.max(300, Math.min(900, 120 + Math.ceil(sizeBytes / (12 * 1024)))) + 10) * 1000;
+}
 const LEGACY_WAKE_HOLD_MS = 30000;
 const MAX_WAKE_HOLD_MS = 1800000;
 const ACTIVITY_HOLD_MS = 15000;
@@ -19,10 +25,10 @@ const OPERATION_ACTIVE = ["waking", "applying"];
  * Transport handles implement start(credentials), write(command), kill(), stop().
  * Factory creation/import is inert; start owns sampling, stop releases all work.
  */
-export function createRuntime({createTransport, sample, makeId, packagePath,
+export function createRuntime({createTransport, sample, makeId, packagePath, bandPackage = null,
   now = Date.now, schedule = setTimeout, cancel = clearTimeout,
   emit = () => {}, timings: overrides = {}}) {
-  const timings = {...DEFAULT_TIMINGS, ...overrides};
+  const timings = {...DEFAULT_TIMINGS, install: installationTimeout(bandPackage?.sizeBytes), ...overrides};
   let timer = null, connectionDeadline = null, closing = false, started = false;
   let commands = Promise.resolve(), stopping = null;
   const wakePolicy = createWakePolicy({now, cooldown: timings.cooldown, ttl: timings.ttl});
@@ -39,19 +45,20 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     deadline = null,
     installDeadline = null;
   let retryAt = 0, launchOnConnect = false;
-  let capabilities = null, deviceAt = 0;
+  let capabilities = null, deviceAt = 0, buddyDeadline = null, buddyFromLaunch = false;
   let seq = 0,
     session = makeId(),
     pending = null,
     paused = false,
     metrics = null,
-    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false, wakeHoldMs: 20000 };
+    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false, wakeHoldMs: 20000, activityKeepAwake: false, powerSaving: false };
   let state = {
     connection: "disconnected",
     ack: null,
     error: null,
     progress: null,
     installed: false,
+    buddy: initialBuddyState(bandPackage),
   };
   const publish = () =>
     emit({
@@ -66,6 +73,12 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
   function operationActive() {
     return OPERATION_ACTIVE.includes(operation?.status);
   }
+  function configureKind(value) {
+    if (value.buddyTheme !== undefined) return "theme";
+    if (value.activityKeepAwake !== undefined) return "activity_keep_awake";
+    if (value.powerSaving !== undefined) return "power_saving";
+    return "wake_hold";
+  }
   function settleOperation(status, code = null) {
     if (!operationActive()) return;
     cancel(operationDeadline); operationDeadline = null;
@@ -78,7 +91,6 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     settleOperation("cancelled", "superseded");
     operation = {id: request, kind, status: "waking", code: null, at: now(), target};
     if (!transport || !desired || !LINK_READY.includes(state.connection)) settleOperation("failed", "not_connected");
-    else if (paused) settleOperation("failed", "paused");
     else {
       wakePolicy.requestUser(kind, request);
       operationDeadline = schedule(() => { settleOperation("failed", "timeout"); publish(); }, timings.operation);
@@ -89,9 +101,14 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     publish();
   }
   function launchPendingWake() {
-    if (!transport || !desired || paused || wakeFlight || pingDeadline || !LINK_READY.includes(state.connection)) return;
+    if (!transport || !desired || (paused && !operationActive()) || wakeFlight || pingDeadline || !LINK_READY.includes(state.connection)) return;
     const wake = wakePolicy.take(true);
     if (wake) launchWake(wake);
+  }
+  function wakeForPreference() {
+    // Changing an option is a user action, not periodic permission to reopen Buddy.
+    if (transport && desired && !paused && LINK_READY.includes(state.connection) && !operationActive())
+      beginOperation("settings-" + makeId(), "wake", {});
   }
   // Older Buddy builds reject leases above 30 s; newer ones advertise their own limit.
   function wakeHold() {
@@ -107,6 +124,28 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     deviceAt = now();
     write({op: "device_status", id: "device-status"});
   }
+  function clearBuddyCheck() {
+    cancel(buddyDeadline); buddyDeadline = null; buddyFromLaunch = false;
+  }
+  function beginBuddyCheck() {
+    state.buddy = {...state.buddy, status: "checking", error: null};
+    buddyDeadline = schedule(() => {
+      buddyDeadline = null; buddyFromLaunch = false;
+      state.buddy = {...state.buddy, status: "error", error: "timeout"};
+      publish();
+    }, timings.buddy);
+  }
+  function requestBuddy() {
+    if (!transport || !LINK_READY.includes(state.connection) || buddyDeadline !== null) return;
+    beginBuddyCheck();
+    write({op: "buddy_status", id: "buddy-status"});
+    publish();
+  }
+  function missingBuddy() {
+    clearBuddyCheck();
+    state.installed = false;
+    state.buddy = checkedBuddyState(state.buddy, {installed: false, versionCode: null}, now());
+  }
   function clearWake() {
     cancel(wakeDeadline); wakeDeadline = null; wakeFlight = null;
   }
@@ -116,8 +155,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     state.wake = { reason: event.reason, status: "sending", at: now() };
     write({op: "launch_buddy", id: wakeFlight.id});
     wakeDeadline = schedule(() => {
-      state.wake = { ...state.wake, status: "unconfirmed" };
-      if (ownsWake(wakeFlight)) settleOperation("failed", "no_response");
+      const code = wakeFlight?.acknowledged ? "display_unconfirmed" : "no_response";
+      state.wake = { ...state.wake, status: code === "no_response" ? "unconfirmed" : "display_unconfirmed" };
+      if (ownsWake(wakeFlight)) settleOperation("failed", code);
       clearWake(); clearPending();
       state.connection = "standby";
       retryAt = now() + timings.probe;
@@ -139,6 +179,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     cancel(retryTimer);
     cancel(connectionDeadline);
     cancel(installDeadline);
+    clearBuddyCheck();
     clearPending();
     const child = transport;
     transport = null;
@@ -152,6 +193,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       error: null,
       progress: null,
       installed: false,
+      buddy: initialBuddyState(bandPackage),
     };
   }
   function write(command) {
@@ -187,6 +229,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     retryAt = 0;
     state.connection = "connecting";
     state.ack = null;
+    state.buddy = initialBuddyState(bandPackage);
+    clearBuddyCheck();
     capabilities = null;
     state.error = null;
     publish();
@@ -197,11 +241,15 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       try { wire.decodeTransportEvent(event); } catch { return; }
       if (event.event === "authenticated") {
         cancel(watchdog);
-        if (launchOnConnect && !paused) wakePolicy.requestConnection();
+        const checkFromLaunch = launchOnConnect && !paused;
+        if (checkFromLaunch) wakePolicy.requestConnection();
         launchOnConnect = false;
         state.connection = "waiting";
         state.error = null;
         requestDevice();
+        // Launch already fetches this inventory. Do not put another query ahead of it.
+        if (checkFromLaunch) {beginBuddyCheck(); buddyFromLaunch = true;}
+        else requestBuddy();
         publish();
       }
       if (event.event === "battery") {
@@ -217,6 +265,30 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         return;
       }
       if (event.event === "result" && event.id === "device-status") return;
+      if (event.event === "buddy") {
+        if (state.connection === "installing") return;
+        clearBuddyCheck();
+        if (state.buddy.installed !== event.installed || state.buddy.installedVersionCode !== event.versionCode) {
+          // An older in-flight application reply must not relabel a newly observed package.
+          clearPending(); state.ack = null; state.lastAckAt = null; capabilities = null;
+        }
+        state.buddy = checkedBuddyState(state.buddy, event, now());
+        state.installed = event.installed;
+        if (operationActive() && operation.kind === "check_buddy" && operation.target.inventoryRequested)
+          settleOperation("done");
+        publish(); return;
+      }
+      if (event.event === "result" && event.id === "buddy-status") {
+        if (state.connection === "installing") return;
+        clearBuddyCheck();
+        if (!event.ok || state.buddy.status === "checking") {
+          state.buddy = {...state.buddy, status: "error", error: event.code || "operation_failed"};
+          if (operationActive() && operation.kind === "check_buddy" && operation.target.inventoryRequested)
+            settleOperation("failed", event.code || "operation_failed");
+          publish();
+        }
+        return;
+      }
       if (event.event === "progress") {
         state.progress = Math.max(0, Math.min(100, event.progress * 100));
         publish();
@@ -224,28 +296,54 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
         const ack = event.ack;
         capabilities = ack.capabilities && typeof ack.capabilities === "object" ? ack.capabilities : null;
-        if (operationActive()) {
-          const target = operation.target;
-          if (operation.kind === "theme") {
-            if (confirmedSettings(ack, target)) settleOperation("done");
-            else if (ack.settingsRevision == null) settleOperation("failed", "unsupported");
-          }
-          if (operation.kind === "page" && pending.page === target.page) {
-            if (ack.page === target.page) settleOperation("done");
-            else settleOperation("failed", "unsupported");
-          }
-        }
         if (wakeFlight?.queued && pending.wakeId === wakeFlight.id) {
+          wakeFlight.acknowledged = true;
           const held = ack.wakeDisplay?.id === wakeFlight.id && ack.wakeDisplay?.remainingMs > 0;
-          const owned = ownsWake(wakeFlight) && operation.kind === "wake";
+          const owned = ownsWake(wakeFlight);
           if (held && ack.keepScreen === "on") {
             state.wake = {...state.wake, status: "confirmed"};
-            if (owned) settleOperation("done");
+            if (owned) operation = {...operation, wakeConfirmed: true};
             clearWake();
-          } else if (!held || ack.keepScreen === "error") {
+          } else if (ack.keepScreen === "error") {
             state.wake = {...state.wake, status: "display_unconfirmed"};
             if (owned) settleOperation("failed", "display_unconfirmed");
             clearWake();
+          }
+          // A pre-show ACK can have no lease yet. Retry the same wake ID with
+          // fresh sequence numbers until the original deadline, without relaunching.
+        }
+        // The first receipt can discover support before powerSaving was sent.
+        // Keep a paused manual transaction alive until the saved choice is durable.
+        const powerApplied = capabilities?.powerSaving !== true ||
+          (pending.powerSaving === settings.powerSaving && ack.powerSaving === settings.powerSaving && ack.settingsApplied === true);
+        if (operationActive() && operation.wakeConfirmed && powerApplied) {
+          const target = operation.target;
+          switch (operation.kind) {
+            case "theme":
+              if (confirmedSettings(ack, target)) settleOperation("done");
+              else if (ack.settingsRevision == null) settleOperation("failed", "unsupported");
+              break;
+            case "page":
+              if (pending.page === target.page) settleOperation(ack.page === target.page ? "done" : "failed", ack.page === target.page ? null : "unsupported");
+              break;
+            case "power_saving":
+              if (capabilities?.powerSaving !== true) settleOperation("failed", "unsupported");
+              else if (pending.powerSaving === target.powerSaving && ack.powerSaving === target.powerSaving && ack.settingsApplied === true) settleOperation("done");
+              break;
+            case "activity_keep_awake":
+              if (capabilities?.activityHold !== true) settleOperation("failed", "unsupported");
+              else if (pending.activityHoldMs != null && ack.wakeDisplay?.active === (pending.activityHoldMs > 0)) settleOperation("done");
+              break;
+            case "check_buddy":
+              if (!target.inventoryRequested) {
+                target.inventoryRequested = true;
+                clearBuddyCheck();
+                requestBuddy();
+              }
+              break;
+            case "wake": case "wake_hold": case "reset_activity": case "install":
+              settleOperation("done");
+              break;
           }
         }
         clearPending();
@@ -257,6 +355,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           ack,
           lastAckAt: now(),
           installed: true,
+          buddy: acknowledgedBuddyState(state.buddy, ack.appVersion),
         };
         publish();
       }
@@ -274,10 +373,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           retryAt = now() + timings.launch;
         } else {
           state.wake = {...state.wake, status: "failed", code: event.code};
-          if (ownsWake(wakeFlight)) settleOperation("failed", event.code || "launch_failed");
+          if (ownsWake(wakeFlight)) {
+            // A missing package is a valid inventory result, and cannot be woken.
+            if (operation.kind === "check_buddy" && event.code === "app_missing") settleOperation("done");
+            else settleOperation("failed", event.code || "launch_failed");
+          }
           if (event.code === "app_missing") {
-            state.installed = false;
-            state.error = "手環尚未安裝 Buddy，請前往手環頁安裝";
+            missingBuddy();
           }
           clearWake();
         }
@@ -287,8 +389,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         cancel(installDeadline);
         state.connection = "waiting";
         state.progress = null;
-        state.installed = event.ok;
-        if (event.ok && !paused) wakePolicy.requestConnection("installed");
+        if (event.ok) state.installed = true;
         state.installation = {
           ok: event.ok,
           code: event.code || null,
@@ -297,14 +398,21 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         state.ack = null;
         state.lastAckAt = null;
         capabilities = null;
-        state.error = event.ok ? null : "Buddy 安裝失敗，請保持手環連線後重試";
+        state.error = null;
+        state.buddy = {...state.buddy, status: event.ok ? "unknown" : "error", error: event.ok ? null : event.code || "install_failed",
+          ...(event.ok ? {installed: true, installedVersion: null, installedVersionCode: null} : {})};
+        if (event.ok) {
+          beginBuddyCheck(); buddyFromLaunch = true;
+          beginOperation("install-" + makeId(), "install", {});
+        }
         publish();
       } else if (event.event === "result" && !event.ok && event.id === pending?.seq) {
         clearPending();
         retryAt = now() + timings.failedSend;
         state.connection = "waiting";
         state.operationError = event.code;
-        state.error = "請安裝並在手環打開 Buddy";
+        if (event.code === "app_missing") missingBuddy();
+        else state.error = "Buddy 暫未回應，請稍後重試";
         publish();
       }
       if (event.event === "conflict") {
@@ -333,6 +441,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       transport = null;
       settleOperation("failed", "link_lost");
       cancel(installDeadline);
+      clearBuddyCheck();
       clearWake();
       cancel(pingDeadline); pingDeadline = null;
       clearPending();
@@ -360,9 +469,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         publish();
         break;
       case "pause":
+        const checkAfterPause = !!c.value && buddyFromLaunch && !operationActive();
+        const resuming = paused && !c.value;
         paused = !!c.value;
-        if (paused) settleOperation("cancelled", "paused");
-        wakePolicy.clear(); clearWake(); clearPending();
+        if (operationActive()) wakePolicy.clearEvents();
+        else {wakePolicy.clear(); clearWake(); clearPending();}
+        if (checkAfterPause) {clearBuddyCheck(); requestBuddy();}
+        if (resuming && settings.activityKeepAwake && agent.status().activeSessions > 0) wakeForPreference();
         publish();
         break;
       case "reset_activity":
@@ -373,7 +486,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           clearWake();
         }
         if (!operationActive()) clearPending();
-        publish();
+        if (c.request) beginOperation(c.request, "reset_activity", {});
+        else publish();
         break;
       case "configure":
         if (!supportsTheme(c.settings.buddyTheme)) {
@@ -385,9 +499,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           publish();
           break;
         }
+        const enablingActivityHold = c.settings.activityKeepAwake === true && !settings.activityKeepAwake;
         settings = { ...settings, ...c.settings };
-        if (c.request) beginOperation(c.request, "theme", {buddyTheme: settings.buddyTheme, revision: settings.revision});
-        else publish();
+        if (c.request) beginOperation(c.request, configureKind(c.settings), {...c.settings});
+        else {
+          if (enablingActivityHold) wakeForPreference();
+          publish();
+        }
         break;
       case "show_page":
         beginOperation(c.request, "page", {page: c.page});
@@ -397,6 +515,10 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         break;
       case "refresh_device":
         requestDevice();
+        break;
+      case "check_buddy":
+        if (c.request) beginOperation(c.request, "check_buddy", {});
+        else requestBuddy();
         break;
       case "install":
         if (!transport || !["connected", "waiting", "standby"].includes(state.connection)) {
@@ -408,7 +530,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         settleOperation("cancelled", "install");
         wakePolicy.clear(); clearWake();
         cancel(pingDeadline); pingDeadline = null;
+        clearBuddyCheck();
         state.connection = "installing";
+        state.buddy = {...state.buddy, status: "installing", error: null};
         state.installation = null;
         state.operationError = null;
         state.progress = 0;
@@ -420,7 +544,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
           path: packagePath,
         });
         installDeadline = schedule(() => {
-          state.error = "安裝逾時，請重連後檢查版本";
+          state.installation = {ok: false, code: "timeout", at: now()};
+          state.buddy = {...state.buddy, status: "error", error: "timeout"};
           transport?.kill();
         }, timings.install);
         break;
@@ -431,13 +556,14 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     try { nextMetrics = await sample(); } catch { nextMetrics = null; }
     if (closing) return;
     metrics = nextMetrics;
-    if (!desired || paused || state.connection === "installing") wakePolicy.clear();
+    if (!desired || (paused && !operationActive()) || state.connection === "installing") wakePolicy.clear();
     launchPendingWake();
     if (transport && !paused && LINK_READY.includes(state.connection) && now() - deviceAt >= timings.device) requestDevice();
     if (
       transport &&
-      !paused &&
+      (!paused || operationActive()) &&
       !pending &&
+      (!operationActive() || operation.wakeConfirmed || wakeFlight?.queued) &&
       (!wakeFlight || wakeFlight.queued) &&
       now() >= retryAt &&
       ["connected", "waiting", "standby"].includes(state.connection) &&
@@ -466,10 +592,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
       };
       if (wakeFlight) { pending.wakeId = wakeFlight.id; pending.wakeHoldMs = wakeHold(); }
       if (capabilities?.activityHold === true) {
-        pending.activityHoldMs = activity.activeSessions > 0 ? ACTIVITY_HOLD_MS : 0;
+        pending.activityHoldMs = !paused && settings.activityKeepAwake && activity.activeSessions > 0 ? ACTIVITY_HOLD_MS : 0;
         pending.idleHoldMs = settings.wakeHoldMs ?? 20000;
         pending.sessionCounts = {...activity.sessionCounts};
       }
+      if (capabilities?.powerSaving === true) pending.powerSaving = settings.powerSaving;
       if (operationActive() && operation.kind === "page") pending.page = operation.target.page;
       const payload = {...pending};
       if (wakeFlight) pending.wakeId = wakeFlight.id;

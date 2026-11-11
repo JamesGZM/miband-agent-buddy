@@ -24,7 +24,7 @@ test('pause discards wake and pending data; resume does not replay old events', 
   await h.runtime.dispatch({op: 'pause', value: true});
   h.hook('UserPromptSubmit');
   await h.clock.advance(20000);
-  assert.deepEqual(h.calls.map(c => c.op), ['device_status']);
+  assert.deepEqual(h.calls.map(c => c.op), ['device_status', 'buddy_status']);
   await h.runtime.dispatch({op: 'pause', value: false});
   await h.clock.advance(2000);
   assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, 0);
@@ -51,7 +51,8 @@ test('install pauses snapshots and requires device result before post-install wa
   h.children[0].event({event: 'result', id: 'install', ok: true});
   await h.clock.advance(2000);
   assert.equal(h.state.installation.ok, true);
-  assert.equal(h.state.wake.reason, 'installed');
+  assert.equal(h.state.wake.reason, 'user');
+  assert.equal(h.state.operation.kind, 'install');
 });
 
 test('installation timeout terminates transport and reports uncertainty', async t => {
@@ -59,7 +60,7 @@ test('installation timeout terminates transport and reports uncertainty', async 
   await h.connect(); await h.runtime.dispatch({op: 'install'});
   await h.clock.advance(100);
   assert.equal(h.children[0].killed, 1);
-  assert.ok(h.states.some(s => s.error?.includes('安裝逾時')));
+  assert.ok(h.states.some(s => s.installation?.code === 'timeout' && s.buddy.error === 'timeout'));
 });
 
 test('transport retries are bounded and background reconnect never synthesizes wake', async t => {

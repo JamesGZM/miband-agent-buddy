@@ -6,15 +6,15 @@ use crate::{
     state::{Session, Shared},
 };
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 use tauri::{
+    AppHandle, Manager,
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -230,12 +230,16 @@ pub fn run() {
                 credentials,
                 busy: false,
                 login_error,
+                runtime: RuntimeState {
+                    paused: !prefs.sync_enabled,
+                    ..Default::default()
+                },
                 prefs,
-                runtime: RuntimeState::default(),
                 worker: RuntimeClient::default(),
                 config,
             }));
             app.manage(shared.clone());
+            app.manage(crate::updater::UpdateCache::default());
             app.manage(TrayRefresh {
                 pending: AtomicBool::new(false),
                 last_signature: Mutex::new(String::new()),
@@ -245,7 +249,8 @@ pub fn run() {
             let language = shared.lock().unwrap().prefs.language.clone();
             runtime::start(shared, app.handle().clone());
             let labels = i18n::labels(i18n::current(&language));
-            let status = MenuItem::with_id(app, "status", labels.disconnected, false, None::<&str>)?;
+            let status =
+                MenuItem::with_id(app, "status", labels.disconnected, false, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", labels.open, true, None::<&str>)?;
             let wake = MenuItem::with_id(app, "wake", labels.wake, false, None::<&str>)?;
             let pause = MenuItem::with_id(app, "pause", labels.pause, true, None::<&str>)?;
@@ -282,39 +287,37 @@ pub fn run() {
                 .icon_as_template(true)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "open" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
-                        "quit" => app.exit(0),
-                        "wake" => {
-                            let state = app.state::<Shared>();
-                            let mut s = state.lock().unwrap();
-                            let _ = services::perform(&mut s, crate::domain::Action::Wake);
-                            drop(s);
-                            refresh_tray_now(app);
-                        }
-                        "disconnect" => {
-                            let state = app.state::<Shared>();
-                            let mut s = state.lock().unwrap();
-                            let _ = services::disconnect(&mut s);
-                            drop(s);
-                            refresh_tray_now(app);
-                        }
-                        "pause" => {
-                            let state = app.state::<Shared>();
-                            let mut s = state.lock().unwrap();
-                            let paused = s.runtime.paused;
-                            let _ = services::pause(&mut s, !paused);
-                            drop(s);
-                            refresh_tray_now(app);
-                        }
-                        _ => {}
                     }
+                    "quit" => app.exit(0),
+                    "wake" => {
+                        let state = app.state::<Shared>();
+                        let mut s = state.lock().unwrap();
+                        let _ = services::perform(&mut s, crate::domain::Action::Wake);
+                        drop(s);
+                        refresh_tray_now(app);
+                    }
+                    "disconnect" => {
+                        let state = app.state::<Shared>();
+                        let mut s = state.lock().unwrap();
+                        let _ = services::disconnect(&mut s);
+                        drop(s);
+                        refresh_tray_now(app);
+                    }
+                    "pause" => {
+                        let state = app.state::<Shared>();
+                        let mut s = state.lock().unwrap();
+                        let paused = s.runtime.paused;
+                        let _ = services::pause(&mut s, !paused);
+                        drop(s);
+                        refresh_tray_now(app);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
             refresh_tray_now(app.handle());
@@ -377,9 +380,19 @@ mod tests {
     #[test]
     fn band_ready_matches_operation_gate() {
         assert!(band_ready(Connection::Connected));
+        assert!(band_ready(Connection::Waiting));
         assert!(band_ready(Connection::Standby));
         assert!(!band_ready(Connection::Disconnected));
         assert!(!band_ready(Connection::Installing));
+        let paused = RuntimeState {
+            connection: Connection::Standby,
+            paused: true,
+            ..Default::default()
+        };
+        assert!(
+            band_ready(paused.connection),
+            "tray wake remains enabled with background sync off"
+        );
     }
 
     #[test]
@@ -388,7 +401,9 @@ mod tests {
         assert_eq!(battery_percent(&runtime), None);
         runtime.fields.insert("battery".into(), json!(76.4));
         assert_eq!(battery_percent(&runtime), Some(76));
-        runtime.fields.insert("device".into(), json!({"battery": 41}));
+        runtime
+            .fields
+            .insert("device".into(), json!({"battery": 41}));
         assert_eq!(battery_percent(&runtime), Some(76));
         runtime.fields.remove("battery");
         assert_eq!(battery_percent(&runtime), Some(41));

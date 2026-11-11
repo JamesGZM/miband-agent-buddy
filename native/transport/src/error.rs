@@ -9,6 +9,16 @@ pub fn classify_error(error: &anyhow::Error) -> &'static str {
         "install_rejected"
     } else if text.contains("prepare") {
         "install_prepare"
+    } else if text.contains("Timeout waiting for mass packet ACK") {
+        "transfer_ack_timeout"
+    } else if text.contains("SAR session was reset while waiting for MASS ACK")
+        || text.contains("SAR session was reset during MASS transfer")
+        || text.contains("device restarted the L1 session; pending transfer dropped")
+        || text.contains("SAR retransmission limit exceeded:")
+    {
+        "transfer_session_reset"
+    } else if text.contains("RFCOMM async send did not complete within") {
+        "transfer_send_timeout"
     } else if text.contains("MASS") {
         "transfer"
     } else if text.contains("App not installed") {
@@ -54,5 +64,45 @@ mod tests {
             classify_error(&anyhow::anyhow!("failed to send MASS payload")),
             "transfer"
         );
+    }
+
+    #[test]
+    fn mass_ack_timeout_is_not_hidden_by_its_outer_context() {
+        let error = anyhow::anyhow!("deadline has elapsed")
+            .context("Timeout waiting for mass packet ACK")
+            .context("failed to send MASS payload");
+        assert_eq!(classify_error(&error), "transfer_ack_timeout");
+    }
+
+    #[test]
+    fn mass_session_resets_use_a_fixed_code_without_sequence_or_device_details() {
+        for cause in [
+            "SAR session was reset while waiting for MASS ACK (seq 23)",
+            "SAR session was reset during MASS transfer (part 1025)",
+            "device restarted the L1 session; pending transfer dropped",
+            "SAR retransmission limit exceeded: device stopped acknowledging (timed out)",
+            "SAR retransmission limit exceeded: device keeps rejecting packets (timed out)",
+        ] {
+            let error = anyhow::anyhow!(cause)
+                .context("failed to send MASS payload")
+                .context("synthetic fixture-device operation");
+            assert_eq!(classify_error(&error), "transfer_session_reset");
+        }
+    }
+
+    #[test]
+    fn native_write_timeout_is_distinct_when_the_source_chain_preserves_it() {
+        let error = anyhow::anyhow!(
+            "RFCOMM async send did not complete within 45s: timed out waiting on channel"
+        )
+        .context("failed to send MASS payload");
+        assert_eq!(classify_error(&error), "transfer_send_timeout");
+    }
+
+    #[test]
+    fn unknown_mass_failures_do_not_invent_a_timeout_or_user_cancellation() {
+        let error = anyhow::anyhow!("SPP send failed")
+            .context("failed to send MASS payload");
+        assert_eq!(classify_error(&error), "transfer");
     }
 }

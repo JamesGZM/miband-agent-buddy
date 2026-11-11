@@ -7,11 +7,12 @@ import { createSampler } from '../src/adapters/metrics.mjs';
 import { createHookServer } from '../src/adapters/hook-server.mjs';
 import { transportFactory } from '../src/adapters/transport.mjs';
 import { transportPath, packagePath } from '../src/adapters/paths.mjs';
+import { readBandPackage } from '../src/adapters/band-package.mjs';
 
 export function runRuntime() {
   const runtime = createRuntime({
     createTransport: transportFactory(transportPath), sample: createSampler(),
-    makeId: randomUUID, packagePath,
+    makeId: randomUUID, packagePath, bandPackage: readBandPackage(packagePath),
     emit: value => process.stdout.write(JSON.stringify(value) + '\n'),
   });
   const input = createInterface({input: process.stdin});

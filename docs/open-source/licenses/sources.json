@@ -1,0 +1,32 @@
+[
+  {
+    "file": "pbjson-LICENSE",
+    "url": "https://github.com/influxdata/pbjson/blob/3587e007496f87790afd7ac7b5ff45cfe1df3297/LICENSE",
+    "gitBlob": "42d41dfd83f6fd1083a41ed35f6d2d994a2e9dcc"
+  },
+  {
+    "file": "alloc-stdlib-LICENSE",
+    "url": "https://github.com/dropbox/rust-alloc-no-stdlib/blob/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE",
+    "gitBlob": "cd496ba72eb37e83a44958358d1f89a8a28cbc15"
+  },
+  {
+    "file": "crc-catalog-Apache-2.0.txt",
+    "url": "https://github.com/akhilles/crc-catalog/blob/ed4ad631f22b05055c21a3a4127eb7cf6d75bb62/LICENSES/Apache-2.0.txt",
+    "gitBlob": "545ca53e3050de0357fe603ca636e0e14b5ecfaa"
+  },
+  {
+    "file": "objc2-LICENSE.md",
+    "url": "https://github.com/madsmtm/objc2/blob/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+    "gitBlob": "540ae4c81adb5f64a9f61e222b688880da24300e"
+  },
+  {
+    "file": "MIT-standard.txt",
+    "url": "https://github.com/spdx/license-list-data/blob/main/text/MIT.txt",
+    "gitBlob": "d817195dad53ec992418c28ffca5fbd1cd86502a"
+  },
+  {
+    "file": "MPL-2.0-standard.txt",
+    "url": "https://github.com/spdx/license-list-data/blob/main/text/MPL-2.0.txt",
+    "gitBlob": "ee6256cdb62a765749a71aae3abea32884301cd1"
+  }
+]

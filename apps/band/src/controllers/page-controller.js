@@ -1,6 +1,7 @@
 var protocol = require('../common/generated/protocol');
 var display = require('../common/generated/display');
 var ui = require('../common/generated/native-ui');
+var activityRing = require('../common/generated/activity-ring');
 var keepScreenModule = require('../common/keep-screen');
 var settingsModule = require('../common/settings');
 
@@ -9,7 +10,7 @@ function createPageController(deps) {
   var clock=deps.now || Date.now, schedule=deps.schedule || setTimeout, cancel=deps.cancel || clearTimeout;
   var keepScreen=deps.keepScreen || keepScreenModule;
   var alive=false;
-  var settingsController=null, buddyTheme='chatgpt', keepWanted=false;
+  var settingsController=null, buddyTheme='chatgpt', keepWanted=false, powerSaving=false;
   var keepController = null;
   var channel = null, timer = null, exitTimer = null, lastMessage = null;
   var receivedAt = 0, visible = false, lastTapAt = -1000;
@@ -17,7 +18,7 @@ function createPageController(deps) {
   var rings = null, snapMetrics = true, lastRingPaint = 0;
   return {
     private: {
-      pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0, activityLabel: '',
+      pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
       ringSource: '/common/capsule/ring-idle-b0.png', ringOpacity: 1,
       loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
       symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
@@ -28,8 +29,8 @@ function createPageController(deps) {
       var self = this;
       alive=true;
       keepController=keepScreen.createKeepScreen(function(options){brightness.setKeepScreenOn(options);},clock,schedule,cancel,function(state,code){if(!alive)return;self.keepResult=state;if(state==='error')self.errorText='KEEP error '+code;});
-      buddyTheme='chatgpt';keepWanted=false;
-      settingsController=settingsModule.createSettings(storage,function(value){buddyTheme=value.buddyTheme;var changed=keepWanted!==value.keepScreen;keepWanted=value.keepScreen;if(visible&&changed){if(keepWanted)keepController.show();else keepController.hide();}self.tick();},schedule,cancel);
+      buddyTheme='chatgpt';keepWanted=false;powerSaving=false;
+      settingsController=settingsModule.createSettings(storage,function(value){buddyTheme=value.buddyTheme;powerSaving=value.powerSaving===true;var changed=keepWanted!==value.keepScreen;keepWanted=value.keepScreen;if(visible&&changed){if(keepWanted)keepController.show();else keepController.hide();}self.tick();},schedule,cancel);
       settingsController.load();
       lastMessage=null; receivedAt=0; activeMode='idle'; modeAt=clock(); exiting=false; metricsStamp='';
       this.pageIndex=0;lastTapAt=-1000;
@@ -49,7 +50,7 @@ function createPageController(deps) {
           if((msg.mode||'idle')!==activeMode){activeMode=msg.mode||'idle';modeAt=receivedAt;}
           self.tick();
           var ack=protocol.makeAck(msg,self.keepResult,self.received);
-          ack.appVersion='0.5.4';ack.capabilities={maxWakeHoldMs:1800000,themes:['chatgpt','claude','deepseek'],page:true,activityHold:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
+          ack.appVersion='0.5.5';ack.capabilities={maxWakeHoldMs:1800000,themes:['chatgpt','claude','deepseek'],page:true,activityHold:true,powerSaving:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
           ack.character=buddyTheme==='claude'?'claude':'codex';ack.mode=activeMode;ack.gestures=self.gestureCount;ack.exitReady=true;
           if(msg.command==='exit')exitTimer=schedule(function(){self.exitApp();},500);
           channel.send({data:ack,success:function(){if(!alive)return;self.errorText='';if(msg.command==='exit')self.exitApp();},fail:function(data,code){if(!alive)return;self.errorText='ACK error '+code;if(msg.command==='exit')self.exitApp();}});
@@ -92,7 +93,7 @@ function createPageController(deps) {
       if(timer)cancel(timer);timer=null;
       if(!visible||exiting)return;
       var now=clock(),stale=!receivedAt||now-receivedAt>=10000||now<receivedAt;
-      var delay=200, name;
+      var cadence=ui.frameDelay(powerSaving),delay=cadence, name;
       if(this.pageIndex===1){
         var forcePaint=snapMetrics;
         var stamp=(lastMessage?lastMessage.session+':'+lastMessage.seq:'none')+':'+stale;
@@ -107,7 +108,7 @@ function createPageController(deps) {
           }
           snapMetrics=false;
         }
-        var moving=false, paint=forcePaint||now-lastRingPaint>=80||now<lastRingPaint;
+        var moving=false, paint=forcePaint||now-lastRingPaint>=cadence||now<lastRingPaint;
         for(name in rings){
           var src=ui.ringSource(name,ui.ringValue(rings[name],now));
           if((paint||stale)&&this[name+'Ring']!==src)this[name+'Ring']=src;
@@ -116,13 +117,13 @@ function createPageController(deps) {
         }
         if(paint)lastRingPaint=now;
         // Static resource pages only wake for incoming data or the stale deadline.
-        delay=moving?Math.max(1,80-(now-lastRingPaint)):(!stale?Math.max(1,10000-(now-receivedAt)):0);
+        delay=moving?Math.max(1,cadence-(now-lastRingPaint)):(!stale?Math.max(1,10000-(now-receivedAt)):0);
       }else{
-        var activityLabel=display.activityLabel(lastMessage&&lastMessage.sessionCounts,stale);
-        if(this.activityLabel!==activityLabel)this.activityLabel=activityLabel;
         var mode=stale&&lastMessage?'offline':activeMode;
         if(mode==='complete'&&now-modeAt>=4000)mode='idle';
-        var motion=ui.motion(mode,Math.max(0,(now-modeAt)/1000),buddyTheme);
+        var seconds=Math.max(0,(now-modeAt)/1000);
+        var motion=ui.motion(mode,seconds,buddyTheme);
+        motion.ringSource=activityRing.source(lastMessage&&lastMessage.sessionCounts,stale,buddyTheme,mode,ui.breathLevel(mode,seconds))||motion.ringSource;
         for(name in motion)if(this[name]!==motion[name])this[name]=motion[name];
       }
       if(delay){var self=this;timer=schedule(function(){timer=null;if(alive&&visible&&!exiting)self.tick();},delay);}

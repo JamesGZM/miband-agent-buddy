@@ -5,7 +5,7 @@ import {runtimeHarness, ack} from '../helpers/runtime.mjs';
 
 const {createKeepScreen} = createRequire(import.meta.url)('../../apps/band/src/common/keep-screen.js');
 
-function harness({supported = true} = {}) {
+function harness({supported = true, activityKeepAwake = true} = {}) {
   let display;
   const brightness = [];
   const h = runtimeHarness({onWrite(command, child) {
@@ -20,9 +20,114 @@ function harness({supported = true} = {}) {
   display = createKeepScreen(options => {brightness.push(options.keepScreenOn); options.success();},
     h.clock.now, h.clock.schedule, h.clock.cancel, () => {});
   return {...h, display, brightness,
+    async connect() {
+      await h.connect();
+      if (activityKeepAwake) await h.runtime.dispatch({op: 'configure', settings: {activityKeepAwake: true}});
+    },
     hook(event, session = 'a') {h.runtime.acceptHook({event, session: session.repeat(64), at: h.clock.now()});},
     snapshots: () => h.calls.filter(c => c.op === 'snapshot').map(c => c.payload)};
 }
+
+test('activity keep-awake defaults off and active tasks still use bounded event wakes', async t => {
+  const h = harness({activityKeepAwake: false}); t.after(() => h.runtime.stop());
+  await h.connect(); await h.clock.advance(7000);
+  assert.equal(h.states.at(-1).settings.activityKeepAwake, false);
+  await h.runtime.dispatch({op: 'configure', settings: {wakeHoldMs: 5000}});
+  h.hook('UserPromptSubmit'); await h.clock.advance(20000);
+  assert.equal(h.states.at(-1).agent.activeSessions, 1);
+  assert.equal(h.snapshots().at(-1).mode, 'thinking');
+  assert.deepEqual(h.snapshots().at(-1).sessionCounts, {thinking: 1, working: 0, attention: 0});
+  assert.equal(h.snapshots().at(-1).activityHoldMs, 0);
+  assert.equal(h.display.display().active, false);
+  assert.equal(h.display.display().remainingMs, 0);
+  assert.equal(h.brightness.at(-1), false);
+});
+
+test('switching keep-awake on and off applies without ending the active task', async t => {
+  const h = harness({activityKeepAwake: false}); t.after(() => h.runtime.stop());
+  await h.connect(); await h.clock.advance(7000);
+  await h.runtime.dispatch({op: 'configure', settings: {wakeHoldMs: 5000}});
+  h.hook('UserPromptSubmit'); await h.clock.advance(20000);
+  const launches = h.calls.filter(c => c.op === 'launch_buddy').length;
+  await h.runtime.dispatch({op: 'configure', settings: {activityKeepAwake: true}});
+  await h.clock.advance(2000);
+  assert.equal(h.display.display().active, true);
+  assert.equal(h.snapshots().at(-1).activityHoldMs, 15000);
+  await h.runtime.dispatch({op: 'configure', settings: {activityKeepAwake: false}});
+  await h.clock.advance(2000);
+  assert.equal(h.states.at(-1).agent.activeSessions, 1);
+  assert.equal(h.display.display().active, false);
+  assert.ok(h.display.display().remainingMs > 3000 && h.display.display().remainingMs <= 5000);
+  await h.clock.advance(6000);
+  assert.equal(h.display.display().remainingMs, 0);
+  assert.equal(h.brightness.at(-1), false);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 1);
+});
+
+test('enabling task keep-awake wakes a sleeping Buddy immediately and only once', async t => {
+  let awake = true;
+  const h = runtimeHarness({onWrite(command, child) {
+    if (command.op === 'launch_buddy') {
+      awake = true;
+      child.later({event: 'result', id: command.id, ok: true});
+    }
+    if (command.op === 'snapshot' && awake) {
+      const p = command.payload;
+      child.later(ack(p, {keepScreen: 'on', wakeDisplay: {id:p.wakeId, remainingMs:15000},
+        capabilities: {activityHold:true,maxWakeHoldMs:1800000}}));
+    }
+  }}); t.after(() => h.runtime.stop());
+  await h.connect(); await h.clock.advance(7000);
+  awake = false;
+  h.hook('PreToolUse'); await h.clock.advance(12000);
+  assert.equal(h.state.connection, 'standby');
+  const launches = h.calls.filter(c => c.op === 'launch_buddy').length;
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:true}});
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 1);
+  await h.clock.advance(4000);
+  assert.equal(h.state.operation.kind, 'wake');
+  assert.equal(h.state.operation.status, 'done');
+  assert.equal(h.calls.filter(c => c.op === 'snapshot').at(-1).payload.activityHoldMs, 15000);
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:true}});
+  await h.clock.advance(60000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 1);
+});
+
+test('paused keep-awake changes wait for one resume wake, while idle enabling stays bounded', async t => {
+  const h = harness({activityKeepAwake:false}); t.after(() => h.runtime.stop());
+  await h.connect(); await h.clock.advance(7000);
+  await h.runtime.dispatch({op:'pause',value:true});
+  h.hook('PreToolUse');
+  const launches = h.calls.filter(c => c.op === 'launch_buddy').length;
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:true}});
+  await h.clock.advance(20000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches);
+  await h.runtime.dispatch({op:'pause',value:false}); await h.clock.advance(4000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 1);
+  assert.equal(h.display.display().active, true);
+  await h.runtime.dispatch({op:'pause',value:false}); await h.clock.advance(4000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 1);
+  await h.runtime.dispatch({op:'reset_activity'});
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:false,wakeHoldMs:5000}});
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:true}}); await h.clock.advance(10000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, launches + 2);
+  assert.equal(h.display.display().active, false);
+  assert.equal(h.display.display().remainingMs, 0);
+});
+
+test('restoring disabled sync before startup connection never launches or sends snapshots', async t => {
+  const h = harness({activityKeepAwake:false}); t.after(() => h.runtime.stop());
+  await h.runtime.start();
+  await h.runtime.dispatch({op:'pause',value:true});
+  await h.runtime.dispatch({op:'connect',address:'fixture',key:'0'.repeat(32),settings:{activityKeepAwake:true}});
+  h.children[0].event({event:'authenticated'});
+  h.hook('PreToolUse'); await h.clock.advance(60000);
+  assert.equal(h.states.at(-1).paused, true);
+  assert.equal(h.calls.filter(c => ['launch_buddy','snapshot'].includes(c.op)).length, 0);
+  await h.runtime.dispatch({op:'pause',value:false}); await h.clock.advance(5000);
+  assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, 1);
+  assert.equal(h.display.display().active, true);
+});
 
 test('active work stays held beyond the saved idle time with one brightness request per refresh', async t => {
   const h = harness(); t.after(() => h.runtime.stop());

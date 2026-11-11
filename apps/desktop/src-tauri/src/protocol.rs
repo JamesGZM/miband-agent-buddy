@@ -62,6 +62,10 @@ pub struct RuntimeSettings {
     pub keep_screen: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wake_hold_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activity_keep_awake: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub power_saving: Option<bool>,
 }
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -89,7 +93,14 @@ pub enum RuntimeCommand {
     },
     Install,
     RefreshDevice,
-    ResetActivity,
+    CheckBuddy {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request: Option<String>,
+    },
+    ResetActivity {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request: Option<String>,
+    },
 }
 
 #[cfg(test)]
@@ -125,6 +136,8 @@ mod tests {
                 revision: 2,
                 keep_screen: Some(false),
                 wake_hold_ms: Some(20000),
+                activity_keep_awake: Some(false),
+                power_saving: Some(false),
             },
         };
         assert_eq!(
@@ -138,6 +151,8 @@ mod tests {
                     revision: 3,
                     keep_screen: None,
                     wake_hold_ms: None,
+                    activity_keep_awake: None,
+                    power_saving: None,
                 },
                 request: Some("op-1".into()),
             },
@@ -161,12 +176,87 @@ mod tests {
                 revision: 3,
                 keep_screen: None,
                 wake_hold_ms: Some(300000),
+                activity_keep_awake: None,
+                power_saving: None,
             },
             request: None,
         };
         assert_eq!(serde_json::to_value(hold).unwrap(), f["runtimeCommands"][8]);
-        assert_eq!(serde_json::to_value(RuntimeCommand::RefreshDevice).unwrap(), f["runtimeCommands"][9]);
-        assert_eq!(serde_json::to_value(RuntimeCommand::ResetActivity).unwrap(), f["runtimeCommands"][10]);
-        assert!(serde_json::from_value::<Action>(serde_json::json!({"operation":"reset_activity","value":true})).is_err());
+        assert_eq!(
+            serde_json::to_value(RuntimeCommand::RefreshDevice).unwrap(),
+            f["runtimeCommands"][9]
+        );
+        assert_eq!(
+            serde_json::to_value(RuntimeCommand::ResetActivity { request: None }).unwrap(),
+            f["runtimeCommands"][10]
+        );
+        assert!(
+            serde_json::from_value::<Action>(
+                serde_json::json!({"operation":"reset_activity","value":true})
+            )
+            .is_err()
+        );
+        let activity = RuntimeCommand::Configure {
+            settings: RuntimeSettings {
+                buddy_theme: None,
+                revision: 3,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: Some(true),
+                power_saving: None,
+            },
+            request: None,
+        };
+        assert_eq!(
+            serde_json::to_value(activity).unwrap(),
+            f["runtimeCommands"][11]
+        );
+        assert_eq!(
+            serde_json::to_value(RuntimeCommand::CheckBuddy { request: None }).unwrap(),
+            serde_json::json!({"op":"check_buddy"})
+        );
+        for value in [serde_json::json!("true"), serde_json::json!(1), Value::Null] {
+            assert!(
+                serde_json::from_value::<Action>(
+                    serde_json::json!({"operation":"activity_keep_awake","value":value})
+                )
+                .is_err()
+            );
+            assert!(
+                serde_json::from_value::<Action>(
+                    serde_json::json!({"operation":"power_saving","value":value})
+                )
+                .is_err()
+            );
+        }
+        let power = RuntimeCommand::Configure {
+            settings: RuntimeSettings {
+                buddy_theme: None,
+                revision: 3,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: Some(true),
+            },
+            request: None,
+        };
+        assert_eq!(
+            serde_json::to_value(power).unwrap(),
+            f["runtimeCommands"][13]
+        );
+        assert_eq!(
+            serde_json::to_value(RuntimeCommand::ResetActivity {
+                request: Some("op-reset".into())
+            })
+            .unwrap(),
+            f["runtimeCommands"][14]
+        );
+        assert_eq!(
+            serde_json::to_value(RuntimeCommand::CheckBuddy {
+                request: Some("op-check".into())
+            })
+            .unwrap(),
+            f["runtimeCommands"][15]
+        );
     }
 }

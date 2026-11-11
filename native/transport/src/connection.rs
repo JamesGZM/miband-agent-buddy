@@ -35,7 +35,7 @@ pub async fn connect(addr: String, key: String) -> Result<()> {
         key,
         2,
         ConnectType::SPP,
-        Some(6),
+        Some(0),
         mtu,
         None,
         false,

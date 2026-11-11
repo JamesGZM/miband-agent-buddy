@@ -29,6 +29,7 @@ for (const responds of [true, false]) test(`sleeping Buddy: launch ${responds ? 
   assert.ok(!h.states.some(s => s.connection === 'retrying'));
   assert.equal(launches, 2);
   assert.ok(h.states.some(s => s.wake?.reason === 'connection' && s.wake.code === 'app_missing'));
-  assert.ok(h.states.some(s => s.error?.includes('尚未安裝')));
+  assert.ok(h.states.some(s => s.buddy?.status === 'not_installed'));
+  assert.ok(h.states.every(s => s.error === null));
   assert.ok(h.calls.filter(c => c.op === 'snapshot').every(c => c.payload.keepScreen === false));
 });

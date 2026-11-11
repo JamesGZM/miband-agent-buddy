@@ -23,12 +23,12 @@ export function fakeClock() {
   return clock;
 }
 
-export function runtimeHarness({onWrite = () => {}, sample, timings} = {}) {
+export function runtimeHarness({onWrite = () => {}, sample, timings, bandPackage = null} = {}) {
   const clock = fakeClock(), states = [], children = [], calls = [];
   let id = 0;
   const runtime = createRuntime({
     ...clock, now: clock.now, schedule: clock.schedule, cancel: clock.cancel,
-    makeId: () => String(++id), packagePath: '/fixture/buddy.debug.rpk', timings,
+    makeId: () => String(++id), packagePath: '/fixture/buddy.debug.rpk', timings, bandPackage,
     sample: sample || (async () => ({cpu: 42})),
     emit: value => states.push(structuredClone(value)),
     createTransport(handlers) {

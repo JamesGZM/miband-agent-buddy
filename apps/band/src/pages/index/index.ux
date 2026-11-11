@@ -5,7 +5,6 @@
       <image class="layer" src="{{ ringSource }}" style="opacity: {{ ringOpacity }};" />
       <image class="layer" src="{{ loadingSource }}" style="opacity: {{ loadingOpacity }};" />
       <image class="layer" src="{{ symbolSource }}" style="left: {{ symbolLeft }}px;" />
-      <div class="activity-count" show="{{ activityLabel !== '' }}"><text class="activity-label">{{ activityLabel }}</text></div>
     </stack>
     <stack class="page" show="{{ pageIndex === 1 }}">
       <image class="layer" src="/common/capsule/resource-tracks.png" />
@@ -29,7 +28,7 @@ var createPageController=require('../../controllers/page-controller').createPage
 var controller=null;
 export default {
   private: {
-    pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0, activityLabel: '',
+    pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
     ringSource: '/common/capsule/ring-idle-b0.png', ringOpacity: 1,
     loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
     symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
@@ -54,8 +53,6 @@ export default {
 <style>
 .page { width: 192px; height: 490px; background-color: #000000; }
 .layer { width: 192px; height: 490px; left: 0px; top: 0px; object-fit: contain; }
-.activity-count { position: absolute; left: 192px; top: 0px; width: 490px; height: 192px; transform-origin: 0px 0px; transform: rotate(90deg); padding-left: 85px; padding-top: 158px; }
-.activity-label { width: 320px; height: 22px; color: #B9C5C0; font-size: 14px; text-align: center; }
 .numbers { position: absolute; left: 192px; top: 0px; width: 490px; height: 192px; transform-origin: 0px 0px; transform: rotate(90deg); padding-left: 86px; padding-top: 49px; }
 .column { width: 106px; height: 94px; flex-direction: column; align-items: center; }
 .label { font-size: 16px; width: 106px; height: 24px; text-align: center; }

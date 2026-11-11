@@ -15,18 +15,35 @@ test('ordinary source checks cannot package or publish application artifacts', (
   }
 });
 
-test('only published releases package artifacts and never distribute the checkout-bound app', () => {
+test('only version tags or an explicit release dispatch package and publish portable macOS assets', () => {
   const workflow = readWorkflow('release.yml');
-  assert.match(workflow, /^  release:\n    types: \[published\]$/m);
-  assert.doesNotMatch(workflow, /^  (push|pull_request|workflow_dispatch|schedule):/m);
-  assert.match(workflow, /runs-on: macos-/);
-  for (const command of ['npm run build', 'npm run build:desktop', 'npm test', 'npm run check:architecture']) {
+  assert.match(workflow, /^  push:\n    tags: \['v\[0-9\]\*'\]$/m);
+  assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.doesNotMatch(workflow, /^  (pull_request|schedule):/m);
+  assert.doesNotMatch(workflow, /branches:/);
+  for (const command of ['npm run build', 'npm run build:desktop -- --release', 'scripts/package_release.py', 'npm test', 'npm run check:architecture', 'gh release create', 'gh release upload']) {
     assert.ok(workflow.includes(command), command);
   }
-  const upload = workflow.split('\n').find(line => line.includes('gh release upload'));
-  assert.ok(upload);
-  assert.match(upload, /dist\/buddy\.debug\.rpk dist\/SHA256SUMS/);
-  assert.doesNotMatch(upload, /\.app|\.zip|\.dmg|\*/);
-  assert.ok(upload.includes('"$RELEASE_TAG"'));
-  assert.ok(!upload.includes('${{'));
+  assert.match(workflow, /runner: macos-15-intel/);
+  assert.match(workflow, /runner: macos-15\n/);
+  assert.match(workflow, /needs: macos/);
+  assert.match(workflow, /--verify-tag/);
+  assert.match(workflow, /Tag and desktop version must match/);
+  assert.match(workflow, /Tauri version must match/);
+  assert.match(workflow, /Cargo version must match/);
+  assert.match(workflow, /scripts\/release_notes.py/);
+  assert.match(workflow, /--notes-file/);
+  assert.doesNotMatch(workflow, /dist\/buddy\.debug\.rpk|name: buddy-package/);
+  for (const line of workflow.split('\n').filter(line => line.includes('gh release'))) {
+    assert.ok(line.includes('"$RELEASE_TAG"'));
+    assert.ok(!line.includes('${{'));
+  }
+});
+
+test('desktop release versions agree across npm, Tauri and Cargo', () => {
+  const read = path => readFileSync(new URL('../../' + path, import.meta.url), 'utf8');
+  const version = JSON.parse(read('package.json')).version;
+  assert.equal(JSON.parse(read('apps/desktop/src-tauri/tauri.conf.json')).version, version);
+  assert.equal(read('apps/desktop/src-tauri/Cargo.toml').match(/^version = "([^"]+)"/m)[1], version);
+  assert.ok(read('CHANGELOG.md').split('\n').some(line => line.startsWith('## [' + version + ']')));
 });

@@ -40,6 +40,7 @@ pub enum Operation {
     Snapshot { payload: Value },
     Ping,
     DeviceStatus,
+    BuddyStatus,
     LaunchBuddy,
     Install { path: String },
     Disconnect,

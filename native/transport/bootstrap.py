@@ -1,4 +1,4 @@
-"""Fetch pinned upstream sources and apply the isolated no-network build fix."""
+"""Fetch pinned upstream sources and apply isolated compatibility/correctness patches."""
 import json
 from pathlib import Path
 import subprocess
@@ -16,9 +16,10 @@ for repo in json.loads((root / 'upstream-lock.json').read_text()):
     if actual != repo['commit']:
         raise SystemExit(f"Unexpected upstream version: {repo['directory']}; no reset performed")
 core = root / 'upstream/core'
-patch = root / 'core-no-network.patch'
 base = ['git', '-C', str(core), 'apply']
-if subprocess.run(base + ['--reverse', '--check', str(patch)], capture_output=True).returncode != 0:
-    subprocess.run(base + ['--check', str(patch)], check=True)
-    subprocess.run(base + [str(patch)], check=True)
-print('Pinned sources and no-network patch ready')
+for filename in ('core-no-network.patch', 'core-without-vivo.patch', 'core-sar-ack-reuse.patch'):
+    patch = root / filename
+    if subprocess.run(base + ['--reverse', '--check', str(patch)], capture_output=True).returncode != 0:
+        subprocess.run(base + ['--check', str(patch)], check=True)
+        subprocess.run(base + [str(patch)], check=True)
+print('Pinned sources and recorded patches ready')

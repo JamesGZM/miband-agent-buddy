@@ -52,8 +52,8 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   channel.onmessage({ data });
   assert.equal(page.received, 1);
   assert.equal(page.cpuText, '0%');
-  assert.equal(sent[0].data.appVersion, '0.5.4');
-  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true});
+  assert.equal(sent[0].data.appVersion, '0.5.5');
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, powerSaving: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();
@@ -115,7 +115,7 @@ test('resource rings interpolate, settle without polling and invalidate at stale
  channel.onmessage(metric(1,10));page.act('monitor');assert.match(page.cpuRing,/010.png$/);
  setTime(3000);channel.onmessage(metric(2,90));assert.match(page.cpuRing,/010.png$/);
  setTime(3450);page.tick();assert.match(page.cpuRing,/050.png$/);
- assert.equal(delays.get([...timers][0]),80);assert.equal(timers.size,1);
+ assert.equal(delays.get([...timers][0]),1000/30);assert.equal(timers.size,1);
  setTime(3900);page.tick();assert.match(page.cpuRing,/090.png$/);
  assert.equal(delays.get([...timers][0]),9100);
  setTime(13000);page.tick();assert.equal(page.cpuText,'—');assert.match(page.cpuRing,/000.png$/);assert.equal(timers.size,0);
@@ -138,9 +138,9 @@ test('duplicate values do not restart transitions or produce redundant property 
 });
 test('throttled final frame is scheduled even if a packet arrives at transition completion',()=>{
  const {page,channel,setTime,timers,delays}=harness();page.onShow();channel.onmessage(metric(1,0));page.act('monitor');
- setTime(3000);channel.onmessage(metric(2,100));setTime(3830);page.tick();assert.match(page.cpuRing,/098.png$/);
- setTime(3900);channel.onmessage(metric(3,100));assert.equal(delays.get([...timers][0]),10);
- setTime(3910);page.tick();assert.match(page.cpuRing,/100.png$/);
+ setTime(3000);channel.onmessage(metric(2,100));setTime(3860);page.tick();assert.match(page.cpuRing,/099.png$/);
+ setTime(3890);channel.onmessage(metric(3,100));assert.ok(delays.get([...timers][0])<4);
+ setTime(3900);page.tick();assert.match(page.cpuRing,/100.png$/);
 });
 
 test('single root click handler debounces taps and ignores clicks after long press or hide',()=>{
@@ -176,16 +176,37 @@ test('activity renewal is capability advertised, replay safe and cannot relight 
  page.onShow();assert.equal(requests.length,2);
  page.exitApp();channel.onmessage({data:JSON.stringify({...base,seq:4})});assert.equal(requests.at(-1).keepScreenOn,false);
 });
-test('pet page shows only bounded aggregate counts and clears them when stale or idle',()=>{
+test('pet page replaces its one main ring with task colors and restores it for one task, stale or idle',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'counts',seq:1,text:'',value:0,cpu:42,mode:'attention',sessionCounts:{thinking:1,working:1,attention:1}};
- channel.onmessage({data:JSON.stringify(base)});assert.equal(page.activityLabel,'3 ACTIVE · 1 WAIT');
- setTime(11000);page.tick();assert.equal(page.activityLabel,'');
- channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:0}})});
- assert.equal(page.activityLabel,'');
- channel.onmessage({data:JSON.stringify({...base,seq:3,sessionCounts:{thinking:128,working:1,attention:0}})});
- assert.equal(page.activityLabel,'');assert.equal(page.errorText,'Invalid message');
- assert.match(ux,/class="activity-count"/);assert.match(ux,/padding-top: 158px/);
+ channel.onmessage({data:JSON.stringify(base)});assert.match(page.ringSource,/activity-chatgpt-attention-3-b0.png$/);
+ setTime(1900);page.tick();assert.match(page.ringSource,/activity-chatgpt-attention-3-b15.png$/);
+ channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});
+ assert.match(page.ringSource,/ring-attention-b15.png$/);
+ channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});
+ assert.match(page.ringSource,/activity-chatgpt-active-3-b0.png$/);assert.match(page.loadingSource,/working-00.png$/);
+ setTime(11900);page.tick();assert.match(page.ringSource,/ring-offline-b\d+.png$/);
+ channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});
+ assert.match(page.ringSource,/ring-idle-b0.png$/);
+ channel.onmessage({data:JSON.stringify({...base,seq:5,sessionCounts:{thinking:128,working:1,attention:0}})});
+ assert.match(page.ringSource,/ring-idle-b0.png$/);assert.equal(page.errorText,'Invalid message');
+ assert.doesNotMatch(ux,/activity-count|activity-label|activitySource/);
+ assert.equal((ux.match(/src="\{\{ ringSource \}\}"/g)||[]).length,1);
+ assert.equal((ux.match(/src="\{\{ loadingSource \}\}"/g)||[]).length,1);
+ assert.equal(Object.hasOwn(page,'activitySource'),false);
+});
+
+test('power saving applies live, is acknowledged, and hidden animation has no timer',()=>{
+ const {page,channel,sent,timers,delays,setTime}=harness({keepScreen:false});page.onShow();
+ assert.equal(delays.get([...timers][0]),1000/30);
+ const base={v:1,type:'snapshot',session:'power',seq:1,text:'',value:0,cpu:42,mode:'thinking',powerSaving:true};
+ channel.onmessage({data:JSON.stringify(base)});
+ assert.equal(sent.at(-1).data.powerSaving,true);assert.equal(delays.get([...timers][0]),200);
+ const symbol=page.symbolSource;setTime(1400);page.tick();assert.notEqual(page.symbolSource,symbol);
+ channel.onmessage({data:JSON.stringify({...base,seq:2,powerSaving:false})});
+ assert.equal(sent.at(-1).data.powerSaving,false);assert.equal(delays.get([...timers][0]),1000/30);
+ const oldTick=[...timers][0];page.onHide();assert.equal(timers.size,0);oldTick();assert.equal(timers.size,0);
+ page.onShow();assert.equal(timers.size,1);page.onDestroy();assert.equal(timers.size,0);
 });
 
 test('destroyed controller ignores late channel send and error callbacks',()=>{

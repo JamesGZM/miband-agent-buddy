@@ -30,7 +30,8 @@
       "thinking": 1,
       "working": 1,
       "attention": 1
-    }
+    },
+    "powerSaving": true
   },
   "ack": {
     "v": 1,
@@ -61,8 +62,10 @@
         "deepseek"
       ],
       "page": true,
-      "activityHold": true
-    }
+      "activityHold": true,
+      "powerSaving": true
+    },
+    "powerSaving": true
   },
   "credentials": {
     "address": "fixture-device",
@@ -77,7 +80,9 @@
         "buddyTheme": "chatgpt",
         "revision": 2,
         "keepScreen": false,
-        "wakeHoldMs": 20000
+        "wakeHoldMs": 20000,
+        "activityKeepAwake": false,
+        "powerSaving": false
       }
     },
     {
@@ -127,6 +132,31 @@
     },
     {
       "op": "reset_activity"
+    },
+    {
+      "op": "configure",
+      "settings": {
+        "revision": 3,
+        "activityKeepAwake": true
+      }
+    },
+    {
+      "op": "check_buddy"
+    },
+    {
+      "op": "configure",
+      "settings": {
+        "revision": 3,
+        "powerSaving": true
+      }
+    },
+    {
+      "op": "reset_activity",
+      "request": "op-reset"
+    },
+    {
+      "op": "check_buddy",
+      "request": "op-check"
     }
   ],
   "transportCommands": [
@@ -164,7 +194,8 @@
           "thinking": 1,
           "working": 1,
           "attention": 1
-        }
+        },
+        "powerSaving": true
       }
     },
     {
@@ -186,6 +217,10 @@
     {
       "op": "device_status",
       "id": "device-status"
+    },
+    {
+      "op": "buddy_status",
+      "id": "buddy-status"
     }
   ],
   "transportEvents": [
@@ -234,8 +269,10 @@
             "deepseek"
           ],
           "page": true,
-          "activityHold": true
-        }
+          "activityHold": true,
+          "powerSaving": true
+        },
+        "powerSaving": true
       }
     },
     {
@@ -260,6 +297,11 @@
       "model": "fixture-model",
       "storageTotal": 1000,
       "storageFree": 400
+    },
+    {
+      "event": "buddy",
+      "installed": true,
+      "versionCode": 16
     }
   ],
   "runtimeState": {
@@ -294,15 +336,18 @@
           "deepseek"
         ],
         "page": true,
-        "activityHold": true
-      }
+        "activityHold": true,
+        "powerSaving": true
+      },
+      "powerSaving": true
     },
     "paused": false,
     "settings": {
       "buddyTheme": "chatgpt",
       "revision": 2,
       "keepScreen": false,
-      "wakeHoldMs": 20000
+      "wakeHoldMs": 20000,
+      "activityKeepAwake": false
     },
     "agent": {
       "state": "thinking",
@@ -323,6 +368,16 @@
       "storageTotal": 1000,
       "storageFree": 400,
       "at": 1
+    },
+    "buddy": {
+      "status": "current",
+      "installed": true,
+      "installedVersionCode": 16,
+      "installedVersion": "0.5.4",
+      "availableVersion": "0.5.4",
+      "availableVersionCode": 16,
+      "checkedAt": 1,
+      "error": null
     }
   },
   "actions": [
@@ -388,6 +443,10 @@
       "value": null
     },
     {
+      "operation": "activity_keep_awake",
+      "value": true
+    },
+    {
       "operation": "preferences",
       "value": {
         "appTheme": "chatgpt",
@@ -395,6 +454,14 @@
         "background": true,
         "language": "en"
       }
+    },
+    {
+      "operation": "check_buddy",
+      "value": null
+    },
+    {
+      "operation": "power_saving",
+      "value": true
     }
   ]
 }

@@ -1,26 +1,55 @@
 name: Release packages
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable version tag (for example v0.6.0)
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.event.release.tag_name }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   macos:
-    runs-on: macos-15
-    timeout-minutes: 45
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - name: Validate release tag and version
+        run: |
+          python3 - <<'PY'
+          import json, os, re, tomllib
+          tag = os.environ['RELEASE_TAG']
+          version = json.load(open('package.json'))['version']
+          assert re.fullmatch(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', tag), 'Expected a stable vX.Y.Z tag'
+          assert tag == 'v' + version, 'Tag and desktop version must match'
+          assert json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'] == version, 'Tauri version must match'
+          with open('apps/desktop/src-tauri/Cargo.toml', 'rb') as source:
+              assert tomllib.load(source)['package']['version'] == version, 'Cargo version must match'
+          PY
+          git show-ref --verify "refs/tags/$RELEASE_TAG"
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/band/package-lock.json
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
@@ -31,11 +60,51 @@ jobs:
       - run: npm run check:architecture
       - run: npm test
       - run: cargo test --locked --manifest-path native/transport/Cargo.toml
+      - name: Verify patched transport acknowledgement handling
+        run: cargo test --locked --manifest-path native/transport/Cargo.toml -p corelib device::xiaomi::sar::tests
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
-      - name: Validate source-checkout macOS app
-        run: npm run build:desktop
-      - name: Attach band package and checksum
+      - name: Build relocatable macOS app
+        run: npm run build:desktop -- --release
+      - name: Package app and checksums
+        run: python3 scripts/package_release.py
+      - name: Verify relocated package through the updater
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" dist/buddy.debug.rpk dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+          BUDDY_TEST_ARCHIVE: ${{ github.workspace }}/dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.zip
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml updater::tests::built_archive_runs_from_a_relocated_directory -- --ignored
+      - name: Archive corresponding project and dependency sources
+        run: python3 scripts/package_sources.py
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: desktop-${{ matrix.arch }}
+          path: |
+            dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.zip
+            dist/SHA256SUMS-${{ matrix.arch }}
+            dist/MiBand-Agent-Buddy-source-${{ matrix.arch }}.tar.gz
+            dist/MiBand-Agent-Buddy-source-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+  publish:
+    needs: macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create or update GitHub Release
+        run: |
+          python3 scripts/release_notes.py "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "MiBand Agent Buddy $RELEASE_TAG"
+          fi

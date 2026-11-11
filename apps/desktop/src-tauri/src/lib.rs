@@ -10,6 +10,7 @@ mod protocol;
 mod runtime;
 mod services;
 mod state;
+mod updater;
 mod vault;
 #[allow(dead_code)]
 #[path = "vendor/xiaomi.rs"]

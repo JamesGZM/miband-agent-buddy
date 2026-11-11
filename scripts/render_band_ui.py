@@ -1,7 +1,9 @@
 """Small, static PNG layers for native Vela image components (no frame animator)."""
 from pathlib import Path
 from PIL import Image,ImageDraw
+import json
 import math
+import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'apps/band/src/common/capsule'
 OUT.mkdir(parents=True,exist_ok=True)
@@ -35,7 +37,9 @@ def ring(im,inset,color,width,start=0,fraction=1):
     for x,y in [selected[0],selected[-1]]:
      rr=width*S/2;draw.ellipse((x-rr,y-rr,x+rr,y+rr),fill=color)
 
-BREATH_LEVELS=8
+BREATH_LEVELS=32
+LOADING_FRAMES=96
+NUDGE_STEPS=16
 def save(im,name,palette=False):
  im=im.resize((490,192),Image.Resampling.LANCZOS).transpose(Image.Transpose.ROTATE_270)
  if palette:im=im.quantize(64,method=Image.Quantize.FASTOCTREE)
@@ -45,19 +49,40 @@ def save_breath(im,name):
  for level in range(BREATH_LEVELS):
   frame=im.copy();alpha=frame.getchannel('A').point(lambda a,k=.32+.65*level/(BREATH_LEVELS-1):round(a*k))
   frame.putalpha(alpha);save(frame,f'{name}-b{level}.png',palette=True)
- save(im,name+'.png')
+ # Only the desktop theme thumbnails consume a full-opacity still ring.
+ if name in ['ring-idle','claude-ring-idle','deepseek-ring-idle']:save(im,name+'.png')
+ else:(OUT/(name+'.png')).unlink(missing_ok=True)
 def save_nudge(im,name):
- for x in range(5):
-  frame=layer();frame.alpha_composite(im,(x*S,0));save(frame,f'{name}-x{x}.png')
+ for step in range(NUDGE_STEPS+1):
+  # Subpixel shifts supply actual intermediate poses at the panel's native size.
+  offset=4*S*step/NUDGE_STEPS
+  frame=im.transform(im.size,Image.Transform.AFFINE,(1,0,-offset,0,1,0),resample=Image.Resampling.BICUBIC)
+  save(frame,f'{name}-x{step}.png')
 
 save(layer(),'blank.png')
+# Active-state ring pixels are identical to idle; native-ui reuses that artwork.
+for prefix in ['', 'claude-', 'deepseek-']:
+ for mode in ['thinking','working']:
+  for level in range(BREATH_LEVELS):(OUT/f'{prefix}ring-{mode}-b{level}.png').unlink(missing_ok=True)
+# Keep the palette canonical in the pure presentation module used by both apps.
+activity_palettes=json.loads(subprocess.check_output(
+ ['node','-e',"console.log(JSON.stringify(require('./packages/buddy-shared/presentation/activity-ring.js').palettes))"],cwd=ROOT,text=True))
+for theme,colors in activity_palettes.items():
+ for variant in ['active','attention']:
+  for count in range(2,len(colors)+1):
+   im=layer()
+   for index,color in enumerate(colors[:count]):
+    if index==0 and variant=='attention':color='#FFBD64'
+    # Replace the original ring on its exact path; no additional outline.
+    ring(im,8,color,7,index/count,1/count)
+   save_breath(im,f'activity-{theme}-{variant}-{count}')
 base=layer();ring(base,8,'#141D38',7);save(base,'face-track.png')
-for mode,color in {'idle':'#728BFF','thinking':'#728BFF','working':'#728BFF','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#728BFF','offline':'#7187B0'}.items():
+for mode,color in {'idle':'#728BFF','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#728BFF','offline':'#7187B0'}.items():
  im=layer();ring(im,8,color,7);save_breath(im,'ring-'+mode)
 for mode in ['thinking','working']:
- for frame in range(24):
+ for frame in range(LOADING_FRAMES):
   im=layer()
-  for start in ([frame/24] if mode=='thinking' else [frame/24,(frame/24+.5)%1]):
+  for start in ([frame/LOADING_FRAMES] if mode=='thinking' else [frame/LOADING_FRAMES,(frame/LOADING_FRAMES+.5)%1]):
    fraction=.24 if mode=='thinking' else .16
    ring(im,8,'#94B5FF',7,start,fraction)
    ring(im,8,'#E8F9FF',7,(start+fraction-.025)%1,.025)
@@ -75,14 +100,13 @@ for i,(name,color) in enumerate([('disk','#647FFF'),('memory','#A192FF'),('cpu',
   if percent:ring(im,inset,color,6,0,percent/100)
   save(im,f'{name}-{percent:03}.png')
 save(background,'resource-tracks.png')
-print('Rendered',len(list(OUT.glob('*.png'))),'small PNG layers')
 # Original Claude-inspired pixel buddy; geometric source is part of this project.
-for mode,color in {'idle':'#EBA270','thinking':'#EBA270','working':'#EBA270','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#C58768','offline':'#947F74'}.items():
+for mode,color in {'idle':'#EBA270','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#C58768','offline':'#947F74'}.items():
  im=layer();ring(im,8,color,7);save_breath(im,'claude-ring-'+mode)
 for mode in ['thinking','working']:
- for frame in range(24):
+ for frame in range(LOADING_FRAMES):
   im=layer()
-  for start in ([frame/24] if mode=='thinking' else [frame/24,(frame/24+.5)%1]):
+  for start in ([frame/LOADING_FRAMES] if mode=='thinking' else [frame/LOADING_FRAMES,(frame/LOADING_FRAMES+.5)%1]):
    fraction=.24 if mode=='thinking' else .16
    ring(im,8,'#EBA270',7,start,fraction);ring(im,8,'#FFE7CD',7,(start+fraction-.025)%1,.025)
   save(im,f'claude-{mode}-{frame:02}.png',palette=True)
@@ -96,12 +120,12 @@ for name,color in [('symbols','#EBA270'),('symbols-offline','#947F74')]:
  save(im,'claude-'+name+'.png')
  if name=='symbols':save_nudge(im,'claude-'+name)
 # Original pixel whale for the DeepSeek theme; geometry is drawn here, not a brand asset.
-for mode,color in {'idle':'#4D6BFE','thinking':'#4D6BFE','working':'#4D6BFE','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#3A52C4','offline':'#6C7A9C'}.items():
+for mode,color in {'idle':'#4D6BFE','attention':'#FFBD64','complete':'#77EDBD','error':'#FF7766','sleep':'#3A52C4','offline':'#6C7A9C'}.items():
  im=layer();ring(im,8,color,7);save_breath(im,'deepseek-ring-'+mode)
 for mode in ['thinking','working']:
- for frame in range(24):
+ for frame in range(LOADING_FRAMES):
   im=layer()
-  for start in ([frame/24] if mode=='thinking' else [frame/24,(frame/24+.5)%1]):
+  for start in ([frame/LOADING_FRAMES] if mode=='thinking' else [frame/LOADING_FRAMES,(frame/LOADING_FRAMES+.5)%1]):
    fraction=.24 if mode=='thinking' else .16
    ring(im,8,'#8FA2FF',7,start,fraction);ring(im,8,'#E6EBFF',7,(start+fraction-.025)%1,.025)
   save(im,f'deepseek-{mode}-{frame:02}.png',palette=True)
@@ -125,3 +149,4 @@ d.ellipse((158,166,170,178),fill=blue_hi)
 d.polygon([(72,160),(108,174),(72,188),(80,174)],fill=silver)
 d.rounded_rectangle((108,170,148,178),radius=4,fill=(120,130,150,255))
 icon.save(ROOT/'apps/band/src/common/icon.png')
+print('Rendered',len(list(OUT.glob('*.png'))),'small PNG layers')

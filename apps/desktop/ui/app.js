@@ -3,7 +3,9 @@ import { initialState } from "./state.js";
 import { startPreview } from "./preview.js";
 import { createToast } from "./toast.js";
 import { integrationsPage, setupRequest, SKILL_URL } from "./integrations.js";
-import { onboardingCard } from "./onboarding.js";
+import { initialPage, setupStage, welcomePage, onboardingCard, connectionGuide, readyCard } from "./onboarding.js";
+import { buddyPackageView, bandOnlyError } from "./band-package.js";
+import { desktopUpdateView, updateErrorMessage, PROJECT_URL } from "./desktop-update.js";
 import { t, formatTime, resolveLanguage, setLanguage } from "./i18n.js";
 const $ = (s) => document.querySelector(s),
   escape = (s) =>
@@ -19,17 +21,24 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 let state = initialState(),
-  page = "buddy",
+  page = initialPage(state),
+  setupSession = page !== "buddy",
+  initialDeviceCheck = false,
   bandPage = 0,
   ackPage = null,
   draftTheme = null,
   busyAction = null,
   signature = "",
   confirmLogout = false,
+  updateExpanded = false,
+  updateChecked = false,
   refreshingSince = 0,
   settledOperation = undefined,
   hydrated = !bridge.available,
-  refreshing = false;
+  refreshing = null,
+  stateEpoch = 0;
+const pendingPreferences = new Map();
+let pendingAutostart = null;
 const toast = createToast(() => $("#toast"));
 const icons = {
   hooks: '<path d="M8 7V4m8 3V4M6 7h12v4a6 6 0 0 1-6 6v4m-6-10V7"/>',
@@ -56,6 +65,7 @@ const THEMES = [
   { id: "deepseek", name: "DeepSeek" },
 ];
 const labels = {
+  welcome: "歡迎使用 Buddy",
   buddy: "Buddy",
   devices: "手環",
   account: "帳號",
@@ -87,6 +97,12 @@ const operationDone = {
   theme: "主題已套用到手環",
   page: "手環已切換頁面",
   wake: "手環已喚醒",
+  wake_hold: "亮屏時長已套用到手環",
+  activity_keep_awake: "亮屏設定已套用到手環",
+  power_saving: "省電設定已套用到手環",
+  reset_activity: "任務顯示已重設",
+  check_buddy: "Buddy 檢查完成",
+  install: "Buddy 已安裝並開啟",
 };
 const dotStates = {
   idle: "idle",
@@ -100,8 +116,8 @@ const dotStates = {
 const operationErrors = {
   timeout: "手環沒有回應，請確認手環在附近",
   no_response: "手環沒有回應，請確認手環在附近",
-  app_missing: "手環尚未安裝 Buddy，請到「手環」頁安裝",
-  unsupported: "手環上的 Buddy 版本過舊，請先更新",
+  app_missing: "無法開啟手環上的 Buddy",
+  unsupported: "手環暫不支援此操作",
   superseded: "操作已被新的操作取代",
   not_connected: "手環未連線",
   paused: "同步已暫停，請先恢復同步",
@@ -119,8 +135,7 @@ const operationProgress = {
   applying: "套用中…",
 };
 const linkReady = () =>
-  ["connected", "waiting", "standby"].includes(state.runtime.connection) &&
-  !state.runtime.paused;
+  ["connected", "waiting", "standby"].includes(state.runtime.connection);
 const operation = () => state.runtime.operation || null;
 const operationActive = () =>
   ["waking", "applying"].includes(operation()?.status);
@@ -131,7 +146,8 @@ const appliedTheme = () =>
   state.runtime.ack?.settingsApplied === true
     ? state.runtime.ack.buddyTheme
     : null;
-const previewTheme = () => draftTheme || appliedTheme() || state.preferences.buddyTheme || "chatgpt";
+// The saved theme is updated only by a durable current-revision receipt.
+const previewTheme = () => draftTheme || state.preferences.buddyTheme || appliedTheme() || "chatgpt";
 const capabilities = () => state.runtime.ack?.capabilities || null;
 const themeSupported = (id) =>
   id !== "deepseek" || !!capabilities()?.themes?.includes(id);
@@ -156,6 +172,8 @@ function holdMessage(seconds) {
     : t("已儲存為 {duration}，較長的亮屏時間會增加手環耗電", { duration: duration(seconds) });
 }
 function holdLimitMessage() {
+  // No current-session ACK means capabilities are unknown, not legacy.
+  if (!linkReady() || !state.runtime.ack) return "";
   return holdSeconds() > effectiveHold()
     ? t("此版本的 Buddy 最多亮屏 {duration}，更新 Buddy 可使用設定時長。", { duration: duration(effectiveHold()) })
     : "";
@@ -184,9 +202,19 @@ function bytes(value) {
   return value >= 1e9 ? (value / 1e9).toFixed(1) + " GB" : (value / 1e6).toFixed(value >= 1e8 ? 0 : 1) + " MB";
 }
 const spinner = '<span class="spinner" aria-hidden="true"></span>';
+const bandActions = new Set(["theme", "page", "wake", "wake_hold", "activity_keep_awake", "power_saving", "reset_activity", "check_buddy", "install"]);
+function actionProgress(action) {
+  if (action === "install" && state.runtime.connection === "installing") return t("安裝中…");
+  if (operationActive() && operation().kind === action)
+    return t(operationProgress[operation().status]);
+  if (busyAction === action)
+    return t(bandActions.has(action) && linkReady() ? "喚醒手環中…" : "儲存中…");
+  return "";
+}
 function actionButton(text, action, value = "", cls = "", disabled = false) {
-  const loading = busyAction === action;
-  return `<button class="button ${cls} ${loading ? "loading" : ""}" data-action="${action}" data-value="${escape(value)}" ${disabled || loading || busyAction ? "disabled" : ""}>${loading ? spinner : ""}${text}</button>`;
+  const progress = actionProgress(action);
+  const loading = !!progress;
+  return `<button class="button ${cls} ${loading ? "loading" : ""}" data-action="${action}" data-value="${escape(value)}" ${disabled || loading || busyAction || (bandActions.has(action) && operationActive()) ? "disabled" : ""}>${loading ? spinner : ""}${bandActions.has(action) && progress ? progress : text}</button>`;
 }
 // The band-facing button shows the worker's progress; everything else waits.
 function bandButton(kind, text, cls = "", disabled = false) {
@@ -228,27 +256,27 @@ function sessionsText() {
 function buddyPage() {
   const op = operation();
   const pageBusy = operationActive() && op.kind === "page";
-  const waking = (operationActive() && op.kind === "wake") || busyAction === "wake";
+  const progress = operationActive() ? t(operationProgress[op.status]) : bandActions.has(busyAction) ? actionProgress(busyAction) : "";
   const segment = (index, text) =>
     `<button data-view="${index}" class="${bandPage === index ? "active" : ""} ${pageBusy && bandPage === index ? "loading" : ""}" ${operationActive() || busyAction ? "disabled" : ""}>${pageBusy && bandPage === index ? spinner : ""}${text}</button>`;
   const ready = linkReady();
-  const screen = `<button class="screen" data-action="wake" title="${ready ? t("點按喚醒手環") : t("連線手環後可點按喚醒")}" ${!ready || operationActive() || busyAction ? "disabled" : ""}><canvas id="band" width="490" height="192" aria-label="${t("手環畫面預覽")}"></canvas>${waking ? `<span class="screen-overlay">${spinner}${t("喚醒手環中…")}</span>` : ""}</button>`;
+  const screen = `<button class="screen" data-action="wake" title="${ready ? t("點按喚醒手環") : t("連線手環後可點按喚醒")}" ${!ready || operationActive() || busyAction ? "disabled" : ""}><canvas id="band" width="490" height="192" aria-label="${t("手環畫面預覽")}"></canvas><span id="preview-loading" class="screen-overlay" role="status">${spinner}${t("載入中…")}</span><span id="preview-error" class="screen-overlay" role="status" hidden>${t("預覽暫時無法載入")}</span>${progress ? `<span class="screen-overlay" role="status">${spinner}${progress}</span>` : ""}</button>`;
   const top = `<div class="hero-top"><span class="chip status-chip" title="${t("活動")}"><i id="buddy-dot" class="buddy-dot"></i><span id="activity">${escape(activityText())}</span></span><span id="screen-badge" class="chip screen-badge"></span></div>`;
   const bottom = `<div class="hero-bottom"><div class="segments" role="group" aria-label="${t("手環頁面")}">${segment(0, t("角色"))}${segment(1, t("資源"))}</div><div class="hero-meta"><span class="meta" title="${t("最後同步")}">${svg(glyphs.sync)}<span id="last-sync">${syncText()}</span></span><span class="meta" title="${t("喚醒後亮屏時長")}">${svg(glyphs.hold)}<span id="hold-duration">${duration(holdSeconds())}</span></span></div></div>`;
   const cards = THEMES.map(({ id, name }) => {
     const supported = themeSupported(id);
-    return `<button class="theme-card ${previewTheme() === id ? "selected" : ""}" data-theme-choice="${id}" ${operationActive() ? "disabled" : ""}><span class="theme-thumb"><img alt="" src="assets/${id}-preview.png"></span><span class="theme-name">${name}</span>${!supported ? `<span class="theme-note">${t("需要更新 Buddy")}</span>` : appliedTheme() === id ? `<span class="theme-note">${t("使用中")}</span>` : ""}</button>`;
+    return `<button class="theme-card ${previewTheme() === id ? "selected" : ""}" data-theme-choice="${id}" ${operationActive() ? "disabled" : ""}><span class="theme-thumb"><img alt="" src="assets/${id}-preview.png"></span><span class="theme-name">${name}</span>${!supported ? `<span class="theme-note">${t("僅預覽")}</span>` : appliedTheme() === id ? `<span class="theme-note">${t("使用中")}</span>` : ""}</button>`;
   }).join("");
   const selected = previewTheme();
-  const themeTip = themeSupported(selected) ? t("只影響手環畫面。") : t("手環上的 Buddy 需要更新才能使用此主題。");
-  return `${onboardingCard(state)}<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div><p id="session-summary" class="footnote">${sessionsText()}</p>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}${holdLimitMessage() ? `<p class="footnote">${holdLimitMessage()}</p>` : ""}${ready && !capabilities()?.activityHold ? `<p class="footnote">${t("更新手環上的 Buddy 後，任務進行中可持續亮屏。")}</p>` : ""}</section><section class="group"><div class="section-head"><div class="section-titles"><h2>${t("手環主題")}</h2><p class="section-sub">${themeTip}</p></div>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div></section>`;
+  const themeTip = t("只影響手環畫面。");
+  return `<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div><p id="session-summary" class="footnote">${sessionsText()}</p>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}</section><section class="group"><div class="section-head"><div class="section-titles"><h2>${t("手環主題")}</h2><p class="section-sub">${themeTip}</p></div>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div></section>`;
 }
 function devicesPage() {
   const r = state.runtime,
     p = state.preferences;
   if (!state.loggedIn)
-    return `<div class="empty"><p>${t("登入小米帳號後，這裡會列出你綁定的小米手環 9。")}</p><button class="button primary" data-page="account">${t("登入")}</button></div>`;
-  const current = selectedDevice();
+    return onboardingCard(state) + connectionGuide(state);
+  const current = selectedDevice()?.supported ? selectedDevice() : null;
   const deviceRow = (d) =>
     row(
       escape(d.name),
@@ -266,20 +294,36 @@ function devicesPage() {
     ? group(current ? t("其他手環") : t("我的手環"), others.map(deviceRow).join(""), t("支援小米手環 9 與小米手環 9 NFC 版。"))
     : current
       ? `<p class="footnote">${t("支援小米手環 9 與小米手環 9 NFC 版。")}</p>`
-      : group(t("我的手環"), row(t("沒有可用的手環"), t("請確認服務地區，或先在小米運動健康綁定手環後重新登入。")));
-  if (!current) return list;
+      : group(t("我的手環"), row(t("沒有可用的手環"), t("請確認服務地區，或先在小米運動健康綁定手環後重新登入。"), `<button class="button" data-page="account">${t("檢查帳號與服務地區")}</button>`));
+  if (!current) return onboardingCard(state) + connectionGuide(state) + list;
   const installCodes = {
     install_receipt_missing: "沒有收到手環的安裝結果，請重新連線檢查版本",
     install_rejected: "手環拒絕了安裝包",
     install_prepare: "手環尚未準備好接收",
     transfer: "安裝包傳輸失敗",
+    transfer_ack_timeout: "手環未在時限內確認傳輸封包",
+    transfer_session_reset: "傳輸連線狀態已重設，安裝未完成",
+    transfer_send_timeout: "藍牙資料寫入逾時",
     timeout: "安裝逾時",
   };
   const installDetail = r.installation?.ok
-    ? t("安裝完成，手環會自動開啟 Buddy。")
+    ? operation()?.kind === "install" && operation()?.status === "done" ? t("Buddy 已安裝並開啟") : t("安裝完成")
     : r.installation?.ok === false
       ? t("安裝失敗：") + escape(t(installCodes[r.installation.code] || "請重新連線後重試"))
-      : t("連線後會自動檢查版本並開啟 Buddy。");
+      : "";
+  const buddy = buddyPackageView(r);
+  const versionText = buddy.installedVersion
+    ? t("已安裝 {version}", { version: escape(buddy.installedVersion) })
+    : Number.isInteger(buddy.installedVersionCode)
+      ? t("已安裝版本代碼 {code}", { code: buddy.installedVersionCode })
+      : "";
+  const packageDetail = [
+    escape(t(buddy.label)),
+    versionText,
+    buddy.availableVersion ? t("此 App 隨附 Buddy {version}", { version: escape(buddy.availableVersion) }) : "",
+    buddy.status === "error" ? t("請保持手環連線後重試；沒有回應不代表未安裝。") : "",
+    installDetail,
+  ].filter(Boolean).join(" · ");
   const progress =
     r.connection === "installing"
       ? `<div class="row"><progress class="progress" max="100" value="${Number(r.progress) || 0}"></progress><span class="row-detail">${Number(r.progress) >= 100 ? t("等待手環完成安裝…") : t("傳送中 {n}%", { n: Math.floor(Number(r.progress) || 0) })}</span></div>`
@@ -299,34 +343,37 @@ function devicesPage() {
             : ["", t("未連線")];
   const tile = (label, value, extra = "") =>
     `<div class="tile"><span class="tile-label">${label}</span><span class="tile-value">${value}</span>${extra}</div>`;
-  const used = Number.isFinite(info.storageTotal) && Number.isFinite(info.storageFree) ? info.storageTotal - info.storageFree : null;
+  const used = Number.isFinite(info.storageTotal) && info.storageTotal > 0 && Number.isFinite(info.storageFree) && info.storageFree >= 0 && info.storageFree <= info.storageTotal ? info.storageTotal - info.storageFree : null;
   const storage =
     used === null
       ? tile(t("儲存空間"), "—")
       : tile(
           t("儲存空間"),
           `${bytes(used)} / ${bytes(info.storageTotal)}`,
-          `<span class="meter"><span style="width:${info.storageTotal ? Math.round((used / info.storageTotal) * 100) : 0}%"></span></span>`,
+          `<progress class="storage-meter" max="${info.storageTotal}" value="${used}" aria-label="${t("儲存空間已用 {n}%", { n: Math.round((used / info.storageTotal) * 100) })}"></progress>`,
         );
   const card = `<section class="group"><div class="panel device-card"><div class="device-head"><div class="device-title"><span class="device-card-name">${escape(current.name)}</span><span class="badge ${badge[0]}"><i class="dot ${badge[0]}"></i>${badge[1]}</span></div><button class="icon-button ${refreshingSince ? "spinning" : ""}" data-action="refresh_device" title="${t("重新整理")}" aria-label="${t("重新整理")}" ${!ready || refreshingSince || busyAction ? "disabled" : ""}>${svg(glyphs.sync)}</button></div><div class="tiles">${tile(
     t("電量"),
     Number.isFinite(battery) ? `${battery}%${info.charging ? `<span class="charging">${svg(glyphs.bolt, "bolt")}${t("充電中")}</span>` : ""}` : "—",
-  )}${tile(t("韌體"), escape(info.firmware || "—"))}${tile(t("型號"), escape(info.model || "—"))}${storage}${tile(t("Buddy 版本"), escape(r.ack?.appVersion || "—"))}${tile(t("最後同步"), `<span id="device-sync">${syncText()}</span>`)}</div></div></section>`;
+  )}${tile(t("韌體"), escape(info.firmware || "—"))}${tile(t("型號"), escape(info.model || "—"))}${storage}${tile(t("Buddy 版本"), escape(buddy.installedVersion || "—"))}${tile(t("最後同步"), `<span id="device-sync">${syncText()}</span>`)}</div></div></section>`;
   const actions = group(
     "",
     row(
       t("手環連線"),
       escape(current.address),
-      actionButton(t("中斷連線"), "disconnect", current.index),
+      ["disconnected", "error"].includes(r.connection)
+        ? actionButton(t("重新連線"), "connect", current.index, "primary")
+        : actionButton(t("中斷連線"), "disconnect", current.index),
     ) +
       row(
         t("手環上的 Buddy"),
-        installDetail,
-        actionButton(t("安裝或更新"), "install", "", "", !ready),
+        packageDetail,
+        `<div class="button-pair">${actionButton(buddy.status === "checking" ? t("正在檢查…") : t("檢查更新"), "check_buddy", "", "", !buddy.canCheck)}${buddy.installLabel || buddy.status === "installing" ? actionButton(t(buddy.installLabel || "正在安裝"), "install", "", "primary", !buddy.canCheck) : ""}</div>`,
       ) +
       progress,
   );
-  return card + actions + list;
+  const repair = buddy.canReinstall ? `<details class="package-repair"><summary>${t("重新安裝 Buddy")}</summary><p>${t("若手環上的 Buddy 無法開啟，可重新安裝此 App 隨附的版本。")}</p>${actionButton(t("重新安裝"), "install")}</details>` : "";
+  return readyCard(state, {show:setupSession}) + card + actions + (holdLimitMessage() ? `<p class="footnote">${holdLimitMessage()}</p>` : "") + repair + list + onboardingCard(state) + connectionGuide(state);
 }
 function accountPage() {
   if (state.loggedIn)
@@ -339,6 +386,7 @@ function accountPage() {
       ) +
       group(
         "",
+        row(t("重新同步裝置"), t("新增手環或裝置清單有誤時，可重新登入小米帳號以取得最新清單。"), actionButton(t("重新登入"), "login")) +
         row(
           t("登出"),
           t("會中斷手環連線並刪除本機認證，外觀設定會保留。"),
@@ -370,6 +418,13 @@ function accountPage() {
 function settingsPage() {
   const p = state.preferences,
     r = state.runtime;
+  const update = state.desktopUpdate || {},
+    updateView = desktopUpdateView(update);
+  const updateDetail = [t(updateView.label), update.latestVersion ? t("最新版本 {version}", { version: escape(update.latestVersion) }) : ""].filter(Boolean).join(" · ");
+  const updateControls = `<div class="button-pair">${actionButton(t("檢查更新"), "check_update", "", "", !updateView.canCheck)}${updateView.canDownload ? actionButton(t("下載更新"), "download_update", "", "primary") : ""}${updateView.canInstall ? actionButton(t("安裝並重新啟動"), "install_update", "", "primary") : ""}</div>`;
+  const version = escape(state.appVersion || update.currentVersion || "—");
+  const versionButton = `<button class="version-button" data-action="update_details" aria-expanded="${updateExpanded}" aria-controls="desktop-update" aria-label="${t(updateView.hasUpdate ? "版本 {version}，有可用更新" : "版本 {version}，檢查更新", { version })}">${version}${updateView.hasUpdate ? '<span class="update-dot" aria-hidden="true"></span>' : ""}${["checking", "downloading"].includes(update.status) ? spinner : ""}</button>`;
+  const updatePanel = updateExpanded ? `<div id="desktop-update" class="update-panel" role="region" aria-label="${t("版本更新")}"><p role="status">${updateDetail}</p>${updateView.progress !== null ? `<progress class="progress" max="100" value="${updateView.progress}" aria-label="${t("下載進度")}"></progress>` : ""}<div class="update-actions">${updateControls}${update.releaseUrl ? actionButton(t("版本說明"), "open_release") : ""}</div></div>` : "";
   const options = (pairs, current) =>
     pairs
       .map(
@@ -377,8 +432,10 @@ function settingsPage() {
           `<option value="${v}" ${current === v ? "selected" : ""}>${text}</option>`,
       )
       .join("");
-  const toggle = (id, checked) =>
-    `<input id="${id}" class="switch" type="checkbox" ${checked ? "checked" : ""}>`;
+  const toggle = (id, checked, label, action = id) => {
+    const progress = actionProgress(action);
+    return `<span class="toggle-control">${progress ? `<span class="control-status" role="status">${spinner}${progress}</span>` : ""}<input id="${id}" class="switch" type="checkbox" aria-label="${escape(label)}" ${checked ? "checked" : ""}${busyAction || (bandActions.has(action) && operationActive()) ? ' disabled' : ''}${progress ? ' aria-busy="true"' : ''}></span>`;
+  };
   return (
     group(
       t("外觀"),
@@ -423,27 +480,38 @@ function settingsPage() {
     ) +
     group(
       t("一般"),
-      row(t("登入 Mac 時啟動"), "", toggle("autostart", state.autostart)) +
-        row(t("關閉視窗後繼續同步"), "", toggle("background", p.background)) +
+      row(t("登入 Mac 時啟動"), "", toggle("autostart", state.autostart, t("登入 Mac 時啟動"))) +
+        row(t("關閉視窗後繼續同步"), "", toggle("background", p.background, t("關閉視窗後繼續同步"))) +
         row(
-          t("同步與事件喚醒"),
-          t("思考、執行與等待確認時保持亮屏；全部待機後再倒數 {duration}。", { duration: duration(holdSeconds()) }),
-          actionButton(r.paused ? t("恢復") : t("暫停"), "pause"),
+          t("活動同步"),
+          t("同步 AI 狀態與 Mac 資源用量，並在任務事件發生時喚醒手環。"),
+          toggle("activity-sync", p.syncEnabled ?? !r.paused, t("活動同步"), "pause"),
         ) +
         row(
-          t("待機後亮屏時長"),
-          holdLimitMessage() || t("全部任務結束或手動喚醒後的亮屏時間，5 到 1800 秒。"),
+          t("任務期間保持亮屏"),
+          p.syncEnabled === false ? t("活動同步已關閉，此設定會在恢復同步後生效。") : t("預設關閉。開啟後，思考、執行及等待確認時持續亮屏，全部任務結束後才開始息屏倒數。"),
+          toggle("activity-keep-awake", p.activityKeepAwake === true, t("任務期間保持亮屏"), "activity_keep_awake"),
+        ) +
+        row(
+          t("自動息屏延遲"),
+          p.activityKeepAwake ? t("全部任務結束後開始倒數；待機時手動喚醒也使用此時間。5 到 1800 秒。") : t("每次事件或手動喚醒後的亮屏時間，5 到 1800 秒。"),
           `<span class="hold-field"><input id="wake-hold" class="number" type="number" inputmode="numeric" min="5" max="1800" step="1" value="${holdSeconds()}"><span class="unit">${t("秒")}</span>${actionButton(t("儲存"), "wake_hold")}</span>`,
         ) +
         row(
-          t("重設活動狀態"),
-          t("若已停止的任務仍顯示工作中，可清除本機活動；下一個事件會恢復更新。"),
-          actionButton(t("清除活動"), "reset_activity"),
+          t("省電模式"),
+          t("降低手環與 App 預覽的動畫更新頻率。預設關閉，使用較流暢的動畫。"),
+          toggle("power-saving", p.powerSaving === true, t("省電模式"), "power_saving"),
+        ) +
+        row(
+          t("重設任務顯示"),
+          t("若已結束的任務仍顯示進行中，可清除本機記錄。不會停止 AI 任務，下一個事件會重新更新。"),
+          actionButton(t("重設"), "reset_activity"),
         ),
     ) +
     group(
       t("關於"),
-      row("MiBand Agent Buddy", "", '<span class="value">0.5.0</span>') +
+      row(`<a class="project-link" href="${PROJECT_URL}" target="_blank" rel="noopener noreferrer" data-action="open_project">MiBand Agent Buddy</a>`, "", versionButton) +
+        updatePanel +
         row(t("授權"), "", '<span class="value">AGPL-3.0</span>'),
       t("社群開源專案，與 Xiaomi、OpenAI、Anthropic、DeepSeek 無關。通訊基於 AstralSightStudios 的 AstroBox Core、Bluetooth 與 BtClassicSpp，帳號流程基於 AstroBox Account（github.com/AstralSightStudios）。固定版本與修改說明見 THIRD_PARTY_NOTICES.md。"),
     ) +
@@ -464,8 +532,23 @@ function applyChrome() {
   );
 }
 // Theme/appearance only flip CSS variables; persist in the background.
+function setPendingPreferences(next) {
+  const revision = ++stateEpoch;
+  for (const [key, value] of Object.entries(next)) {
+    pendingPreferences.set(key, { value, revision, previous: state.preferences[key] });
+    state.preferences[key] = value;
+  }
+  return revision;
+}
+function rollbackPreferences(revision) {
+  for (const [key, pending] of pendingPreferences) {
+    if (pending.revision !== revision) continue;
+    state.preferences[key] = pending.previous;
+    pendingPreferences.delete(key);
+  }
+}
 function savePreferences(next, { relayout = false } = {}) {
-  state.preferences = { ...state.preferences, ...next };
+  const revision = setPendingPreferences(next);
   applyChrome();
   if (relayout) render();
   if (!bridge.available) return;
@@ -477,7 +560,12 @@ function savePreferences(next, { relayout = false } = {}) {
       keepScreen: false,
       background: state.preferences.background,
     })
-    .catch((e) => toast.show("error", t(String(e))));
+    .catch((e) => {
+      rollbackPreferences(revision);
+      render();
+      toast.show("error", t(String(e)));
+    })
+    .finally(() => { stateEpoch++; refresh({ fresh: true }); });
 }
 function render() {
   if (!hydrated) return;
@@ -503,11 +591,14 @@ function render() {
   $("#notice").textContent =
     (state.loginError && t(state.loginError)) ||
     (state.busy ? t("正在取得小米裝置…") : null) ||
-    (r.error && !operationActive() ? t(r.error) : null) ||
+    (r.error && !operationActive() && (page === "devices" || !bandOnlyError(r.error)) ? t(r.error) : null) ||
     (!bridge.available ? t("介面預覽，未連接原生 App") : "");
+  const previousCanvas = $("#band");
   $("#content").innerHTML =
-    page === "buddy"
-      ? buddyPage()
+    page === "welcome"
+      ? welcomePage(state, actionButton(t("登入小米帳號"), "login", "", "primary"))
+      : page === "buddy"
+        ? buddyPage()
       : page === "devices"
         ? devicesPage()
         : page === "hooks"
@@ -515,6 +606,11 @@ function render() {
         : page === "account"
           ? accountPage()
           : settingsPage();
+  const nextCanvas = $("#band");
+  if (previousCanvas && nextCanvas) {
+    previousCanvas.setAttribute("aria-label", nextCanvas.getAttribute("aria-label"));
+    nextCanvas.replaceWith(previousCanvas);
+  }
   updateLive();
   preview.draw();
 }
@@ -525,6 +621,8 @@ function renderLoading(error = false) {
   $("#startup").innerHTML = `<img class="startup-icon" src="assets/app-icon.png" alt=""><p>${error ? t("無法讀取本機服務狀態") : t("載入中…")}</p>${error ? `<button class="button" data-action="retry">${t("重新載入")}</button>` : spinner}`;
 }
 function updateLive() {
+  const progress = operationActive() ? t(operationProgress[operation().status]) : bandActions.has(busyAction) ? actionProgress(busyAction) : "";
+  $("#operation-status").innerHTML = progress ? `${spinner}<span>${progress}</span>` : "";
   if ($("#last-sync")) $("#last-sync").textContent = syncText();
   if ($("#device-sync")) $("#device-sync").textContent = syncText();
   if ($("#hold-duration")) $("#hold-duration").textContent = duration(holdSeconds());
@@ -541,8 +639,8 @@ function updateLive() {
   if (badge) {
     const remaining = screenRemaining(),
       ready = linkReady();
-    badge.textContent = !ready ? "" : remaining > 0 ? state.runtime.ack?.wakeDisplay?.active ? t("任務中保持亮屏") : screenText(remaining) : t("息屏");
-    badge.className = `chip screen-badge ${!ready ? "hidden" : remaining > 0 ? "on" : "off"}`;
+    badge.textContent = !ready ? "" : progress || (remaining > 0 ? state.runtime.ack?.wakeDisplay?.active ? t("任務中保持亮屏") : screenText(remaining) : t("息屏"));
+    badge.className = `chip screen-badge ${!ready ? "hidden" : progress ? "busy" : remaining > 0 ? "on" : "off"}`;
     const screen = $(".screen");
     if (screen) screen.classList.toggle("asleep", ready && remaining <= 0);
   }
@@ -580,17 +678,53 @@ function settleRefresh() {
     toast.show("error", t("手環沒有回應，請確認手環在附近"));
   }
 }
-async function refresh() {
-  if (!bridge.available || refreshing) return;
-  refreshing = true;
+async function refresh({ fresh = false } = {}) {
+  if (!bridge.available) return;
+  if (refreshing) {
+    if (!fresh) return refreshing;
+    while (refreshing) await refreshing;
+  }
+  refreshing = readState();
+  try { return await refreshing; }
+  finally { refreshing = null; }
+}
+async function readState() {
+  const epoch = stateEpoch;
   try {
+    const firstLoad = !hydrated;
     const wasLoggedIn = state.loggedIn;
+    const wasOperating = operationActive();
     const selected = state.preferences.selected;
-    state = await bridge.getState();
+    const incoming = await bridge.getState();
+    // A read begun before a mutation must never undo the user's newer choice.
+    if (epoch !== stateEpoch) return false;
+    state = incoming;
+    for (const [key, pending] of pendingPreferences) {
+      if (state.preferences[key] === pending.value) pendingPreferences.delete(key);
+      else state.preferences[key] = pending.value;
+    }
+    if (pendingAutostart) {
+      if (state.autostart === pendingAutostart.value) pendingAutostart = null;
+      else state.autostart = pendingAutostart.value;
+    }
     hydrated = true;
+    if (firstLoad) {
+      page = initialPage(state);
+      setupSession = page !== "buddy";
+      initialDeviceCheck = page === "buddy";
+    }
+    if (initialDeviceCheck) {
+      if (state.runtime.buddy?.installed === false) {
+        page = "devices";
+        setupSession = true;
+        initialDeviceCheck = false;
+      } else if (state.runtime.buddy?.installed === true || state.runtime.ack?.appVersion) {
+        initialDeviceCheck = false;
+      }
+    }
     if (selected !== state.preferences.selected) draftTheme = null;
     const reported = state.runtime.ack?.page;
-    if (typeof reported === "number" && reported !== ackPage) {
+    if (typeof reported === "number" && (reported !== ackPage || (wasOperating && !operationActive()))) {
       ackPage = reported;
       if (!operationActive()) bandPage = reported;
     }
@@ -598,10 +732,11 @@ async function refresh() {
       settledOperation = null;
     announceOperation();
     settleRefresh();
-    if (!wasLoggedIn && state.loggedIn && page === "account") page = "devices";
+    if (!wasLoggedIn && state.loggedIn && ["welcome", "account"].includes(page)) page = "devices";
     const op = operation();
     const next = JSON.stringify([
       page,
+      setupSession,
       bandPage,
       state.loggedIn,
       state.loginError,
@@ -617,12 +752,15 @@ async function refresh() {
       state.runtime.device,
       state.runtime.battery,
       state.runtime.installation,
+      state.runtime.buddy,
       state.runtime.progress,
       state.runtime.paused,
       Number(state.runtime.agent?.eventCount) > 0,
       op?.id,
       op?.status,
       state.autostart,
+      state.appVersion,
+      state.desktopUpdate,
       refreshingSince,
     ]);
     if (next !== signature) {
@@ -634,11 +772,12 @@ async function refresh() {
         render();
       } else updateLive();
     } else updateLive();
+    return true;
   } catch {
+    if (epoch !== stateEpoch) return false;
     if (hydrated) $("#notice").textContent = t("無法讀取本機服務狀態");
     else renderLoading(true);
-  } finally {
-    refreshing = false;
+    return false;
   }
 }
 async function perform(op, value, success = "") {
@@ -646,32 +785,50 @@ async function perform(op, value, success = "") {
     toast.show("error", t("請在 Mac App 中操作"));
     return;
   }
+  const region = $("#region")?.value || state.region || "cn";
+  const preference = { activity_keep_awake: "activityKeepAwake", power_saving: "powerSaving", wake_hold: "wakeHoldSeconds", pause: "syncEnabled" }[op];
+  const revision = preference ? setPendingPreferences({ [preference]: op === "pause" ? !value : value }) : ++stateEpoch;
+  if (op === "autostart") {
+    pendingAutostart = { value, previous: state.autostart };
+    state.autostart = value;
+  }
   busyAction = op;
   render();
   try {
-    if (op === "login") await bridge.openLogin($("#region")?.value || "cn");
+    if (op === "login") await bridge.openLogin(region);
     else if (op === "finish")
-      await bridge.finishLogin($("#region")?.value || "cn");
+      await bridge.finishLogin(region);
     else await bridge.action(op, value);
-    if (success) toast.show("success", success);
+    if (success && (op === "wake_hold" || !(bandActions.has(op) && linkReady()))) toast.show("success", success);
     if (op === "logout") {
       draftTheme = null;
       page = "account";
     }
     if (op === "finish") page = "devices";
   } catch (e) {
-    toast.show("error", t(String(e)));
+    rollbackPreferences(revision);
+    if (op === "autostart" && pendingAutostart) {
+      state.autostart = pendingAutostart.previous;
+      pendingAutostart = null;
+    }
+    toast.show("error", t(updateErrorMessage(String(e))));
     if (op === "refresh_device") refreshingSince = 0;
     if (op === "page" && ackPage !== null) bandPage = ackPage;
   } finally {
+    stateEpoch++;
+    await refresh({ fresh: true });
     busyAction = null;
-    await refresh();
     render();
   }
 }
 document.addEventListener("click", (e) => {
-  const b = e.target.closest("button");
-  if (!b || busyAction || b.disabled) return;
+  const b = e.target.closest("button, a[data-action]");
+  if (!b) return;
+  if (b.tagName === "A") {
+    if (!bridge.available) return;
+    e.preventDefault();
+  }
+  if (busyAction || b.disabled) return;
   if (b.dataset.action === "retry") {
     renderLoading();
     refresh();
@@ -687,8 +844,12 @@ document.addEventListener("click", (e) => {
   }
   if (b.dataset.page) {
     page = b.dataset.page;
+    initialDeviceCheck = false;
+    if (["buddy", "hooks"].includes(page) && setupStage(state) === "ready") setupSession = false;
     confirmLogout = false;
+    updateExpanded = false;
     render();
+    if (page === "settings") checkUpdatesOnce();
     return;
   }
   if (b.dataset.view) {
@@ -706,6 +867,12 @@ document.addEventListener("click", (e) => {
   }
   let op = b.dataset.action;
   if (!op) return;
+  if (op === "update_details") {
+    updateExpanded = !updateExpanded;
+    render();
+    checkUpdatesOnce();
+    return;
+  }
   if (op === "logout" && !confirmLogout) {
     confirmLogout = true;
     render();
@@ -717,7 +884,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (op === "reset_activity") {
-    perform(op, null, t("活動狀態已重設"));
+    perform(op, null, t("任務顯示已重設"));
     return;
   }
   if (op === "refresh_device") refreshingSince = Date.now();
@@ -732,6 +899,11 @@ document.addEventListener("click", (e) => {
           : null,
   );
 });
+function checkUpdatesOnce() {
+  if (!bridge.available || updateChecked || state.desktopUpdate?.status && state.desktopUpdate.status !== "idle") return;
+  updateChecked = true;
+  bridge.action("check_update", null).then(() => refresh()).catch(() => { updateChecked = false; });
+}
 function saveHold() {
   const text = String($("#wake-hold")?.value ?? "").trim();
   const seconds = Number(text);
@@ -745,9 +917,22 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target?.id === "wake-hold" && !busyAction) saveHold();
 });
 document.addEventListener("change", (e) => {
+  if (busyAction || e.target.disabled) return;
   if (e.target.id === "region" || e.target.id === "wake-hold") return;
   if (e.target.id === "autostart") {
     perform("autostart", e.target.checked);
+    return;
+  }
+  if (e.target.id === "activity-keep-awake") {
+    perform("activity_keep_awake", e.target.checked);
+    return;
+  }
+  if (e.target.id === "activity-sync") {
+    perform("pause", !e.target.checked);
+    return;
+  }
+  if (e.target.id === "power-saving") {
+    perform("power_saving", e.target.checked);
     return;
   }
   if (page !== "settings") return;
@@ -768,6 +953,7 @@ const preview = startPreview(() => ({
   theme: previewTheme(),
   online: online(),
   bandPage,
+  powerSaving: state.preferences.powerSaving === true,
 }));
 if (hydrated) render();
 else renderLoading();
