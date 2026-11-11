@@ -22,6 +22,10 @@ pub struct Preferences {
     pub keep_screen: bool,
     pub activity_keep_awake: bool,
     pub power_saving: bool,
+    pub completion_vibration: bool,
+    pub completion_vibration_mode: VibrationMode,
+    pub buddy_fps: u8,
+    pub band_brightness: Option<u8>,
     pub sync_enabled: bool,
     pub background: bool,
     pub selected: Option<usize>,
@@ -39,6 +43,10 @@ impl Default for Preferences {
             keep_screen: false,
             activity_keep_awake: false,
             power_saving: false,
+            completion_vibration: false,
+            completion_vibration_mode: VibrationMode::Short,
+            buddy_fps: 10,
+            band_brightness: None,
             sync_enabled: true,
             background: true,
             selected: None,
@@ -89,6 +97,13 @@ pub enum BuddyTheme {
     Chatgpt,
     Claude,
     Deepseek,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VibrationMode {
+    #[default]
+    Short,
+    Long,
 }
 impl BuddyTheme {
     pub fn as_str(self) -> &'static str {
@@ -180,6 +195,14 @@ pub enum Action {
     ActivityKeepAwake(bool),
     #[serde(rename = "power_saving")]
     PowerSaving(bool),
+    #[serde(rename = "completion_vibration")]
+    CompletionVibration(bool),
+    #[serde(rename = "completion_vibration_mode")]
+    CompletionVibrationMode(VibrationMode),
+    #[serde(rename = "buddy_fps")]
+    BuddyFps(u8),
+    #[serde(rename = "band_brightness")]
+    BandBrightness(u8),
     #[serde(rename = "refresh_device")]
     RefreshDevice,
     #[serde(rename = "check_buddy")]
@@ -239,6 +262,8 @@ mod tests {
         assert!(!p.keep_screen);
         assert!(!p.activity_keep_awake);
         assert!(!p.power_saving);
+        assert!(!p.completion_vibration);
+        assert_eq!(p.completion_vibration_mode, VibrationMode::Short);
         assert!(p.sync_enabled);
         assert!(p.themes.is_empty());
         assert!(p.selected.is_none());
@@ -248,6 +273,9 @@ mod tests {
         assert_eq!(legacy.language, "system");
         assert!(!legacy.activity_keep_awake);
         assert!(!legacy.power_saving);
+        assert!(!legacy.completion_vibration);
+        assert_eq!(legacy.completion_vibration_mode, VibrationMode::Short);
+        assert_eq!(legacy.buddy_fps, 10);
         assert!(legacy.sync_enabled);
     }
 }

@@ -408,5 +408,25 @@
         "gitBlob": "42d41dfd83f6fd1083a41ed35f6d2d994a2e9dcc"
       }
     ]
+  },
+  "mac-notification-sys-0.6.15": {
+    "license": "MIT/Apache-2.0",
+    "revision": "deb559683962d314a7693478476bf8d052efa84e",
+    "manifestSource": "https://github.com/h4llow3En/mac-notification-sys/blob/deb559683962d314a7693478476bf8d052efa84e/Cargo.toml",
+    "basis": "Original repository-root dual-license texts omitted by the published crate include list. Exact upstream revision and blobs verified.",
+    "files": [
+      {
+        "path": "mac-notification-LICENSE-MIT",
+        "sha256": "1299b4d9d15e9d67e4ac0e7d47ae9404887ca3cf0764aadeec7588d5a6e8e0cc",
+        "source": "https://github.com/h4llow3En/mac-notification-sys/blob/deb559683962d314a7693478476bf8d052efa84e/LICENSE-MIT",
+        "gitBlob": "a6a98a84ac3f77aa01837efa8f4ddf70fa8f5b62"
+      },
+      {
+        "path": "mac-notification-LICENSE-Apache",
+        "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+        "source": "https://github.com/h4llow3En/mac-notification-sys/blob/deb559683962d314a7693478476bf8d052efa84e/LICENSE-Apache",
+        "gitBlob": "8dada3edaf50dbc082c9a125058f25def75e625a"
+      }
+    ]
   }
 }

@@ -15,12 +15,16 @@ function count(counts, stale) {
   }
   return total > 128 ? 0 : total;
 }
-function source(counts, stale, theme, mode, breathLevel) {
-  var total = count(counts, stale);
-  if (total <= 1 || (mode !== 'thinking' && mode !== 'working' && mode !== 'attention')) return '';
-  theme = theme === 'claude' || theme === 'deepseek' ? theme : 'chatgpt';
-  var level = typeof breathLevel === 'number' && isFinite(breathLevel) ? Math.max(0, Math.min(31, Math.round(breathLevel))) : 0;
-  var variant = mode === 'attention' ? 'attention' : 'active';
-  return '/common/capsule/activity-' + theme + '-' + variant + '-' + Math.min(MAX_COLORS, total) + '-b' + level + '.png';
+// Host-side display compilation. The band consumes these colors, not AI sessions.
+function colors(theme,mode,counts) {
+  theme=theme==='claude'||theme==='deepseek'?theme:'chatgpt';
+  var palette=palettes[theme]||palettes.chatgpt,color=palette[0];
+  if(mode==='attention')color='#FFBD64';else if(mode==='complete')color='#77EDBD';else if(mode==='error')color='#FF7766';
+  else if(mode==='offline')color=theme==='claude'?'#947F74':theme==='deepseek'?'#6C7A9C':'#7187B0';
+  else if(mode==='sleep')color=theme==='claude'?'#C58768':theme==='deepseek'?'#3A52C4':color;
+  var active=mode==='thinking'||mode==='working'||mode==='attention';
+  var total=active?Math.max(1,Math.min(MAX_COLORS,count(counts,false))):1,result=[color];
+  for(var i=1;i<total;i++)result.push(palette[i]);
+  return result;
 }
-module.exports = {count: count, source: source, palettes: palettes, maxColors: MAX_COLORS};
+module.exports = {count: count, colors: colors, palettes: palettes, maxColors: MAX_COLORS};

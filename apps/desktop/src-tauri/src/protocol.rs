@@ -1,5 +1,5 @@
 //! Typed wire boundaries. Extension data is retained for additive v1 fields.
-use crate::domain::BuddyTheme;
+use crate::domain::{BuddyTheme, VibrationMode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -66,6 +66,14 @@ pub struct RuntimeSettings {
     pub activity_keep_awake: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub power_saving: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buddy_fps: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_vibration: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_vibration_mode: Option<VibrationMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub band_brightness: Option<u8>,
 }
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -138,6 +146,10 @@ mod tests {
                 wake_hold_ms: Some(20000),
                 activity_keep_awake: Some(false),
                 power_saving: Some(false),
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: Some(false),
+                completion_vibration_mode: Some(VibrationMode::Short),
             },
         };
         assert_eq!(
@@ -153,6 +165,10 @@ mod tests {
                     wake_hold_ms: None,
                     activity_keep_awake: None,
                     power_saving: None,
+                    buddy_fps: None,
+                    band_brightness: None,
+                    completion_vibration: None,
+                    completion_vibration_mode: None,
                 },
                 request: Some("op-1".into()),
             },
@@ -178,6 +194,10 @@ mod tests {
                 wake_hold_ms: Some(300000),
                 activity_keep_awake: None,
                 power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             },
             request: None,
         };
@@ -204,6 +224,10 @@ mod tests {
                 wake_hold_ms: None,
                 activity_keep_awake: Some(true),
                 power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             },
             request: None,
         };
@@ -237,6 +261,10 @@ mod tests {
                 wake_hold_ms: None,
                 activity_keep_awake: None,
                 power_saving: Some(true),
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             },
             request: None,
         };

@@ -1,6 +1,32 @@
 # Changelog
 
+**English** · [简体中文](CHANGELOG.zh-CN.md) · [繁體中文](CHANGELOG.zh-TW.md)
+
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
+
+## [0.7.0] - 2026-11-11
+
+### Added
+
+- Band brightness slider (0–255), power-saving brightness fixed at 25, explicit charging status and low-battery Mac notifications plus an in-app warning below 20%.
+- Opt-in task completion vibration, off by default: short/long choices (default short), one vibration for each observed AI task completion, including concurrent tasks, with durable notification deduplication.
+- Settings grouped into appearance, startup/sync, band display, task notifications and about.
+- Buddy frame-rate input from 10 to 30 FPS; power saving uses 10 FPS while retaining the selected rate.
+- English, Simplified Chinese and Traditional Chinese contributor documentation with language-preserving navigation and Quick App development guidance.
+
+### Improved
+
+- Code-drawn Buddy characters and resource rings preserve the existing design. The band package contains only its launcher icon as an image, reducing local transfer size.
+- Multi-AI state and task colors are compiled on the Mac. Stable native widgets, cached geometry/color levels and frame-time budgeting reduce animation work.
+- Mac previews share native geometry, effective frame rate and animation timing with Buddy.
+
+### Fixed
+
+- Resource-ring junctions, doubled strokes and accumulating CPU arc gaps during updates.
+- Brightness-request failure handling, stalled sampling and active-task reconnect recovery, with bounded callbacks and retries.
+- Page/controller ownership and diagnostics distinguish hidden pages, missing receipts and transport failures.
+
+Includes stable Buddy **0.5.7** without a test suffix. Physical panel FPS, battery impact and extended screen-on reliability remain unmeasured; see the [verification guide](docs/testing.md).
 
 ## [0.6.0] - 2026-11-11
 
@@ -31,3 +57,4 @@ Notable changes are documented here. Desktop and Buddy versions are maintained i
 This release includes Buddy 0.5.5. See the [verification guide](docs/testing.md) for compatibility and current limitations.
 
 [0.6.0]: https://github.com/JamesGZM/miband-agent-buddy/releases/tag/v0.6.0
+[0.7.0]: https://github.com/JamesGZM/miband-agent-buddy/releases/tag/v0.7.0

@@ -14,7 +14,11 @@ function validSettings(value) {
     (value.wakeHoldMs === undefined || integer(value.wakeHoldMs, 5000, 1800000)) &&
     (value.keepScreen === undefined || typeof value.keepScreen === 'boolean') &&
     (value.activityKeepAwake === undefined || typeof value.activityKeepAwake === 'boolean') &&
+    (value.bandBrightness === undefined || integer(value.bandBrightness,0,255)) &&
+    (value.buddyFps === undefined || integer(value.buddyFps,10,30)) &&
     (value.powerSaving === undefined || typeof value.powerSaving === 'boolean') &&
+    (value.completionVibration === undefined || typeof value.completionVibration === 'boolean') &&
+    (value.completionVibrationMode === undefined || ['short','long'].indexOf(value.completionVibrationMode)>=0) &&
     (value.revision === undefined || (typeof value.revision === 'number' && isFinite(value.revision) && value.revision >= 0 && value.revision % 1 === 0));
 }
 function validRequest(value) {
@@ -54,7 +58,7 @@ function decodeTransportEvent(value) {
   switch (value.event) {
     case 'transport': case 'authenticated': case 'conflict': break;
     case 'battery':
-      if (typeof value.percent !== 'number' || !isFinite(value.percent) || value.percent < 0 || value.percent > 100) throw new Error('Invalid battery');
+      if (typeof value.percent !== 'number' || !isFinite(value.percent) || value.percent < 0 || value.percent > 100 || (value.charging != null && typeof value.charging !== 'boolean')) throw new Error('Invalid battery');
       break;
     case 'progress':
       if (typeof value.progress !== 'number' || !isFinite(value.progress)) throw new Error('Invalid progress');

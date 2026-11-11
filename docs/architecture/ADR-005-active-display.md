@@ -1,5 +1,7 @@
 # ADR-005: Keep the display held during active tasks
 
+**English** · [简体中文](ADR-005-active-display.zh-CN.md) · [繁體中文](ADR-005-active-display.zh-TW.md)
+
 ## Problem
 
 One-shot wake leases expire while an agent is still thinking, using tools or waiting for permission. Extending them on every metric packet would also prevent idle sleep and could leave the display held after host failure. Completing one task must not obscure another concurrent task.
@@ -12,11 +14,15 @@ Each explicit setting action, in either direction, requests one user wake while 
 
 The separate `syncEnabled` desktop preference defaults to true. Window and tray pause actions persist its inverse, and worker startup sends the saved pause command before auto-connect. Restarting the desktop therefore cannot briefly launch Buddy or send activity snapshots when synchronization was disabled.
 
+After a transport reconnect authenticates, an opted-in active task requests one connection wake to restore Buddy and its watchdog, without requiring a new Hook. The current task/preference/pause state is checked at authentication and again before launch, so idle, ended, disabled or paused work cannot reopen it, including cancellation while a recovery wake is queued. Duplicate authentication notifications are ignored. This is connection recovery, not a periodic relaunch: uninterrupted sessions and ordinary snapshots never synthesize launches. It replaces the unconditional no-wake reconnect policy, which left an active task dark after a lost transport. The existing event cooldown and bounded wake/ACK deadline still apply.
+
 Buddy 0.5.4 advertises `capabilities.activityHold=true`. Only after observing that capability in a matching ACK does the runtime add the paired v1 snapshot fields `activityHoldMs` and `idleHoldMs`. The first is 15,000 ms when the preference is enabled and `activeSessions` is nonzero; otherwise it is zero. The latter carries the saved 5–1,800 second idle grace. Disabling the preference during an active lease starts this grace once, without clearing task state. Active aggregate mode takes precedence over a completion-wake animation from an individual session.
 
-The band refreshes a local 15-second deadline on each accepted active snapshot. Brightness API refreshes retain their existing 30-second interval; ordinary 2-second samples only move the deadline. On the first active-to-idle transition, the band starts the saved idle grace once. Further idle snapshots do not move it. An active user wake retains the activity watchdog instead of substituting a long idle lease.
+The band refreshes a local 15-second deadline on each accepted active snapshot. Successful brightness API requests refresh every 30 seconds; failed or timed-out requests retry after two seconds while the lease remains valid. Negative native `value` results delivered through a success callback count as failures. Ordinary 2-second snapshots only move the deadline. On the first active-to-idle transition, the band starts the saved idle grace once. Further idle snapshots do not move it. An active user wake retains the activity watchdog instead of substituting a long idle lease.
 
-If snapshots stop because of disconnect, pause, install, shutdown or failed sampling, the band releases the request when the watchdog expires. Hide, exit and destroy cancel the timers and invalidate old brightness callbacks. Duplicate snapshots cannot renew anything. A resumed foreground page requires a fresh accepted snapshot; cached activity never reactivates it. `wakeDisplay.active` identifies a renewable activity lease; its `remainingMs` is a watchdog, not the user-selected idle duration.
+Resource sampling does not gate task delivery. The runtime keeps at most one sample in flight; snapshots use the latest result for at most two sample intervals, then send unknown metrics until sampling recovers. Failure or a hung filesystem does not suppress active or terminal task snapshots, and late sampling results cannot restart a stopped runtime. This replaces awaiting the whole sample before each delivery; overlapping retries were rejected because a hung filesystem could accumulate work.
+
+If snapshots stop because of disconnect, pause, install or shutdown, the band releases the request when the watchdog expires. Hide, exit and destroy cancel the timers and invalidate old brightness callbacks. Duplicate snapshots cannot renew anything. A resumed foreground page requires a fresh accepted snapshot; cached activity never reactivates it. `wakeDisplay.active` identifies a renewable activity lease; its `remainingMs` is a watchdog, not the user-selected idle duration.
 
 An active session is marked stale after 15 minutes without an event, exposing `freshActiveSessions` and `staleSessions` for diagnostics. Staleness is a warning, never an idle classification: a long thinking or tool call can legitimately emit no further Hooks for hours. When the preference is enabled, every active session continues retaining the display while snapshots arrive, regardless of event age. Only a terminal lifecycle event or explicit reset ends its activity.
 

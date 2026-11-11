@@ -3,11 +3,14 @@ import { createCodexState } from './codex-state.mjs';
 import { initialBuddyState, checkedBuddyState, acknowledgedBuddyState } from './band-package-state.mjs';
 import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
 import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
+import activityRing from '../../../../packages/buddy-shared/presentation/activity-ring.js';
+import { createBatteryAlert } from './battery-alert.mjs';
+import { createCompletionQueue } from './completion-queue.mjs';
 
 export const DEFAULT_TIMINGS = Object.freeze({
   sample: 2000, ack: 8000, probe: 30000, connect: 55000,
   wake: 15000, launch: 1000, failedSend: 10000, install: 310000,
-  cooldown: 10000, ttl: 60000, operation: 25000, device: 300000, buddy: 30000,
+  cooldown: 10000, ttl: 60000, operation: 25000, device: 300000, battery: 60000, buddy: 30000,
 });
 export function installationTimeout(sizeBytes) {
   if (!Number.isInteger(sizeBytes) || sizeBytes < 0 || sizeBytes >= 16 * 1024 * 1024) return DEFAULT_TIMINGS.install;
@@ -30,10 +33,23 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   emit = () => {}, timings: overrides = {}}) {
   const timings = {...DEFAULT_TIMINGS, install: installationTimeout(bandPackage?.sizeBytes), ...overrides};
   let timer = null, connectionDeadline = null, closing = false, started = false;
+  let sampleFlight = null, sampleValue = null, sampleAt = null;
+  const diagnostics = {starts:0,closes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null};
+  const diagnosticCodes = ['auth_rejected','timeout','operation_failed','event_lagged','event_closed','transfer_session_reset','transfer_send_timeout','transfer_ack_timeout','transfer','app_missing'];
+  function diagnose(phase, code) {
+    diagnostics.phase = phase; diagnostics.at = now();
+    if (code) diagnostics.lastCode = code;
+  }
   let commands = Promise.resolve(), stopping = null;
   const wakePolicy = createWakePolicy({now, cooldown: timings.cooldown, ttl: timings.ttl});
+  const batteryAlert=createBatteryAlert();
+  let batteryAt=0,batteryDevice=null;
+  const completions = createCompletionQueue({now,makeId});
   const agent = createCodexState({now,onEvent(event, previous) {
-      if (desired && !paused && state.connection !== "installing") wakePolicy.observe(event, previous);
+      if (desired && !paused && state.connection !== "installing") {
+        wakePolicy.observe(event, previous);
+        completions.observe(event,previous,settings.completionVibration);
+      }
     }});
   let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
   let operation = null, operationDeadline = null;
@@ -51,7 +67,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     pending = null,
     paused = false,
     metrics = null,
-    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false, wakeHoldMs: 20000, activityKeepAwake: false, powerSaving: false };
+    settings = { buddyTheme: "chatgpt", revision: 0, keepScreen: false, wakeHoldMs: 20000, activityKeepAwake: false, powerSaving: false, buddyFps: 10, completionVibration: false, completionVibrationMode: 'short' };
   let state = {
     connection: "disconnected",
     ack: null,
@@ -65,10 +81,12 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       event: "state",
       ...state,
       metrics,
+      lowBattery:batteryAlert.snapshot(),
       agent: agent.status(),
       paused,
       settings,
       operation,
+      diagnostics,
     });
   function operationActive() {
     return OPERATION_ACTIVE.includes(operation?.status);
@@ -76,7 +94,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function configureKind(value) {
     if (value.buddyTheme !== undefined) return "theme";
     if (value.activityKeepAwake !== undefined) return "activity_keep_awake";
+    if (value.bandBrightness !== undefined) return "band_brightness";
+    if (value.buddyFps !== undefined) return "buddy_fps";
     if (value.powerSaving !== undefined) return "power_saving";
+    if (value.completionVibration !== undefined) return "completion_vibration";
+    if (value.completionVibrationMode !== undefined) return "completion_vibration_mode";
     return "wake_hold";
   }
   function settleOperation(status, code = null) {
@@ -103,6 +125,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function launchPendingWake() {
     if (!transport || !desired || (paused && !operationActive()) || wakeFlight || pingDeadline || !LINK_READY.includes(state.connection)) return;
     const wake = wakePolicy.take(true);
+    if (wake?.reason === "activity_reconnect" && (paused || !settings.activityKeepAwake || agent.status().activeSessions === 0)) return;
     if (wake) launchWake(wake);
   }
   function wakeForPreference() {
@@ -170,6 +193,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     pending = null;
   }
   async function stop() {
+    completions.clear();
+    diagnose('stopped');
     desired = false;
     launchOnConnect = false;
     settleOperation("cancelled", "disconnected");
@@ -221,6 +246,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       onClose: handleClose,
     });
     transport = child;
+    diagnostics.starts++; diagnose('opening');
     session = makeId();
     seq = 0;
     clearPending();
@@ -235,18 +261,24 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     state.error = null;
     publish();
     cancel(connectionDeadline);
-    let watchdog = connectionDeadline = schedule(() => child.kill(), timings.connect);
+    let watchdog = connectionDeadline = schedule(() => {diagnose('connect_timeout','connect_timeout');child.kill();}, timings.connect);
+    let authenticated = false;
     function handleEvent(event) {
       if (child !== transport) return;
       try { wire.decodeTransportEvent(event); } catch { return; }
+      if (event.event === 'transport') {diagnose('authenticating');publish();return;}
       if (event.event === "authenticated") {
+        if (authenticated) return;
+        authenticated = true;
+        diagnose('waiting_buddy');
         cancel(watchdog);
-        const checkFromLaunch = launchOnConnect && !paused;
-        if (checkFromLaunch) wakePolicy.requestConnection();
+        const restoreActivity = settings.activityKeepAwake && agent.status().activeSessions > 0;
+        const checkFromLaunch = !paused && (launchOnConnect || restoreActivity);
+        if (checkFromLaunch) wakePolicy.requestConnection(launchOnConnect ? "connection" : "activity_reconnect");
         launchOnConnect = false;
         state.connection = "waiting";
         state.error = null;
-        requestDevice();
+        batteryAt=now();requestDevice();
         // Launch already fetches this inventory. Do not put another query ahead of it.
         if (checkFromLaunch) {beginBuddyCheck(); buddyFromLaunch = true;}
         else requestBuddy();
@@ -254,13 +286,14 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       }
       if (event.event === "battery") {
         state.battery = event.percent;
-        if (state.device && typeof event.charging === "boolean") state.device = {...state.device, battery: event.percent, charging: event.charging};
+        batteryAt=now();batteryAlert.observe(event.percent);
+        state.device = {...state.device, battery:event.percent, ...(typeof event.charging === "boolean" ? {charging:event.charging}: {})};
         publish();
       }
       if (event.event === "device") {
         const {battery, charging, firmware, model, storageTotal, storageFree} = event;
         state.device = {battery, charging, firmware, model, storageTotal, storageFree, at: now()};
-        if (Number.isInteger(battery)) state.battery = battery;
+        if (Number.isInteger(battery)){state.battery=battery;batteryAt=now();batteryAlert.observe(battery);}
         publish();
         return;
       }
@@ -294,7 +327,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         publish();
       }
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
+        diagnose('connected');
         const ack = event.ack;
+        if(pending.completion&&ack.completion?.id===pending.completion.id)completions.acknowledge(ack.completion);
         capabilities = ack.capabilities && typeof ack.capabilities === "object" ? ack.capabilities : null;
         if (wakeFlight?.queued && pending.wakeId === wakeFlight.id) {
           wakeFlight.acknowledged = true;
@@ -314,9 +349,14 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         }
         // The first receipt can discover support before powerSaving was sent.
         // Keep a paused manual transaction alive until the saved choice is durable.
+        const fpsApplied = capabilities?.buddyFps !== true ||
+          (pending.buddyFps === settings.buddyFps && ack.buddyFps === settings.buddyFps && ack.settingsApplied === true);
         const powerApplied = capabilities?.powerSaving !== true ||
           (pending.powerSaving === settings.powerSaving && ack.powerSaving === settings.powerSaving && ack.settingsApplied === true);
-        if (operationActive() && operation.wakeConfirmed && powerApplied) {
+        const brightnessRequired=capabilities?.bandBrightness===true;
+        const brightnessApplied=!brightnessRequired || (ack.brightness?.status==='applied' && ack.brightness.value===(settings.powerSaving?25:(settings.bandBrightness??ack.bandBrightness)));
+        if (operationActive() && operation.wakeConfirmed && brightnessRequired && ack.brightness?.status==='error') settleOperation("failed","brightness_failed");
+        if (operationActive() && operation.wakeConfirmed && powerApplied && fpsApplied && brightnessApplied) {
           const target = operation.target;
           switch (operation.kind) {
             case "theme":
@@ -326,9 +366,25 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
             case "page":
               if (pending.page === target.page) settleOperation(ack.page === target.page ? "done" : "failed", ack.page === target.page ? null : "unsupported");
               break;
+            case "band_brightness":
+              if(capabilities?.bandBrightness!==true)settleOperation("failed","unsupported");
+              else if(pending.bandBrightness===target.bandBrightness&&ack.bandBrightness===target.bandBrightness&&ack.settingsApplied===true)settleOperation("done");
+              break;
+            case "buddy_fps":
+              if (capabilities?.buddyFps !== true) settleOperation("failed", "unsupported");
+              else if (pending.buddyFps === target.buddyFps && ack.buddyFps === target.buddyFps && ack.settingsApplied === true) settleOperation("done");
+              break;
             case "power_saving":
               if (capabilities?.powerSaving !== true) settleOperation("failed", "unsupported");
               else if (pending.powerSaving === target.powerSaving && ack.powerSaving === target.powerSaving && ack.settingsApplied === true) settleOperation("done");
+              break;
+            case "completion_vibration":
+              if(capabilities?.completionVibration!==true)settleOperation("failed","unsupported");
+              else if(pending.completionVibration===target.completionVibration&&ack.completionVibration===target.completionVibration&&ack.settingsApplied===true)settleOperation("done");
+              break;
+            case "completion_vibration_mode":
+              if(!Array.isArray(capabilities?.completionVibrationModes)||!capabilities.completionVibrationModes.includes(target.completionVibrationMode))settleOperation("failed","unsupported");
+              else if(pending.completionVibrationMode===target.completionVibrationMode&&ack.completionVibrationMode===target.completionVibrationMode&&ack.settingsApplied===true)settleOperation("done");
               break;
             case "activity_keep_awake":
               if (capabilities?.activityHold !== true) settleOperation("failed", "unsupported");
@@ -361,6 +417,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       }
       if (event.event === "result" && event.id === "link-ping") {
         cancel(pingDeadline); pingDeadline = null;
+        diagnose(event.ok?'link_alive':'link_failed',event.ok?null:'ping_failed');
         if (!event.ok) child.kill();
         return;
       }
@@ -421,6 +478,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         child.kill();
       }
       if (event.event === "error") {
+        diagnose('native_error',diagnosticCodes.includes(event.code)?event.code:'operation_failed');
         state.operationError = event.code;
         state.error = event.message;
         if (!canRetryTransportError(event.code)) {
@@ -435,9 +493,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (child !== transport) return;
       state.error = "無法啟動傳輸程式，請先完成 native/transport 建置";
     }
-    function handleClose() {
+    function handleClose(info) {
       cancel(watchdog);
       if (child !== transport) return;
+      diagnostics.closes++;
+      diagnostics.exitCode = Number.isInteger(info?.code) ? info.code : null;
+      diagnostics.signal = ['SIGTERM','SIGKILL','SIGABRT','SIGSEGV','SIGBUS'].includes(info?.signal) ? info.signal : null;
+      diagnose('transport_closed');
       transport = null;
       settleOperation("failed", "link_lost");
       cancel(installDeadline);
@@ -457,6 +519,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       case "connect":
         await stop();
         if (closing) return;
+        if(batteryDevice!==c.address){batteryAlert.reset();batteryDevice=c.address;}
         credential = { address: c.address, key: c.key };
         desired = true;
         launchOnConnect = true;
@@ -469,6 +532,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         publish();
         break;
       case "pause":
+        if(c.value)completions.clear();
         const checkAfterPause = !!c.value && buddyFromLaunch && !operationActive();
         const resuming = paused && !c.value;
         paused = !!c.value;
@@ -479,6 +543,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         publish();
         break;
       case "reset_activity":
+        completions.clear();
         agent.reset();
         wakePolicy.clearEvents();
         if (wakeFlight?.session) {
@@ -501,6 +566,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         }
         const enablingActivityHold = c.settings.activityKeepAwake === true && !settings.activityKeepAwake;
         settings = { ...settings, ...c.settings };
+        if(!settings.completionVibration)completions.clear();
         if (c.request) beginOperation(c.request, configureKind(c.settings), {...c.settings});
         else {
           if (enablingActivityHold) wakeForPreference();
@@ -521,6 +587,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         else requestBuddy();
         break;
       case "install":
+        completions.clear();
         if (!transport || !["connected", "waiting", "standby"].includes(state.connection)) {
           state.error = "請先連線手環";
           publish();
@@ -552,13 +619,28 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     }
   }
   async function tick() {
-    let nextMetrics;
-    try { nextMetrics = await sample(); } catch { nextMetrics = null; }
+    // A slow filesystem must not block task/watchdog delivery. Keep one sampler
+    // in flight and retire stale metrics while it finishes in the background.
+    if (!sampleFlight) {
+      try {
+        const flight = Promise.resolve(sample());
+        sampleFlight = flight;
+        flight.then(value => {
+          if (closing || sampleFlight !== flight) return;
+          sampleValue = value; sampleAt = now(); sampleFlight = null;
+        }, () => {
+          if (closing || sampleFlight !== flight) return;
+          sampleValue = null; sampleAt = null; sampleFlight = null;
+        });
+      } catch { sampleValue = null; sampleAt = null; }
+    }
+    await Promise.resolve();
     if (closing) return;
-    metrics = nextMetrics;
+    metrics = sampleAt !== null && now() >= sampleAt && now() - sampleAt <= timings.sample * 2 ? sampleValue : null;
     if (!desired || (paused && !operationActive()) || state.connection === "installing") wakePolicy.clear();
     launchPendingWake();
     if (transport && !paused && LINK_READY.includes(state.connection) && now() - deviceAt >= timings.device) requestDevice();
+    if(transport && !pingDeadline && !wakeFlight && !pending && LINK_READY.includes(state.connection) && now()-batteryAt>=timings.battery){batteryAt=now();write({op:"ping",id:"battery-poll"});}
     if (
       transport &&
       (!paused || operationActive()) &&
@@ -566,12 +648,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       (!operationActive() || operation.wakeConfirmed || wakeFlight?.queued) &&
       (!wakeFlight || wakeFlight.queued) &&
       now() >= retryAt &&
-      ["connected", "waiting", "standby"].includes(state.connection) &&
-      metrics
+      ["connected", "waiting", "standby"].includes(state.connection)
     ) {
       if (state.connection === "standby" && !pingDeadline) {
         write({op: "ping", id: "link-ping"});
-        pingDeadline = schedule(() => transport?.kill(), timings.ack);
+        pingDeadline = schedule(() => {diagnostics.pingTimeouts++;diagnose('link_timeout','ping_timeout');transport?.kill();}, timings.ack);
       }
       const activity = agent.status();
       pending = {
@@ -580,10 +661,10 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         session,
         seq: ++seq,
         text: "Mac monitor",
-        value: metrics.cpu ?? 0,
-        cpu: metrics.cpu ?? -1,
-        memory: metrics.memory,
-        disk: metrics.disk,
+        value: metrics?.cpu ?? 0,
+        cpu: metrics?.cpu ?? -1,
+        memory: metrics?.memory,
+        disk: metrics?.disk,
         character: settings.buddyTheme === "claude" ? "claude" : "codex",
         mode: activity.activeSessions > 0 ? activity.state : wakeFlight?.mode || activity.state,
         buddyTheme: settings.buddyTheme,
@@ -594,14 +675,24 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (capabilities?.activityHold === true) {
         pending.activityHoldMs = !paused && settings.activityKeepAwake && activity.activeSessions > 0 ? ACTIVITY_HOLD_MS : 0;
         pending.idleHoldMs = settings.wakeHoldMs ?? 20000;
-        pending.sessionCounts = {...activity.sessionCounts};
+        if(capabilities?.activityRing!==true)pending.sessionCounts = {...activity.sessionCounts};
       }
+      if(capabilities?.activityRing===true)pending.activityRing=activityRing.colors(settings.buddyTheme,pending.mode,activity.sessionCounts);
+      if (capabilities?.bandBrightness===true && settings.bandBrightness!==undefined) pending.bandBrightness=settings.bandBrightness;
+      if (capabilities?.buddyFps === true) pending.buddyFps = settings.buddyFps;
       if (capabilities?.powerSaving === true) pending.powerSaving = settings.powerSaving;
+      if(capabilities?.completionVibration===true){
+        pending.completionVibration=settings.completionVibration;
+        if(Array.isArray(capabilities.completionVibrationModes)&&capabilities.completionVibrationModes.includes(settings.completionVibrationMode))pending.completionVibrationMode=settings.completionVibrationMode;
+        const notice=!paused&&settings.completionVibration?completions.plan(true):null;
+        if(notice)pending.completion=notice;
+      }
       if (operationActive() && operation.kind === "page") pending.page = operation.target.page;
       const payload = {...pending};
       if (wakeFlight) pending.wakeId = wakeFlight.id;
       write({ op: "snapshot", id: seq, payload });
       deadline = schedule(() => {
+        diagnostics.ackTimeouts++; diagnose('buddy_unresponsive','ack_timeout');
         clearPending();
         state.connection = "standby";
         state.error = null;

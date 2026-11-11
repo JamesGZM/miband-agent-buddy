@@ -1132,3 +1132,8 @@ input.number {
     transition: none !important;
   }
 }
+
+.brightness-control { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.brightness-control input { width: 150px; accent-color: var(--accent); }
+.brightness-control output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.battery .charging-label { white-space: nowrap; }

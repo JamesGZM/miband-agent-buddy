@@ -1,5 +1,7 @@
 # ADR-007: Explicit Buddy installation inventory
 
+**English** · [简体中文](ADR-007-band-installation-state.zh-CN.md) · [繁體中文](ADR-007-band-installation-state.zh-TW.md)
+
 - Status: accepted
 - Date: 2026-11-11
 

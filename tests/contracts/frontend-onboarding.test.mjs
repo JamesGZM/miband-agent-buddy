@@ -6,7 +6,7 @@ function boot(scenario) {
   const script = `
     const scenario = ${JSON.stringify(scenario)};
     const nodes = new Map(), handlers = new Map(), intervals = [], calls = [];
-    const ctx = {clearRect(){},fillRect(){},save(){},translate(){},rotate(){},restore(){},fillText(){},drawImage(){}};
+    const ctx = {beginPath(){},moveTo(){},lineTo(){},arcTo(){},closePath(){},arc(){},stroke(){},fill(){},clearRect(){},fillRect(){},save(){},translate(){},rotate(){},restore(){},fillText(){},drawImage(){}};
     let currentCanvas;
     const canvas = () => ({dataset:{},getContext:()=>ctx,getAttribute:()=>'',setAttribute(){},replaceWith(old){currentCanvas=old;}});
     const node = selector => {

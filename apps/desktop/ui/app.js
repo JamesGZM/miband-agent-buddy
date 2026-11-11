@@ -100,6 +100,9 @@ const operationDone = {
   wake_hold: "亮屏時長已套用到手環",
   activity_keep_awake: "亮屏設定已套用到手環",
   power_saving: "省電設定已套用到手環",
+  completion_vibration: "震動設定已套用到手環",
+  band_brightness: "亮度已套用到手環",
+  completion_vibration_mode: "震動模式已套用到手環",
   reset_activity: "任務顯示已重設",
   check_buddy: "Buddy 檢查完成",
   install: "Buddy 已安裝並開啟",
@@ -123,6 +126,7 @@ const operationErrors = {
   paused: "同步已暫停，請先恢復同步",
   link_lost: "與手環的連線中斷",
   display_unconfirmed: "手環未確認亮屏",
+  brightness_failed: "手環未能套用亮度，請重試",
   launch_failed: "無法開啟手環上的 Buddy",
 };
 const operationCancelled = {
@@ -195,14 +199,14 @@ function dotState() {
 }
 function batteryIcon(percent, charging) {
   const level = Math.max(0, Math.min(100, percent));
-  return `<span class="battery ${level <= 20 ? "low" : ""}" title="${t("電量 {n}%", { n: level })}"><svg viewBox="0 0 26 12" aria-hidden="true"><rect class="shell" x=".5" y=".5" width="22" height="11" rx="3"/><rect class="cap" x="23.5" y="3.5" width="2" height="5" rx="1"/><rect class="level" x="2.5" y="2.5" width="${((18 * level) / 100).toFixed(1)}" height="7" rx="1.5"/></svg>${charging ? svg(glyphs.bolt, "bolt") : ""}<span>${level}%</span></span>`;
+  return `<span class="battery ${level < 20 ? "low" : ""}" title="${t("電量 {n}%", { n: level })}"><svg viewBox="0 0 26 12" aria-hidden="true"><rect class="shell" x=".5" y=".5" width="22" height="11" rx="3"/><rect class="cap" x="23.5" y="3.5" width="2" height="5" rx="1"/><rect class="level" x="2.5" y="2.5" width="${((18 * level) / 100).toFixed(1)}" height="7" rx="1.5"/></svg>${charging ? svg(glyphs.bolt, "bolt") : ""}<span>${level}%</span>${charging ? `<span class="charging-label">${t("充電中")}</span>` : ""}</span>`;
 }
 function bytes(value) {
   if (!Number.isFinite(value)) return "—";
   return value >= 1e9 ? (value / 1e9).toFixed(1) + " GB" : (value / 1e6).toFixed(value >= 1e8 ? 0 : 1) + " MB";
 }
 const spinner = '<span class="spinner" aria-hidden="true"></span>';
-const bandActions = new Set(["theme", "page", "wake", "wake_hold", "activity_keep_awake", "power_saving", "reset_activity", "check_buddy", "install"]);
+const bandActions = new Set(["theme", "page", "wake", "wake_hold", "activity_keep_awake", "power_saving", "buddy_fps", "band_brightness", "completion_vibration", "completion_vibration_mode", "reset_activity", "check_buddy", "install"]);
 function actionProgress(action) {
   if (action === "install" && state.runtime.connection === "installing") return t("安裝中…");
   if (operationActive() && operation().kind === action)
@@ -239,6 +243,7 @@ function syncText() {
 function activityText() {
   const r = state.runtime;
   if (r.paused) return t("同步已暫停");
+  if (r.connection === "waiting") return t("等待 Buddy 回應");
   if (!online() && r.connection !== "standby") return t("未連線");
   return (
     "AI " +
@@ -425,6 +430,7 @@ function settingsPage() {
   const version = escape(state.appVersion || update.currentVersion || "—");
   const versionButton = `<button class="version-button" data-action="update_details" aria-expanded="${updateExpanded}" aria-controls="desktop-update" aria-label="${t(updateView.hasUpdate ? "版本 {version}，有可用更新" : "版本 {version}，檢查更新", { version })}">${version}${updateView.hasUpdate ? '<span class="update-dot" aria-hidden="true"></span>' : ""}${["checking", "downloading"].includes(update.status) ? spinner : ""}</button>`;
   const updatePanel = updateExpanded ? `<div id="desktop-update" class="update-panel" role="region" aria-label="${t("版本更新")}"><p role="status">${updateDetail}</p>${updateView.progress !== null ? `<progress class="progress" max="100" value="${updateView.progress}" aria-label="${t("下載進度")}"></progress>` : ""}<div class="update-actions">${updateControls}${update.releaseUrl ? actionButton(t("版本說明"), "open_release") : ""}</div></div>` : "";
+  const vibrationProgress = actionProgress("completion_vibration_mode");
   const options = (pairs, current) =>
     pairs
       .map(
@@ -479,7 +485,7 @@ function settingsPage() {
       t("只影響 Mac 介面，不影響手環主題。"),
     ) +
     group(
-      t("一般"),
+      t("執行與同步"),
       row(t("登入 Mac 時啟動"), "", toggle("autostart", state.autostart, t("登入 Mac 時啟動"))) +
         row(t("關閉視窗後繼續同步"), "", toggle("background", p.background, t("關閉視窗後繼續同步"))) +
         row(
@@ -488,6 +494,14 @@ function settingsPage() {
           toggle("activity-sync", p.syncEnabled ?? !r.paused, t("活動同步"), "pause"),
         ) +
         row(
+          t("重設任務顯示"),
+          t("若已結束的任務仍顯示進行中，可清除本機記錄。不會停止 AI 任務，下一個事件會重新更新。"),
+          actionButton(t("重設"), "reset_activity"),
+        ),
+    ) +
+    group(
+      t("手環顯示"),
+      row(
           t("任務期間保持亮屏"),
           p.syncEnabled === false ? t("活動同步已關閉，此設定會在恢復同步後生效。") : t("預設關閉。開啟後，思考、執行及等待確認時持續亮屏，全部任務結束後才開始息屏倒數。"),
           toggle("activity-keep-awake", p.activityKeepAwake === true, t("任務期間保持亮屏"), "activity_keep_awake"),
@@ -499,13 +513,31 @@ function settingsPage() {
         ) +
         row(
           t("省電模式"),
-          t("降低手環與 App 預覽的動畫更新頻率。預設關閉，使用較流暢的動畫。"),
+          t("開啟後，Buddy 與 App 預覽固定為 10 FPS，手環亮度固定為 25；關閉後恢復選定值。"),
           toggle("power-saving", p.powerSaving === true, t("省電模式"), "power_saving"),
         ) +
         row(
-          t("重設任務顯示"),
-          t("若已結束的任務仍顯示進行中，可清除本機記錄。不會停止 AI 任務，下一個事件會重新更新。"),
-          actionButton(t("重設"), "reset_activity"),
+          t("手環亮度"),
+          t("範圍 0–255。省電模式固定為 25，關閉後恢復選定亮度。"),
+          `<span class="brightness-control"><input id="band-brightness" type="range" min="0" max="255" step="1" aria-label="${t("手環亮度")}" value="${p.powerSaving ? 25 : p.bandBrightness ?? r.ack?.bandBrightness ?? 128}" ${p.powerSaving || busyAction || operationActive() ? "disabled" : ""}><output id="brightness-value" for="band-brightness">${p.powerSaving ? 25 : p.bandBrightness ?? r.ack?.bandBrightness ?? "—"}</output>${actionProgress("band_brightness") ? `<span class="control-status" role="status">${spinner}${actionProgress("band_brightness")}</span>` : ""}</span>`,
+        ) +
+        row(
+          t("Buddy 幀率"),
+          t("手環與 App 預覽使用相同目標幀率，10–30 FPS；實際流暢度取決於手環負載。"),
+          `<span class="hold-field"><input id="buddy-fps" aria-label="${t("Buddy 幀率")}" class="number" type="number" inputmode="numeric" min="10" max="30" step="1" value="${p.powerSaving ? 10 : p.buddyFps ?? 10}" ${p.powerSaving || busyAction || operationActive() ? "disabled" : ""}><span class="unit">FPS</span>${actionButton(t("儲存"), "buddy_fps", "", "", p.powerSaving === true)}</span>`,
+        ),
+    ) +
+    group(
+      t("任務通知"),
+      row(
+        t("任務完成震動"),
+        t("預設關閉。每個 AI 任務完成時震動一次；多個任務分別通知。取消、工具結束或等待確認不會觸發。"),
+        toggle("completion-vibration", p.completionVibration === true, t("任務完成震動"), "completion_vibration"),
+      ) +
+        row(
+          t("震動模式"),
+          t("預設短震，震動時長由手環系統決定。"),
+          `<span class="toggle-control">${vibrationProgress ? `<span class="control-status" role="status">${spinner}${vibrationProgress}</span>` : ""}<select id="completion-vibration-mode" aria-label="${t("震動模式")}" ${busyAction || operationActive() ? "disabled" : ""}${vibrationProgress ? ' aria-busy="true"' : ''}>${options([["short", t("短震")], ["long", t("長震")]], p.completionVibrationMode || "short")}</select></span>`,
         ),
     ) +
     group(
@@ -515,7 +547,7 @@ function settingsPage() {
         row(t("授權"), "", '<span class="value">AGPL-3.0</span>'),
       t("社群開源專案，與 Xiaomi、OpenAI、Anthropic、DeepSeek 無關。通訊基於 AstralSightStudios 的 AstroBox Core、Bluetooth 與 BtClassicSpp，帳號流程基於 AstroBox Account（github.com/AstralSightStudios）。固定版本與修改說明見 THIRD_PARTY_NOTICES.md。"),
     ) +
-    `<details class="diagnostics"><summary>${t("連線診斷")}</summary><pre>${escape(JSON.stringify({ connection: r.connection, version: r.ack?.appVersion, wake: r.wake, operation: r.operation, keepScreen: r.ack?.keepDiagnostics, settingsApplied: r.ack?.settingsApplied, capabilities: r.ack?.capabilities }, null, 2))}</pre></details>`
+    `<details class="diagnostics"><summary>${t("連線診斷")}</summary><pre>${escape(JSON.stringify({ connection: r.connection, transport: r.diagnostics, version: r.ack?.appVersion, wake: r.wake, operation: r.operation, keepScreen: r.ack?.keepDiagnostics, pageLifecycle: r.ack?.pageLifecycle, drawing: r.ack?.drawing, settingsApplied: r.ack?.settingsApplied, brightness: r.ack?.brightness, bandBrightness: r.ack?.bandBrightness, capabilities: r.ack?.capabilities }, null, 2))}</pre></details>`
   );
 }
 function applyChrome() {
@@ -592,6 +624,7 @@ function render() {
     (state.loginError && t(state.loginError)) ||
     (state.busy ? t("正在取得小米裝置…") : null) ||
     (r.error && !operationActive() && (page === "devices" || !bandOnlyError(r.error)) ? t(r.error) : null) ||
+    (ready && Number.isFinite(battery) && battery < 20 ? t("手環電量低於 20%，請及時充電。") : null) ||
     (!bridge.available ? t("介面預覽，未連接原生 App") : "");
   const previousCanvas = $("#band");
   $("#content").innerHTML =
@@ -786,7 +819,7 @@ async function perform(op, value, success = "") {
     return;
   }
   const region = $("#region")?.value || state.region || "cn";
-  const preference = { activity_keep_awake: "activityKeepAwake", power_saving: "powerSaving", wake_hold: "wakeHoldSeconds", pause: "syncEnabled" }[op];
+  const preference = { activity_keep_awake: "activityKeepAwake", power_saving: "powerSaving", buddy_fps: "buddyFps", band_brightness: "bandBrightness", completion_vibration: "completionVibration", completion_vibration_mode: "completionVibrationMode", wake_hold: "wakeHoldSeconds", pause: "syncEnabled" }[op];
   const revision = preference ? setPendingPreferences({ [preference]: op === "pause" ? !value : value }) : ++stateEpoch;
   if (op === "autostart") {
     pendingAutostart = { value, previous: state.autostart };
@@ -883,6 +916,10 @@ document.addEventListener("click", (e) => {
     saveHold();
     return;
   }
+  if (op === "buddy_fps") {
+    saveFps();
+    return;
+  }
   if (op === "reset_activity") {
     perform(op, null, t("任務顯示已重設"));
     return;
@@ -904,6 +941,16 @@ function checkUpdatesOnce() {
   updateChecked = true;
   bridge.action("check_update", null).then(() => refresh()).catch(() => { updateChecked = false; });
 }
+function saveFps() {
+  if (state.preferences.powerSaving || operationActive()) return;
+  const text = String($("#buddy-fps")?.value ?? "").trim();
+  const fps = Number(text);
+  if (!/^\d+$/.test(text) || fps < 10 || fps > 30) {
+    toast.show("error", t("請輸入 10 到 30 之間的整數幀率"));
+    return;
+  }
+  perform("buddy_fps", fps);
+}
 function saveHold() {
   const text = String($("#wake-hold")?.value ?? "").trim();
   const seconds = Number(text);
@@ -915,9 +962,18 @@ function saveHold() {
 }
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target?.id === "wake-hold" && !busyAction) saveHold();
+  if (e.key === "Enter" && e.target?.id === "buddy-fps" && !busyAction) saveFps();
+});
+document.addEventListener("input", (e) => {
+  if(e.target.id==="band-brightness")$("#brightness-value").textContent=e.target.value;
 });
 document.addEventListener("change", (e) => {
   if (busyAction || e.target.disabled) return;
+  if (e.target.id === "band-brightness") {
+    const value=Number(e.target.value);
+    if(!state.preferences.powerSaving && !operationActive() && Number.isInteger(value) && value>=0 && value<=255)perform("band_brightness",value);
+    return;
+  }
   if (e.target.id === "region" || e.target.id === "wake-hold") return;
   if (e.target.id === "autostart") {
     perform("autostart", e.target.checked);
@@ -927,10 +983,19 @@ document.addEventListener("change", (e) => {
     perform("activity_keep_awake", e.target.checked);
     return;
   }
+  if (e.target.id === "completion-vibration") {
+    perform("completion_vibration", e.target.checked);
+    return;
+  }
+  if (e.target.id === "completion-vibration-mode") {
+    perform("completion_vibration_mode", e.target.value);
+    return;
+  }
   if (e.target.id === "activity-sync") {
     perform("pause", !e.target.checked);
     return;
   }
+  if (e.target.id === "buddy-fps") return;
   if (e.target.id === "power-saving") {
     perform("power_saving", e.target.checked);
     return;
@@ -954,6 +1019,7 @@ const preview = startPreview(() => ({
   online: online(),
   bandPage,
   powerSaving: state.preferences.powerSaving === true,
+  buddyFps: state.preferences.buddyFps ?? 10,
 }));
 if (hydrated) render();
 else renderLoading();

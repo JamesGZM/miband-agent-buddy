@@ -1,20 +1,18 @@
 <template>
   <stack class="page" onclick="togglePage" onlongpress="exitApp">
-    <stack class="page" show="{{ pageIndex === 0 }}">
-      <image class="layer" src="/common/capsule/face-track.png" />
-      <image class="layer" src="{{ ringSource }}" style="opacity: {{ ringOpacity }};" />
-      <image class="layer" src="{{ loadingSource }}" style="opacity: {{ loadingOpacity }};" />
-      <image class="layer" src="{{ symbolSource }}" style="left: {{ symbolLeft }}px;" />
-    </stack>
-    <stack class="page" show="{{ pageIndex === 1 }}">
-      <image class="layer" src="/common/capsule/resource-tracks.png" />
-      <image class="layer" src="{{ diskRing }}" />
-      <image class="layer" src="{{ memoryRing }}" />
-      <image class="layer" src="{{ cpuRing }}" />
-      <div class="numbers">
-        <div class="column"><text class="label disk">DISK</text><text class="value">{{ diskText }}</text><text class="detail">{{ diskDetail }} GB</text></div>
-        <div class="column"><text class="label memory">MEM</text><text class="value">{{ memoryText }}</text><text class="detail">{{ memoryDetail }} GiB</text></div>
-        <div class="column"><text class="label cpu">CPU</text><text class="value">{{ cpuText }}</text><text class="detail">TOTAL LOAD</text></div>
+    <stack class="stage">
+      <stack class="outlines">
+        <div for="{{ drawCapsules }}" tid="id" class="shape" style="left: {{ $item.left }}px; top: {{ $item.top }}px; width: {{ $item.width }}px; height: {{ $item.height }}px; border-radius: {{ $item.radius }}px; border-width: {{ $item.stroke }}px; border-color: {{ $item.color }};"></div>
+      </stack>
+      <div for="{{ drawRects }}" tid="id" show="{{ $item.visible !== false }}" class="shape" style="left: {{ $item.left }}px; top: {{ $item.top }}px; width: {{ $item.width }}px; height: {{ $item.height }}px; border-radius: {{ $item.radius }}px; background-color: {{ $item.color }};"></div>
+      <progress for="{{ drawArcs }}" tid="id" class="shape" percent="{{ $item.percent == null ? 100 : $item.percent }}" type="arc" show="{{ $item.visible !== false }}" style="left: {{ $item.left }}px; top: {{ $item.top }}px; width: {{ $item.size }}px; height: {{ $item.size }}px; center-x: {{ $item.center }}px; center-y: {{ $item.center }}px; radius: {{ $item.radius }}px; start-angle: {{ $item.start }}deg; total-angle: {{ $item.total }}deg; stroke-width: {{ $item.width }}px; color: {{ $item.color }}; layer-color: {{ $item.layerColor || $item.color }};"></progress>
+      <stack class="glyph" style="top: {{ glyphLeft }}px;" show="{{ pageIndex === 0 }}">
+        <div for="{{ glyphRects }}" tid="id" class="shape" style="left: {{ $item.left }}px; top: {{ $item.top }}px; width: {{ $item.width }}px; height: {{ $item.height }}px; background-color: {{ glyphColor }};"></div>
+      </stack>
+      <div class="numbers" if="{{ pageIndex === 1 }}">
+        <div class="column"><text class="label disk" static>DISK</text><text class="value">{{ diskText }}</text><text class="detail">{{ diskDetail }} GB</text></div>
+        <div class="column"><text class="label memory" static>MEM</text><text class="value">{{ memoryText }}</text><text class="detail">{{ memoryDetail }} GiB</text></div>
+        <div class="column"><text class="label cpu" static>CPU</text><text class="value">{{ cpuText }}</text><text class="detail" static>TOTAL LOAD</text></div>
       </div>
     </stack>
   </stack>
@@ -24,35 +22,38 @@ import brightness from '@system.brightness';
 import interconnect from '@system.interconnect';
 import application from '@system.app';
 import storage from '@system.storage';
+import vibrator from '@system.vibrator';
 var createPageController=require('../../controllers/page-controller').createPageController;
-var controller=null;
+var probeDrawing=require('../../common/drawing-support').probeDrawing;
 export default {
   private: {
-    pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
-    ringSource: '/common/capsule/ring-idle-b0.png', ringOpacity: 1,
-    loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
-    symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
-    diskRing: '/common/capsule/disk-000.png', memoryRing: '/common/capsule/memory-000.png', cpuRing: '/common/capsule/cpu-000.png',
-    cpuText: '—', memoryText: '—', diskText: '—', memoryDetail: '—', diskDetail: '—', cpuWidth: 0, memoryWidth: 0, diskWidth: 0
+    pageIndex: 0,
+    drawRects: [], drawArcs: [], drawCapsules: [], glyphRects: [], glyphColor: "#000000", glyphLeft: 0,
+    cpuText: '—', memoryText: '—', diskText: '—', memoryDetail: '—', diskDetail: '—'
   },
   onInit(){
-    controller=createPageController({brightness:brightness,interconnect:interconnect,application:application,storage:storage});
-    controller.onInit.call(this);
+    this._buddyController=createPageController({brightness:brightness,interconnect:interconnect,application:application,storage:storage,vibrator:vibrator,
+      lifecycle:this.$app.$def.buddyLifecycle,drawingCapabilities:probeDrawing(application),appVersion:application.getInfo().versionName});
+    this._buddyController.onInit.call(this);
   },
-  onShow(){controller.onShow.call(this);},
-  onHide(){controller.onHide.call(this);},
-  onBackPress(){return controller.onBackPress.call(this);},
-  onDestroy(){controller.onDestroy.call(this);controller=null;},
-  exitApp(){controller.exitApp.call(this);},
-  togglePage(){controller.togglePage.call(this);},
-  act(action){controller.act.call(this,action);},
-  releaseKeep(){controller.releaseKeep.call(this);},
-  tick(){controller.tick.call(this);}
+  onShow(){if(this._buddyController)this._buddyController.onShow.call(this);},
+  onRefresh(){if(this._buddyController)this._buddyController.onRefresh.call(this);},
+  onHide(){if(this._buddyController)this._buddyController.onHide.call(this);},
+  onBackPress(){return this._buddyController?this._buddyController.onBackPress.call(this):false;},
+  onDestroy(){if(this._buddyController)this._buddyController.onDestroy.call(this);this._buddyController=null;},
+  exitApp(){if(this._buddyController)this._buddyController.exitApp.call(this);},
+  togglePage(){if(this._buddyController)this._buddyController.togglePage.call(this);},
+  act(action){if(this._buddyController)this._buddyController.act.call(this,action);},
+  releaseKeep(){if(this._buddyController)this._buddyController.releaseKeep.call(this);},
+  tick(){if(this._buddyController)this._buddyController.tick.call(this);}
 };
 </script>
 <style>
 .page { width: 192px; height: 490px; background-color: #000000; }
-.layer { width: 192px; height: 490px; left: 0px; top: 0px; object-fit: contain; }
+.stage { position: absolute; left: 0px; top: 0px; width: 192px; height: 490px; }
+.glyph { position: absolute; left: 0px; width: 192px; height: 490px; }
+.shape { position: absolute; }
+.outlines { position: absolute; left: 0px; top: 0px; width: 192px; height: 490px; }
 .numbers { position: absolute; left: 192px; top: 0px; width: 490px; height: 192px; transform-origin: 0px 0px; transform: rotate(90deg); padding-left: 86px; padding-top: 49px; }
 .column { width: 106px; height: 94px; flex-direction: column; align-items: center; }
 .label { font-size: 16px; width: 106px; height: 24px; text-align: center; }

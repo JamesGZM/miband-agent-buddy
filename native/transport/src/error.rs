@@ -1,7 +1,11 @@
 // Only fixed diagnostic codes cross IPC; upstream errors may contain device identifiers.
 pub fn classify_error(error: &anyhow::Error) -> &'static str {
     let text = format!("{error:#}");
-    if text.contains("Device rejected authentication") {
+    if text.contains("channel lagged") {
+        "event_lagged"
+    } else if text.contains("channel closed") {
+        "event_closed"
+    } else if text.contains("Device rejected authentication") {
         "auth_rejected"
     } else if text.contains("install result") {
         "install_receipt_missing"
@@ -32,6 +36,17 @@ pub fn classify_error(error: &anyhow::Error) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn event_receiver_failures_have_distinct_fixed_codes() {
+        assert_eq!(
+            classify_error(&anyhow::anyhow!("channel lagged by 12")),
+            "event_lagged"
+        );
+        assert_eq!(
+            classify_error(&anyhow::anyhow!("channel closed")),
+            "event_closed"
+        );
+    }
     #[test]
     fn explicit_authentication_rejection_is_terminal() {
         let error = anyhow::anyhow!("Device rejected authentication: account error 4")
@@ -101,8 +116,7 @@ mod tests {
 
     #[test]
     fn unknown_mass_failures_do_not_invent_a_timeout_or_user_cancellation() {
-        let error = anyhow::anyhow!("SPP send failed")
-            .context("failed to send MASS payload");
+        let error = anyhow::anyhow!("SPP send failed").context("failed to send MASS payload");
         assert_eq!(classify_error(&error), "transfer");
     }
 }

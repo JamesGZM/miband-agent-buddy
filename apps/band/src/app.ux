@@ -1,3 +1,7 @@
 <script>
-export default {};
+var createLifecycle=require('./common/page-lifecycle').createLifecycle;
+export default {
+  buddyLifecycle:createLifecycle(),
+  onError(){this.buddyLifecycle.error();}
+};
 </script>

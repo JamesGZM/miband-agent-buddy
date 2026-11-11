@@ -1,5 +1,7 @@
 # Verification and compatibility
 
+**English** · [简体中文](testing.zh-CN.md) · [繁體中文](testing.zh-TW.md)
+
 ## Automated checks
 
 Run these commands from the repository root after completing the [development setup](development/README.md):
@@ -29,6 +31,8 @@ Pull requests run source checks without producing application packages. Release 
 
 Buddy 0.5.5 installation and software communication have been verified on the NFC model. Physical frame rate, battery consumption and continuous screen-on reliability remain unverified.
 
+Local keep-awake regression tests cover failed/hung sampling with continuing task snapshots, stale metrics becoming unknown, one in-flight sampler, late results after stop, negative brightness success payloads, bounded retries, and one active-task recovery wake after transport reconnect. These are software checks; they do not establish extended physical endurance.
+
 ## Manual acceptance
 
 Use a test account and device where possible. Do not erase an existing account or pairing merely to exercise onboarding.
@@ -40,6 +44,7 @@ Use a test account and device where possible. Do not erase an existing account o
 5. Exercise manual wake and settings with activity sync both on and off. Confirm the result on the physical screen as well as in the app.
 6. Run overlapping AI sessions. Completing one session must leave the others active; only the final completion starts the idle timer when task keep-awake is enabled.
 7. Verify power saving, disconnect recovery, window close and explicit quit. Restore the user's original settings after testing.
+8. Observe task keep-awake beyond the previous failure time. Record task state, connection, last sync and display diagnostics when sleep occurs. Cover long thinking/tool/approval waits, final completion, and watchdog release after sync stops. Verify one recovery wake after a real transport reconnect with an active opted-in task; idle, paused, disabled and ended tasks must stay quiet.
 
 ## Current limitations
 
@@ -50,3 +55,5 @@ Use a test account and device where possible. Do not erase an existing account o
 - AI integrations depend on lifecycle events exposed by each host. A theme name does not imply a native Hooks API exists in that product.
 
 Report reproducible problems through the [support guide](../SUPPORT.md). Keep account data, device keys, prompts and transcripts out of public reports.
+
+Brightness (including power saving restoration), charging status and low-battery system notification delivery still require physical/OS validation. Automated tests cover strict thresholds, deduplication and native callback receipts; these do not prove macOS notification display or actual illumination.

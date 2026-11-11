@@ -1,5 +1,6 @@
 """Stage canonical ES5 modules for Vela and wrap unchanged CJS for the browser."""
 from pathlib import Path
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {
@@ -7,7 +8,9 @@ MODULES = {
     'display': 'presentation/display.js',
     'native-ui': 'presentation/native-ui.js',
     'activity-ring': 'presentation/activity-ring.js',
+    'geometry': 'presentation/geometry.js',
 }
+DEPENDENCIES = {'geometry': {'./native-ui': 'native-ui', './activity-ring': 'activity-ring'}}
 
 
 def prepare():
@@ -21,8 +24,14 @@ def prepare():
         (band / f'{name}.js').write_text(banner + source)
         # These pure modules use only module.exports. A lexical CJS container
         # preserves the canonical source verbatim; no export-string rewriting.
+        dependencies = DEPENDENCIES.get(name, {})
+        imports = ''.join(f'import dependency{i} from "./{module}.mjs";\n' for i, module in enumerate(dependencies.values()))
+        resolver = ''
+        if dependencies:
+            entries = ','.join(json.dumps(specifier) + f':dependency{i}' for i, specifier in enumerate(dependencies))
+            resolver = 'const dependencies = {' + entries + '};\nfunction require(name) { if (!Object.prototype.hasOwnProperty.call(dependencies, name)) throw new Error("Unknown shared dependency"); return dependencies[name]; }\n'
         (desktop / f'{name}.mjs').write_text(
-            banner + 'const module = {exports: {}};\n' + source
+            banner + imports + resolver + 'const module = {exports: {}};\n' + source
             + '\nexport default module.exports;\n'
         )
 

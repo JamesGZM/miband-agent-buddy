@@ -5,6 +5,7 @@ mod domain;
 mod i18n;
 mod login;
 mod net;
+mod notifications;
 mod persistence;
 mod protocol;
 mod runtime;

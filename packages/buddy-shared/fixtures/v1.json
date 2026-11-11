@@ -31,7 +31,19 @@
       "working": 1,
       "attention": 1
     },
-    "powerSaving": true
+    "activityRing": [
+      "#728BFF",
+      "#65D9BC",
+      "#EFB86C"
+    ],
+    "powerSaving": true,
+    "buddyFps": 20,
+    "completionVibration": true,
+    "completion": {
+      "id": "completion-fixture",
+      "count": 2
+    },
+    "completionVibrationMode": "short"
   },
   "ack": {
     "v": 1,
@@ -52,9 +64,27 @@
     "keepDiagnostics": {
       "visible": true
     },
+    "pageLifecycle": {
+      "createdAt": 1000,
+      "created": 1,
+      "live": 1,
+      "visible": 1,
+      "refreshes": 3
+    },
+    "drawing": {
+      "frames": 42,
+      "capabilities": {
+        "renderer": "native-geometry",
+        "queryAvailable": true,
+        "div": true,
+        "arc": true,
+        "canvas": false
+      }
+    },
     "page": 0,
     "mode": "thinking",
     "capabilities": {
+      "activityRing": true,
       "maxWakeHoldMs": 1800000,
       "themes": [
         "chatgpt",
@@ -63,9 +93,22 @@
       ],
       "page": true,
       "activityHold": true,
-      "powerSaving": true
+      "powerSaving": true,
+      "buddyFps": true,
+      "completionVibration": true,
+      "completionVibrationModes": [
+        "short",
+        "long"
+      ]
     },
-    "powerSaving": true
+    "powerSaving": true,
+    "buddyFps": 20,
+    "completionVibration": true,
+    "completion": {
+      "id": "completion-fixture",
+      "status": "accepted"
+    },
+    "completionVibrationMode": "short"
   },
   "credentials": {
     "address": "fixture-device",
@@ -82,7 +125,9 @@
         "keepScreen": false,
         "wakeHoldMs": 20000,
         "activityKeepAwake": false,
-        "powerSaving": false
+        "powerSaving": false,
+        "completionVibration": false,
+        "completionVibrationMode": "short"
       }
     },
     {
@@ -195,7 +240,19 @@
           "working": 1,
           "attention": 1
         },
-        "powerSaving": true
+        "activityRing": [
+          "#728BFF",
+          "#65D9BC",
+          "#EFB86C"
+        ],
+        "powerSaving": true,
+        "buddyFps": 20,
+        "completionVibration": true,
+        "completion": {
+          "id": "completion-fixture",
+          "count": 2
+        },
+        "completionVibrationMode": "short"
       }
     },
     {
@@ -259,9 +316,27 @@
         "keepDiagnostics": {
           "visible": true
         },
+        "pageLifecycle": {
+          "createdAt": 1000,
+          "created": 1,
+          "live": 1,
+          "visible": 1,
+          "refreshes": 3
+        },
+        "drawing": {
+          "frames": 42,
+          "capabilities": {
+            "renderer": "native-geometry",
+            "queryAvailable": true,
+            "div": true,
+            "arc": true,
+            "canvas": false
+          }
+        },
         "page": 0,
         "mode": "thinking",
         "capabilities": {
+          "activityRing": true,
           "maxWakeHoldMs": 1800000,
           "themes": [
             "chatgpt",
@@ -270,9 +345,22 @@
           ],
           "page": true,
           "activityHold": true,
-          "powerSaving": true
+          "powerSaving": true,
+          "buddyFps": true,
+          "completionVibration": true,
+          "completionVibrationModes": [
+            "short",
+            "long"
+          ]
         },
-        "powerSaving": true
+        "powerSaving": true,
+        "buddyFps": 20,
+        "completionVibration": true,
+        "completion": {
+          "id": "completion-fixture",
+          "status": "accepted"
+        },
+        "completionVibrationMode": "short"
       }
     },
     {
@@ -326,9 +414,27 @@
       "keepDiagnostics": {
         "visible": true
       },
+      "pageLifecycle": {
+        "createdAt": 1000,
+        "created": 1,
+        "live": 1,
+        "visible": 1,
+        "refreshes": 3
+      },
+      "drawing": {
+        "frames": 42,
+        "capabilities": {
+          "renderer": "native-geometry",
+          "queryAvailable": true,
+          "div": true,
+          "arc": true,
+          "canvas": false
+        }
+      },
       "page": 0,
       "mode": "thinking",
       "capabilities": {
+        "activityRing": true,
         "maxWakeHoldMs": 1800000,
         "themes": [
           "chatgpt",
@@ -337,9 +443,22 @@
         ],
         "page": true,
         "activityHold": true,
-        "powerSaving": true
+        "powerSaving": true,
+        "buddyFps": true,
+        "completionVibration": true,
+        "completionVibrationModes": [
+          "short",
+          "long"
+        ]
       },
-      "powerSaving": true
+      "powerSaving": true,
+      "buddyFps": 20,
+      "completionVibration": true,
+      "completion": {
+        "id": "completion-fixture",
+        "status": "accepted"
+      },
+      "completionVibrationMode": "short"
     },
     "paused": false,
     "settings": {
@@ -462,6 +581,14 @@
     {
       "operation": "power_saving",
       "value": true
+    },
+    {
+      "operation": "completion_vibration",
+      "value": true
+    },
+    {
+      "operation": "completion_vibration_mode",
+      "value": "long"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import bandUI from './assets/native-ui.mjs';
 import bandDisplay from './assets/display.mjs';
+import geometry from './assets/geometry.mjs';
 import activityRing from './assets/activity-ring.mjs';
 
 export function startPreview(getState, {
@@ -11,57 +12,25 @@ export function startPreview(getState, {
   cancelFrame = globalThis.cancelAnimationFrame?.bind(globalThis),
 } = {}) {
   const $ = selector => document.querySelector(selector);
-  let timer = null, frame = null, stopped = false, lastPaint = -Infinity, needsPaint = false, scheduledPowerSaving = false;
+  let timer = null, frame = null, stopped = false, lastPaint = -Infinity, needsPaint = false, scheduledCadence = null;
   let animationKey = '', animationAt = now();
-  let pendingFrame = null;
+  const drawGeometry = geometry.createRenderer();
+  let colorKey = '', taskColors = null;
   const previewRings = {
     cpu: bandUI.createRingTransition(),
     memory: bandUI.createRingTransition(),
     disk: bandUI.createRingTransition(),
   };
   let previewStamp = null;
-  const images = new Map();
-  const failedImages = new WeakSet();
-  const MAX_IMAGES = 192;
-  function image(path) {
-    if (images.has(path)) {
-      const cached = images.get(path);
-      images.delete(path); images.set(path, cached);
-      return cached;
-    }
-    if (!images.has(path)) {
-      const im = new Image();
-      im.onload = () => { needsPaint = true; };
-      im.onerror = () => { failedImages.add(im); needsPaint = true; };
-      im.src = "assets/capsule/" + path;
-      images.set(path, im);
-      if (images.size > MAX_IMAGES) {
-        const oldest = images.keys().next().value;
-        images.get(oldest).onload = null;
-        images.get(oldest).onerror = null;
-        images.delete(oldest);
-      }
-    }
-    return images.get(path);
-  }
-  function prepareFrame({runtime: r, theme, online, bandPage}, timestamp, mode, key) {
-    const layers = [], texts = [];
-    const frame = {key, layers, texts};
+  function prepareFrame({runtime: r, theme, online, bandPage}, timestamp, mode) {
+    const texts = [], values = {};
     const animation = `${theme}:${mode}`;
     if (animation !== animationKey) { animationKey = animation; animationAt = timestamp; }
-    const t = Math.max(0, timestamp - animationAt) / 1000;
-    function layer(name, alpha = 1, offset = 0) {
-      layers.push({image:image(name), alpha, offset});
-    }
-    if (bandPage === 0) {
-      const motion = bandUI.motion(mode, t, theme);
-      layer("face-track.png");
-      const ringSource = activityRing.source(r.agent?.sessionCounts, !online, theme, mode, bandUI.breathLevel(mode, t)) || motion.ringSource;
-      layer(ringSource.split("/").pop(), motion.ringOpacity);
-      layer(motion.loadingSource.split("/").pop(), motion.loadingOpacity);
-      layer(motion.symbolSource.split("/").pop(), 1, motion.symbolLeft);
-    } else {
-      layer("resource-tracks.png");
+    const receipt=r.ack?.drawing;
+    const synced=online&&r.ack?.mode===mode&&Number.isFinite(receipt?.elapsedMs)&&receipt.elapsedMs>=0&&wallNow()-(r.lastAckAt||0)<10000;
+    const t = synced ? (receipt.elapsedMs+Math.max(0,wallNow()-r.lastAckAt))/1000 : Math.max(0,timestamp-animationAt)/1000;
+    if(mode==='complete'&&t>=4)mode='idle';
+    if (bandPage === 1) {
       const m =
         online && wallNow() - (r.lastAckAt || 0) < 10000 ? r.metrics : null;
       const stamp = m?.sampledAt || 0;
@@ -81,28 +50,19 @@ export function startPreview(getState, {
         ["memory", m?.memory?.percent, "#a192ff"],
         ["cpu", m?.cpu, "#78edff"],
       ];
+      const fields=bandDisplay.fields(m,!m);
       entries.forEach(([name, val, color], i) => {
-        layer(
-          bandUI
-            .ringSource(
-              name,
-              bandUI.ringValue(previewRings[name], timestamp),
-            )
-            .split("/")
-            .pop(),
-        );
+        values[name] = Math.round(bandUI.ringValue(previewRings[name], timestamp));
         const x = 139 + i * 106;
-        texts.push({text:name === "memory" ? "MEM" : name.toUpperCase(),x,y:76,color,size:15});
-        texts.push({text:val == null ? "—" : Math.round(val) + "%",x,y:114,color:"#f0f4f0",size:32});
-        const metric = m?.[name];
-        texts.push({text:name === "cpu"
-            ? "TOTAL LOAD"
-            : metric
-              ? `${(metric.usedBytes / (name === "memory" ? 1073741824 : 1e9)).toFixed(1)} / ${(metric.totalBytes / (name === "memory" ? 1073741824 : 1e9)).toFixed(1)}`
-              : "—",x,y:139,color:"#b9c5c0",size:11});
+        texts.push({text:name === "memory" ? "MEM" : name.toUpperCase(),x,y:61,color,size:16});
+        texts.push({text:val == null ? "—" : Math.round(val) + "%",x,y:96,color:"#f0f4f0",size:38});
+        texts.push({text:name==='cpu'?'TOTAL LOAD':fields[name+'Detail']+(name==='memory'?' GiB':' GB'),x,y:131,color:'#b9c5c0',size:14});
       });
     }
-    return frame;
+    const counts=online?r.agent?.sessionCounts:null;
+    const key=`${theme}:${mode}:${counts?.thinking}:${counts?.working}:${counts?.attention}`;
+    if(key!==colorKey){colorKey=key;taskColors=activityRing.colors(theme,mode,counts);}
+    return {shapes:drawGeometry({native:true,page:bandPage,theme,mode,seconds:t,colors:taskColors,stale:!online,values}),texts};
   }
   function status(canvas, failed = false) {
     const loading = $("#preview-loading"), error = $("#preview-error");
@@ -114,35 +74,51 @@ export function startPreview(getState, {
     const canvas = $("#band");
     if (!canvas) return;
     const state = getState(), r = state.runtime;
-    const mode = state.online ? r.agent?.state || "idle" : "idle";
-    const key = JSON.stringify([state.bandPage,state.theme,mode,state.online,r.agent?.sessionCounts]);
-    // Hold one complete frame while its assets load; advancing every tick would
-    // continually clear the screen or chase images that are not decoded yet.
-    if (!pendingFrame || pendingFrame.key !== key)
-      pendingFrame = prepareFrame(state, now(), mode, key);
-    if (pendingFrame.layers.some(layer => failedImages.has(layer.image))) {
-      status(canvas, true); pendingFrame = null; return;
-    }
-    status(canvas);
-    if (pendingFrame.layers.some(layer => !layer.image.complete || !layer.image.naturalWidth)) return;
+    const mode = state.online ? r.agent?.state || "idle" : r.lastAckAt ? "offline" : "idle";
     const ctx = canvas.getContext("2d");
     if (!ctx) { status(canvas, true); return; }
+    // Compute the whole scene before replacing the visible frame.
+    const next = prepareFrame(state, now(), mode);
     ctx.clearRect(0, 0, 490, 192);
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, 490, 192);
-    for (const layer of pendingFrame.layers) {
-      ctx.save(); ctx.globalAlpha = layer.alpha;
-      ctx.translate(layer.offset, 192); ctx.rotate(-Math.PI / 2);
-      ctx.drawImage(layer.image, 0, 0, 192, 490); ctx.restore();
+    function rectangle(rect,outline=false) {
+      if(rect.visible===false)return;
+      const inset=outline?rect.stroke/2:0;
+      const x=rect.left+inset,y=rect.top+inset,w=rect.width-2*inset,h=rect.height-2*inset;
+      const radius=Math.max(0,Math.min(rect.radius-inset,w/2,h/2));
+      ctx.fillStyle=rect.color;
+      if(!radius&&!outline){ctx.fillRect(x,y,w,h);return;}
+      ctx.beginPath();ctx.moveTo(x+radius,y);ctx.lineTo(x+w-radius,y);ctx.arcTo(x+w,y,x+w,y+radius,radius);
+      ctx.lineTo(x+w,y+h-radius);ctx.arcTo(x+w,y+h,x+w-radius,y+h,radius);
+      ctx.lineTo(x+radius,y+h);ctx.arcTo(x,y+h,x,y+h-radius,radius);
+      ctx.lineTo(x,y+radius);ctx.arcTo(x,y,x+radius,y,radius);ctx.closePath();
+      if(outline){ctx.strokeStyle=rect.color;ctx.lineWidth=rect.stroke;ctx.stroke();}else ctx.fill();
     }
-    for (const text of pendingFrame.texts) {
-      ctx.textAlign = "center"; ctx.fillStyle = text.color;
+    for(const capsule of next.shapes.capsules)rectangle(capsule,true);
+    for(const rect of next.shapes.rects)rectangle(rect);
+    for (const arc of next.shapes.arcs) {
+      if(arc.visible===false)continue;
+      const percent=arc.percent==null?100:arc.percent;
+      ctx.beginPath();ctx.strokeStyle=arc.color;ctx.lineWidth=arc.width;ctx.lineCap='round';
+      ctx.arc(arc.left+arc.center,arc.top+arc.center,arc.radius-arc.width/2,(arc.start-90)*Math.PI/180,(arc.start+arc.total*percent/100-90)*Math.PI/180);
+      ctx.stroke();
+    }
+    for(const cell of next.shapes.glyphs||[])rectangle({...cell,left:cell.left+next.shapes.glyphLeft,radius:0,color:next.shapes.glyphColor});
+    for (const text of next.texts) {
+      ctx.textAlign = "center"; ctx.textBaseline="middle"; ctx.fillStyle = text.color;
       ctx.font = `${text.size}px -apple-system`;
       ctx.fillText(text.text, text.x, text.y);
     }
-    pendingFrame = null;
     canvas.dataset.previewReady = "true";
     status(canvas);
+  }
+  function cadence() {
+    const state=getState(),ack=state.runtime.ack;
+    if(state.powerSaving===true)return 100;
+    const applied=ack?.drawing?.effectiveFps;
+    if(state.online&&ack?.settingsApplied===true&&Number.isInteger(applied)&&applied>=10&&applied<=30&&wallNow()-(state.runtime.lastAckAt||0)<10000)return 1000/applied;
+    return bandUI.frameDelay(state.powerSaving,state.buddyFps);
   }
   function clearTick() {
     if (timer !== null) cancel(timer);
@@ -151,23 +127,23 @@ export function startPreview(getState, {
   }
   function queue() {
     if (stopped || document.hidden || !$("#band")) return;
-    const lowPower = getState().powerSaving === true;
-    scheduledPowerSaving = lowPower;
-    if (requestFrame && !lowPower) frame = requestFrame(tick);
+    const delay=cadence();
+    scheduledCadence=delay;
+    if (requestFrame && delay<100) frame = requestFrame(tick);
     else timer = schedule(() => {
       timer = null;
       if (requestFrame) frame = requestFrame(tick);
       else tick();
-    }, bandUI.frameDelay(lowPower));
+    }, Math.max(1,delay-Math.max(0,now()-lastPaint)));
   }
   function tick() {
     frame = null;
     if (stopped || document.hidden || !$("#band")) return;
-    const timestamp = now(), cadence = bandUI.frameDelay(getState().powerSaving);
+    const timestamp = now(), delay = cadence();
     const elapsed = timestamp - lastPaint;
-    if (needsPaint || elapsed >= cadence - 0.5 || elapsed < 0) {
+    if (needsPaint || elapsed >= delay - 0.5 || elapsed < 0) {
       paint(); needsPaint = false;
-      lastPaint = elapsed >= cadence ? timestamp - (elapsed % cadence) : timestamp;
+      lastPaint = elapsed >= delay ? timestamp - (elapsed % delay) : timestamp;
     }
     queue();
   }
@@ -175,7 +151,7 @@ export function startPreview(getState, {
     if (stopped) return;
     if (document.hidden || !$("#band")) { clearTick(); return; }
     paint(); needsPaint = false; lastPaint = now();
-    if ((timer !== null || frame !== null) && scheduledPowerSaving === (getState().powerSaving === true)) return;
+    if ((timer !== null || frame !== null) && scheduledCadence === cadence()) return;
     clearTick();
     queue();
   }
@@ -188,8 +164,5 @@ export function startPreview(getState, {
     if (stopped) return;
     stopped = true; clearTick();
     document.removeEventListener?.('visibilitychange', visibilityChanged);
-    for (const im of images.values()) { im.onload = null; im.onerror = null; }
-    pendingFrame = null;
-    images.clear();
   }};
 }

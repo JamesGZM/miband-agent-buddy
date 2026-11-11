@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 test('actual frontend boots, refreshes native state and renders every existing page', async t => {
   const nodes = new Map(), handlers = new Map(), calls = [], frames = [], timers = [], paints = [], texts = [], intervals = [], copies = [];
-  const ctx = {clearRect() {},fillRect() {},save() {},translate() {},rotate() {},restore() {},fillText(text) {texts.push(text);},drawImage() {paints.push('image');}};
+  const ctx = {beginPath(){},moveTo(){},lineTo(){},arcTo(){},closePath(){},arc(){},stroke(){},fill(){},clearRect() {},fillRect() {paints.push('geometry');},save() {},translate() {},rotate() {},restore() {},fillText(text) {texts.push(text);},drawImage() {paints.push('image');}};
   let currentCanvas = null;
   const canvas = () => ({dataset:{},getContext:()=>ctx,getAttribute:()=> '手環畫面預覽',setAttribute(){},replaceWith(existing){currentCanvas=existing;}});
   const node = selector => {
@@ -54,6 +54,10 @@ test('actual frontend boots, refreshes native state and renders every existing p
       if (command === 'action' && args.operation === 'wake_hold') state.preferences.wakeHoldSeconds = args.value;
       if (command === 'action' && args.operation === 'preferences') Object.assign(state.preferences, args.value);
       if (command === 'action' && args.operation === 'activity_keep_awake') state.preferences.activityKeepAwake = args.value;
+      if (command === 'action' && args.operation === 'completion_vibration') state.preferences.completionVibration = args.value;
+      if (command === 'action' && args.operation === 'completion_vibration_mode') state.preferences.completionVibrationMode = args.value;
+      if (command === 'action' && args.operation === 'band_brightness') state.preferences.bandBrightness = args.value;
+      if (command === 'action' && args.operation === 'buddy_fps') state.preferences.buddyFps = args.value;
       if (command === 'action' && args.operation === 'power_saving') state.preferences.powerSaving = args.value;
       if (command === 'action' && args.operation === 'pause') {
         state.runtime.paused = args.value;
@@ -89,6 +93,12 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.equal(globalThis.document.documentElement.dataset.loading,'false');
   assert.match(node('#content').innerHTML,/theme-card selected" data-theme-choice="claude"/);
   assert.ok(paints.length > 0, 'paint preview in the same turn as the first real render');
+  state.runtime.device={battery:19,charging:true};await refresh();
+  assert.match(node('#device-summary').innerHTML,/充電中/);
+  assert.match(node('#notice').textContent,/低於 20%/);
+  state.runtime.device={battery:20,charging:false};await refresh();
+  assert.doesNotMatch(node('#device-summary').innerHTML,/充電中/);
+  assert.doesNotMatch(node('#notice').textContent,/低於 20%/);
   const startupCanvas=node('#band');
   state.runtime.ack = initialAck;
   await refresh();
@@ -138,8 +148,8 @@ test('actual frontend boots, refreshes native state and renders every existing p
   frames.at(-1)();
   assert.ok(paints.length>3);
   assert.ok(texts.includes('42%'));
-  assert.ok(texts.includes('8.0 / 16.0'));
-  assert.ok(texts.includes('60.0 / 100.0'));
+  assert.ok(texts.includes('8.0/16 GiB'));
+  assert.ok(texts.includes('60/100 GB'));
   assert.ok(texts.includes('TOTAL LOAD'));
   assert.ok(!texts.some(text=>/NaN|Infinity/.test(text)));
   await settle();
@@ -201,6 +211,12 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.equal(node('#screen-badge').textContent,'息屏');
   assert.match(node('#screen-badge').className,/ off/);
   assert.match(node('#buddy-dot').className,/alert/);
+  const savedAck = state.runtime.ack;
+  state.runtime.connection = 'waiting'; state.runtime.ack = null;
+  await refresh();
+  assert.equal(node('#activity').textContent,'等待 Buddy 回應');
+  state.runtime.connection = 'connected'; state.runtime.ack = savedAck;
+  await refresh();
   assert.ok(!node('#content').innerHTML.includes('手環螢幕'));
   click({action:'wake'});
   assert.ok(node('#content').innerHTML.includes('喚醒手環中…'));
@@ -330,6 +346,19 @@ test('actual frontend boots, refreshes native state and renders every existing p
   // Opt-in active holding is separate from sync; old preferences leave it unchecked.
   click({page:'settings'});
   assert.match(node('#content').innerHTML, /id="activity-keep-awake" class="switch" type="checkbox" aria-label="任務期間保持亮屏" >/);
+  assert.doesNotMatch(node('#content').innerHTML,/id="completion-vibration"[^>]* checked/);
+  const settingsGroups=[...node('#content').innerHTML.matchAll(/<section class="group"><h2>([^<]+)<\/h2>/g)].map(match=>match[1]);
+  assert.deepEqual(settingsGroups,['外觀','執行與同步','手環顯示','任務通知','關於']);
+  assert.match(node('#content').innerHTML,/<select id="completion-vibration-mode"[^>]*><option value="short" selected>短震<\/option><option value="long" >長震<\/option><\/select>/);
+  assert.doesNotMatch(node('#content').innerHTML,/<select id="completion-vibration-mode"[^>]*disabled/);
+  handlers.get('change')({target:{id:'completion-vibration',checked:true}});await settle();
+  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='completion_vibration').at(-1),['action',{operation:'completion_vibration',value:true}]);
+  assert.match(node('#content').innerHTML,/id="completion-vibration"[^>]* checked/);
+  handlers.get('change')({target:{id:'completion-vibration-mode',value:'long'}});await settle();
+  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='completion_vibration_mode').at(-1),['action',{operation:'completion_vibration_mode',value:'long'}]);
+  assert.match(node('#content').innerHTML,/<option value="long" selected>長震/);
+  handlers.get('change')({target:{id:'completion-vibration',checked:false}});await settle();
+  assert.doesNotMatch(node('#content').innerHTML,/id="completion-vibration"[^>]* checked/);
   assert.match(node('#content').innerHTML, /每次事件或手動喚醒後/);
   handlers.get('change')({target:{id:'activity-keep-awake',checked:true}});
   await settle();
@@ -346,10 +375,28 @@ test('actual frontend boots, refreshes native state and renders every existing p
   handlers.get('change')({target:{id:'activity-sync',checked:true}});
   await settle();
   assert.equal(state.runtime.paused, false);
+  assert.doesNotMatch(node('#content').innerHTML,/<select id="buddy-fps"/);
+  for(const invalid of ['', '9','31','12.5','NaN']){node('#buddy-fps').value=invalid;const before=calls.length;click({action:'buddy_fps'});await settle();assert.equal(calls.length,before);}
+  assert.match(node('#content').innerHTML,/id="buddy-fps"/);
+  node('#buddy-fps').value='27';click({action:'buddy_fps'});await settle();
+  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='buddy_fps').at(-1),['action',{operation:'buddy_fps',value:27}]);
+  assert.match(node('#content').innerHTML,/id="buddy-fps"[^>]*type="number"[^>]*min="10" max="30"[^>]*value="27"/);
+  assert.match(node('#content').innerHTML,/id="band-brightness"[^>]*type="range"[^>]*min="0" max="255"/);
+  const brightnessCalls=calls.length;
+  handlers.get('input')({target:{id:'band-brightness',value:'173'}});
+  assert.equal(node('#brightness-value').textContent,'173');assert.equal(calls.length,brightnessCalls);
+  handlers.get('change')({target:{id:'band-brightness',value:'173'}});await settle();
+  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='band_brightness').at(-1),['action',{operation:'band_brightness',value:173}]);
+  assert.equal(state.preferences.bandBrightness,173);
   assert.doesNotMatch(node('#content').innerHTML, /id="power-saving"[^>]* checked/);
   handlers.get('change')({target:{id:'power-saving',checked:true}});
   await settle();
   assert.equal(state.preferences.powerSaving, true);
+  assert.match(node('#content').innerHTML,/id="buddy-fps"[^>]* disabled/);
+  assert.equal(state.preferences.buddyFps,27);
+  assert.equal(state.preferences.bandBrightness,173);
+  assert.match(node('#content').innerHTML,/id="band-brightness"[^>]*value="25"[^>]*disabled/);
+  assert.match(node('#content').innerHTML,/id="buddy-fps"[^>]*value="10"[^>]*disabled/);
   assert.match(node('#content').innerHTML, /id="power-saving"[^>]* checked/);
   handlers.get('change')({target:{id:'power-saving',checked:false}});
   await settle();

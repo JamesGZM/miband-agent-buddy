@@ -1,5 +1,7 @@
 # Contributing to MiBand Agent Buddy
 
+**English** · [简体中文](CONTRIBUTING.zh-CN.md) · [繁體中文](CONTRIBUTING.zh-TW.md)
+
 Contributions are welcome: bug reports, device testing, translations, documentation and code. This guide describes how to prepare a change for review.
 
 ## Before you start
@@ -19,6 +21,7 @@ Keep each pull request focused on one problem. Avoid mixing formatting changes, 
 ## Engineering guidelines
 
 - Keep Mac appearance, band themes and AI activity independent.
+- Prefer code-drawn band interfaces and preserve the approved Buddy design. Follow the [Quick App UI guide](docs/development/quickapp-ui.md) for image resources, animation cost and physical validation.
 - Follow the ownership boundaries in the [architecture](docs/architecture/README.md). Platform access belongs in adapters; shared presentation and protocol modules remain platform-independent.
 - Validate data at process and application boundaries. For protocol changes, update all affected consumers and the shared synthetic fixtures together.
 - Use injected clocks and dependencies for runtime tests. Cancel owned timers, listeners and child processes when an operation ends; ignore callbacks from abandoned sessions.

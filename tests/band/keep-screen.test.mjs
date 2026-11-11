@@ -5,7 +5,7 @@ const {createKeepScreen}=createRequire(import.meta.url)('../../apps/band/src/com
 function harness(){let now=1000,id=0;const tasks=new Map(),calls=[],reports=[];const controller=createKeepScreen(o=>calls.push(o),()=>now,(fn,delay)=>{tasks.set(++id,{fn,at:now+delay});return id;},id=>tasks.delete(id),s=>reports.push(s));return {controller,calls,reports,advance(ms){const end=now+ms;while(true){let next=[...tasks].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>end)break;now=next[1].at;tasks.delete(next[0]);next[1].fn();}now=end;}};}
 test('visible app refreshes every 30 seconds independent of rendering or incoming data',()=>{const h=harness();h.controller.show();h.calls[0].success();h.advance(29999);assert.equal(h.calls.length,1);h.advance(1);assert.equal(h.calls.length,2);h.calls[1].success();assert.equal(h.controller.snapshot().successes,2);});
 test('hiding cancels renewal and ignores old callbacks',()=>{const h=harness();h.controller.show();h.controller.hide();h.calls[0].success();h.calls[1].success();h.advance(90000);assert.equal(h.calls.length,2);assert.equal(h.controller.snapshot().state,'off');assert.equal(h.controller.snapshot().visible,false);});
-test('missing callback times out with bounded retry; no per-frame requests',()=>{const h=harness();h.controller.show();h.advance(5000);assert.equal(h.controller.snapshot().failures,1);h.advance(29999);assert.equal(h.calls.length,1);h.advance(1);assert.equal(h.calls.length,2);h.calls[0].success();assert.equal(h.controller.snapshot().successes,0);h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');});
+test('missing callback times out with bounded retry; no per-frame requests',()=>{const h=harness();h.controller.show();h.advance(5000);assert.equal(h.controller.snapshot().failures,1);h.advance(1999);assert.equal(h.calls.length,1);h.advance(1);assert.equal(h.calls.length,2);h.calls[0].success();assert.equal(h.controller.snapshot().successes,0);h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');});
 test('show following hide invalidates delayed release callback',()=>{const h=harness();h.controller.show();h.calls[0].success();h.controller.hide();h.controller.show();h.calls[2].success();h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');assert.equal(h.controller.snapshot().shows,2);});
 test('wake hold expires on the band without further packets, including missing API callback',()=>{
  for(const callback of [true,false]){
@@ -13,7 +13,7 @@ test('wake hold expires on the band without further packets, including missing A
   if(callback)h.calls[0].success();
   h.advance(19999);assert.equal(h.controller.display().remainingMs,1);
   h.advance(1);assert.equal(h.calls.at(-1).keepScreenOn,false);assert.equal(h.controller.display().remainingMs,0);
-  h.advance(120000);assert.equal(h.calls.length,2);
+  var count=h.calls.length;h.advance(120000);assert.equal(h.calls.length,count);
  }
 });
 test('duplicate wake and ordinary time cannot extend a lease; exit cancels it',()=>{
@@ -61,4 +61,24 @@ test('malformed activity leases cannot acquire or extend the display',()=>{
  const h=harness();
  for(const [hold,idle] of [[-1,20000],[999,20000],[15001,20000],[1.5,20000],[15000,4999],[15000,1800001],[15000,'20000']])assert.equal(h.controller.activity(hold,idle),false);
  assert.equal(h.calls.length,0);assert.equal(h.controller.display().remainingMs,0);
+});
+
+test('negative firmware result in success callback is a failure and retries before the watchdog',()=>{
+ const h=harness();h.controller.activity(15000,20000);
+ h.calls[0].success({value:-1});
+ assert.equal(h.controller.snapshot().state,'error');
+ assert.equal(h.controller.snapshot().successes,0);
+ h.advance(2000);assert.equal(h.calls.length,2);
+ h.calls[1].success({value:0});assert.equal(h.controller.snapshot().state,'on');
+ h.controller.hide();h.calls.at(-1).success();h.advance(60000);
+ assert.equal(h.calls.at(-1).keepScreenOn,false);
+});
+
+test('a missing brightness callback retries while active without waiting thirty seconds',()=>{
+ const h=harness();h.controller.activity(15000,20000);h.advance(5000);
+ assert.equal(h.controller.snapshot().state,'error');
+ h.advance(2000);assert.equal(h.calls.length,2);
+ h.calls[0].success();assert.equal(h.controller.snapshot().state,'pending');
+ h.calls[1].success();assert.equal(h.controller.snapshot().state,'on');
+ h.advance(8000);assert.equal(h.calls.at(-1).keepScreenOn,false);
 });

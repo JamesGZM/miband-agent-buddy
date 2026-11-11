@@ -1,5 +1,7 @@
 # Support
 
+**English** · [简体中文](SUPPORT.zh-CN.md) · [繁體中文](SUPPORT.zh-TW.md)
+
 Start with the [getting-started guide](README.md#getting-started), [latest release notes](https://github.com/JamesGZM/miband-agent-buddy/releases) and [current compatibility limits](docs/testing.md). Usage questions and reproducible bugs can be raised in [GitHub Issues](https://github.com/JamesGZM/miband-agent-buddy/issues).
 
 ## Installation
@@ -19,6 +21,8 @@ Buddy installation and version checks are managed in **Band**. Report the exact 
 Open **AI connections** and follow the setup request for the host you actually use. After configuring it, start a new task and check whether the app receives an event. A visual theme does not configure the AI host.
 
 If a finished task remains active because the host did not send its completion event, use **Settings → Reset task display**. This clears the locally observed task state without cancelling work in the AI host. Integration details are in the [Hooks guide](docs/development/hooks.md).
+
+Task keep-awake requires activity sync and actual task events. For unexpected sleep, record the elapsed time, current task/connection state, last sync and whether Buddy was exited. Clicking the Mac preview requests a manual wake. The local fix restores one wake after transport reconnect only while task keep-awake, synchronization and an active task are all present; API acceptance still does not prove physical illumination.
 
 ## Reporting a problem
 

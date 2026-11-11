@@ -1,5 +1,7 @@
 # Security and privacy
 
+**English** · [简体中文](SECURITY.zh-CN.md) · [繁體中文](SECURITY.zh-TW.md)
+
 ## Reporting a vulnerability
 
 Use GitHub's private [Report a vulnerability](https://github.com/JamesGZM/miband-agent-buddy/security/advisories/new) form. Keep vulnerability details and proof-of-concept material in that private report until a disclosure plan is agreed.

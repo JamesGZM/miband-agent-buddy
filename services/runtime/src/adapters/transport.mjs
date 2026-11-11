@@ -10,7 +10,10 @@ export function transportFactory(binary, {spawnChild = spawn, killAfter = 1500} 
         child = spawnChild(binary, [], {stdio: ['pipe', 'pipe', 'ignore']});
         child.stdin.on('error', () => {});
         child.once('error', onError);
-        child.once('close', () => {lines?.close(); onClose();});
+        child.once('close', (code, signal) => {lines?.close(); onClose({
+          code:Number.isInteger(code)?code:null,
+          signal:['SIGTERM','SIGKILL','SIGABRT','SIGSEGV','SIGBUS'].includes(signal)?signal:null,
+        });});
         lines = createInterface({input: child.stdout});
         lines.on('line', line => {
           if (line.length > 65536) return;

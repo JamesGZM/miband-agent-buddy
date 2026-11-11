@@ -1,5 +1,7 @@
 # ADR-003: Band capabilities gate longer leases and new themes
 
+**English** · [简体中文](ADR-003-band-capabilities.zh-CN.md) · [繁體中文](ADR-003-band-capabilities.zh-TW.md)
+
 Date: 2026-11-10 Asia/Singapore. Status: accepted by the user's UI and band-feature plan.
 
 ## Problem

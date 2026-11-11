@@ -23,6 +23,7 @@ function sleepingBand({launchOk = true, page = true, answer = true, capabilities
       buddyTheme: band.theme, settingsRevision: band.revision, settingsApplied: true,
       wakeDisplay: {id: p.wakeId || null, remainingMs: p.wakeId && displayOn ? 20000 : 0, active: p.activityHoldMs > 0},
       ...(capabilities ? {capabilities} : {}),
+      ...(p.buddyFps !== undefined ? {buddyFps:p.buddyFps} : {}),
       ...(p.powerSaving !== undefined ? {powerSaving: p.powerSaving} : {}),
     }));
   };
@@ -121,14 +122,14 @@ test('wake operation is done only when the band holds the display lease', async 
   assert.equal(h.state.wake.reason, 'user');
 });
 
-const modernCapabilities = {maxWakeHoldMs:1800000, activityHold:true, powerSaving:true};
+const modernCapabilities = {maxWakeHoldMs:1800000, activityHold:true, powerSaving:true, buddyFps:true};
 for (const paused of [false, true]) test(`all explicit Buddy settings wake from sleep while sync is ${paused ? 'off' : 'on'}`, async t => {
   const band = sleepingBand({capabilities: modernCapabilities});
   const h = await asleep(band); t.after(() => h.runtime.stop());
   if (paused) await h.runtime.dispatch({op:'pause',value:true});
   for (const [kind, settings] of [
     ['activity_keep_awake',{activityKeepAwake:true}], ['activity_keep_awake',{activityKeepAwake:false}],
-    ['power_saving',{powerSaving:true}], ['power_saving',{powerSaving:false}], ['wake_hold',{wakeHoldMs:60000}],
+    ['buddy_fps',{buddyFps:30}], ['buddy_fps',{buddyFps:17}], ['power_saving',{powerSaving:true}], ['power_saving',{powerSaving:false}], ['wake_hold',{wakeHoldMs:60000}],
   ]) {
     band.awake = false;
     const launches = band.launches.length;

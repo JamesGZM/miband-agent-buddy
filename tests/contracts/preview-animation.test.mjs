@@ -4,9 +4,9 @@ import {startPreview} from '../../apps/desktop/ui/preview.js';
 
 function harness(t, {imagesReady = true} = {}) {
   let time=0, paints=0, present=true, next=1;
-  const timers=new Map(), frames=new Map(), listeners=new Map(), images=[], texts=[], layers=[];
-  const state={theme:'chatgpt',online:true,bandPage:0,powerSaving:false,runtime:{agent:{state:'thinking',sessionCounts:{thinking:2,working:0,attention:0}}}};
-  const context={clearRect(){paints++;layers.length=0;},fillRect(){},save(){},translate(){},rotate(){},drawImage(image){layers.push(image.src);},restore(){},fillText(text){texts.push(text);}};
+  const timers=new Map(), frames=new Map(), listeners=new Map(), images=[], texts=[], layers=[],rectangles=[],arcs=[];
+  const state={theme:'chatgpt',online:true,bandPage:0,powerSaving:false,buddyFps:30,runtime:{agent:{state:'thinking',sessionCounts:{thinking:2,working:0,attention:0}}}};
+  const context={clearRect(){paints++;layers.length=0;texts.length=0;rectangles.length=0;arcs.length=0;},fillRect(...args){layers.push(this.fillStyle);rectangles.push(args);},beginPath(){},moveTo(){},lineTo(){},arcTo(){},closePath(){},arc(...args){arcs.push(args);},stroke(){layers.push(this.strokeStyle);},fill(){layers.push(this.fillStyle);},fillText(text){texts.push(text);}};
   const canvas={dataset:{},getContext:()=>context};
   const loading={hidden:false}, error={hidden:true};
   const doc={hidden:false,querySelector:selector=>!present?null:selector==='#band'?canvas:selector==='#preview-loading'?loading:selector==='#preview-error'?error:null,
@@ -21,68 +21,27 @@ function harness(t, {imagesReady = true} = {}) {
   function frameAt(at){time=at;const batch=[...frames.values()];frames.clear();for(const fn of batch)fn(time);}
   function timersAt(at){time=at;for(const [id,timer] of [...timers])if(timer.at<=time){timers.delete(id);timer.fn();}}
   const load=image=>{image.complete=true;image.naturalWidth=192;image.onload?.();};
-  return {preview,state,doc,listeners,frames,timers,images,texts,layers,frameAt,timersAt,canvas,loading,error,load,
+  return {preview,state,doc,listeners,frames,timers,images,texts,layers,rectangles,arcs,frameAt,timersAt,canvas,loading,error,load,
     get paints(){return paints;},setTime(value){time=value;},setPresent(value){present=value;}};
 }
 
-test('cold preview commits only complete frames and keeps the last frame while new assets load',t=>{
-  const h=harness(t,{imagesReady:false});
-  assert.equal(h.images.length,4);
-  assert.equal(h.paints,0,'do not clear the visible canvas before its first complete frame');
-  h.frameAt(200);
-  assert.equal(h.images.length,4,'finish the pending frame instead of chasing new animation assets');
-  for(const image of h.images.slice(0,3))h.load(image);
-  h.frameAt(240);
-  assert.equal(h.paints,0,'partial image completions must not expose a partial frame');
-  h.load(h.images[3]);h.frameAt(280);
-  assert.equal(h.paints,1);assert.equal(h.layers.length,4);assert.equal(h.loading.hidden,true);
-  const firstFrame=[...h.layers];
-  h.frameAt(320);
-  assert.equal(h.paints,1);assert.deepEqual(h.layers,firstFrame);
-  for(const image of h.images.filter(image=>!image.complete))h.load(image);
-  h.frameAt(360);
-  assert.equal(h.paints,2);assert.equal(h.layers.length,4);
-  const previousFrame=[...h.layers];
-  h.state.theme='claude';h.preview.draw();
-  assert.equal(h.paints,2,'keep the previous full theme until the replacement is ready');
-  assert.deepEqual(h.layers,previousFrame);
-  const pending=h.images.filter(image=>!image.complete);
-  for(const image of pending.slice(1))h.load(image);
-  h.frameAt(400);assert.equal(h.paints,2);
-  h.load(pending[0]);h.frameAt(440);
-  assert.equal(h.paints,3);assert.equal(h.layers.length,4);assert.match(h.layers[1],/claude/);
+test('cold preview paints complete geometry immediately without image decoding',t=>{
+ const h=harness(t,{imagesReady:false});assert.equal(h.images.length,0);assert.equal(h.paints,1);
+ assert.ok(h.layers.length>10);assert.equal(h.loading.hidden,true);assert.equal(h.canvas.dataset.previewReady,'true');
+ const initial=[...h.layers];h.state.theme='claude';h.preview.draw();assert.equal(h.paints,2);assert.notDeepEqual(h.layers,initial);
+ assert.ok(h.layers.includes('#EBA270'));assert.equal(h.images.length,0);
+ h.state.theme='deepseek';h.preview.draw();assert.ok(h.layers.includes('#7E95FF'));assert.ok(!h.layers.includes('#EBA270'));
 });
-
-test('late assets cannot paint an abandoned theme and failed assets never clear the preview',t=>{
-  const h=harness(t,{imagesReady:false});
-  const initial=[...h.images];
-  h.state.theme='deepseek';h.preview.draw();
-  for(const image of initial)h.load(image);
-  h.frameAt(40);
-  assert.equal(h.paints,0,'the first theme must not flash after a newer theme is selected');
-  const waiting=h.images.filter(image=>!image.complete);
-  waiting[0].onerror();h.frameAt(80);
-  assert.equal(h.paints,0);assert.equal(h.loading.hidden,true);assert.equal(h.error.hidden,false);
-  h.preview.stop();
-  assert.ok(h.images.every(image=>image.onload===null&&image.onerror===null));
+test('unavailable drawing context reports error without clearing the last frame',t=>{
+ const h=harness(t),before=h.paints;h.canvas.getContext=()=>null;h.preview.draw();
+ assert.equal(h.paints,before);assert.equal(h.error.hidden,false);assert.equal(h.loading.hidden,true);
 });
-
-test('resource page changes keep the character frame until all resource rings are ready',t=>{
-  const h=harness(t,{imagesReady:false});
-  for(const image of h.images)h.load(image);
-  h.frameAt(40);
-  const character=[...h.layers];
-  h.state.bandPage=1;
-  h.state.runtime.lastAckAt=40;
-  h.state.runtime.metrics={sampledAt:40,cpu:42,memory:{usedBytes:8*2**30,totalBytes:16*2**30,percent:50},disk:{usedBytes:60e9,totalBytes:100e9,percent:60}};
-  h.preview.draw();
-  assert.equal(h.paints,1);assert.deepEqual(h.layers,character);assert.deepEqual(h.texts,[]);
-  const pending=h.images.filter(image=>!image.complete);
-  for(const image of pending.slice(0,-1))h.load(image);
-  h.frameAt(80);assert.equal(h.paints,1);
-  h.load(pending.at(-1));h.frameAt(120);
-  assert.equal(h.paints,2);assert.equal(h.layers.length,4);
-  assert.match(h.layers[0],/resource-tracks\.png$/);assert.ok(h.texts.includes('42%'));
+test('resource page preserves the three capsule tracks and original numbers',t=>{
+ const h=harness(t);h.state.bandPage=1;h.state.runtime.lastAckAt=1;
+ h.state.runtime.metrics={sampledAt:1,cpu:42,memory:{usedBytes:8*2**30,totalBytes:16*2**30,percent:50},disk:{usedBytes:60e9,totalBytes:100e9,percent:60}};
+ h.preview.draw();assert.ok(h.texts.includes('42%'));assert.ok(h.texts.includes('DISK'));assert.ok(h.texts.includes('MEM'));assert.ok(h.texts.includes('TOTAL LOAD'));
+ assert.deepEqual(h.arcs.map(a=>a[2]),[87,74,61]);assert.ok(h.layers.lastIndexOf('#192126')<h.layers.indexOf('#647FFF'));assert.ok(h.texts.some(v=>v.endsWith(' GiB')));assert.ok(h.layers.includes('#78EDFF'));assert.ok(h.layers.includes('#192126'));assert.equal(h.images.length,0);
+ h.state.online=false;h.preview.draw();assert.ok(h.texts.includes('—'));assert.ok(!h.texts.includes('42%'));
 });
 
 test('preview uses bounded smooth frames, reduced cadence on opt-in, and no hidden work',t=>{
@@ -91,10 +50,10 @@ test('preview uses bounded smooth frames, reduced cadence on opt-in, and no hidd
   assert.ok(h.paints>=30&&h.paints<=32,`expected about30paints, got${h.paints}`);
   assert.equal(h.frames.size,1);assert.equal(h.timers.size,0);
   h.state.powerSaving=true;h.preview.draw();
-  assert.equal(h.frames.size,0);assert.equal([...h.timers.values()][0].delay,200);
+  assert.equal(h.frames.size,0);assert.equal([...h.timers.values()][0].delay,100);
   const before=h.paints;
-  for(let i=1;i<=5;i++){h.timersAt(1000+i*200);h.frameAt(1000+i*200);}
-  assert.equal(h.paints-before,5);
+  for(let i=1;i<=10;i++){h.timersAt(1000+i*100);h.frameAt(1000+i*100);}
+  assert.equal(h.paints-before,10);
   h.doc.hidden=true;h.listeners.get('visibilitychange')();
   assert.equal(h.frames.size+h.timers.size,0);
   const hiddenPaints=h.paints;h.preview.draw();assert.equal(h.paints,hiddenPaints);
@@ -104,34 +63,33 @@ test('preview uses bounded smooth frames, reduced cadence on opt-in, and no hidd
   assert.equal(h.frames.size+h.timers.size,0);assert.equal(h.listeners.size,0);
 });
 
-test('preview uses one main ring for both single and multiple tasks, with the loading layer unchanged',t=>{
-  const h=harness(t);
-  for(const theme of ['chatgpt','claude','deepseek']){
-    h.state.theme=theme;h.state.runtime.agent.state='thinking';
-    h.state.runtime.agent.sessionCounts={thinking:2,working:1,attention:0};h.preview.draw();
-    assert.equal(h.layers.length,4);
-    assert.match(h.layers[1],new RegExp('activity-'+theme+'-active-3-b0\\.png$'));
-    assert.match(h.layers[2],/thinking-00\.png$/);
-    assert.equal(h.layers.filter(path=>/activity-|-ring-|\/ring-/.test(path)).length,1);
-    h.state.runtime.agent.sessionCounts={thinking:1,working:0,attention:0};h.preview.draw();
-    assert.equal(h.layers.length,4);assert.match(h.layers[1],/ring-idle-b0\.png$/);
-    h.state.runtime.agent.state='attention';h.state.runtime.agent.sessionCounts={thinking:1,working:1,attention:1};h.preview.draw();
-    assert.match(h.layers[1],new RegExp('activity-'+theme+'-attention-3-b0\\.png$'));
-    h.state.online=false;h.preview.draw();assert.match(h.layers[1],/ring-idle-b0\.png$/);
-    h.state.online=true;
-  }
+test('preview applies task colors on the original ring and never draws task text',t=>{
+ const h=harness(t);
+ h.state.runtime.agent.state='attention';h.state.runtime.agent.sessionCounts={thinking:1,working:1,attention:1};h.preview.draw();
+ const multi=[...h.layers];h.state.runtime.agent.sessionCounts={thinking:1,working:0,attention:0};h.preview.draw();assert.notDeepEqual(h.layers,multi);
+ for(const theme of ['chatgpt','claude','deepseek'])for(const mode of ['idle','thinking','working','attention']){
+  h.state.theme=theme;h.state.runtime.agent.state=mode;
+  for(let i=0;i<100;i++){h.setTime(i*40);h.preview.draw();}
+ }
+ assert.equal(h.images.length,0);assert.deepEqual(h.texts,[]);
+ h.setPresent(false);h.preview.draw();assert.equal(h.frames.size+h.timers.size,0);
+ h.setPresent(true);h.preview.draw();assert.equal(h.frames.size,1);h.preview.stop();
 });
 
-test('preview stops when canvas is absent, bounds decoded images, and draws no task text',t=>{
-  const h=harness(t);
-  for(const theme of ['chatgpt','claude','deepseek'])for(const mode of ['idle','thinking','working','attention']){
-    h.state.theme=theme;h.state.runtime.agent.state=mode;
-    for(let i=0;i<160;i++){h.setTime(i*40);h.preview.draw();}
-  }
-  assert.ok(h.images.length>192,'exercise cache eviction across themes and states');
-  assert.ok(h.images.filter(image=>image.onload!==null).length<=192);
-  assert.deepEqual(h.texts,[],'activity is represented by ring colors rather than text');
-  h.setPresent(false);h.preview.draw();assert.equal(h.frames.size+h.timers.size,0);
-  h.setPresent(true);h.preview.draw();assert.equal(h.frames.size,1);
-  h.preview.stop();assert.ok(h.images.every(image=>image.onload===null));
+test('preview follows every selected FPS and power saving restores the saved selection',t=>{
+ const h=harness(t);
+ for(const buddyFps of [10,15,20,25,30]){
+  h.state.buddyFps=buddyFps;h.state.powerSaving=false;h.setTime(0);h.preview.draw();const before=h.paints;
+  for(let i=1;i<=120;i++){h.timersAt(i*1000/120);h.frameAt(i*1000/120);}
+  assert.ok(Math.abs(h.paints-before-buddyFps)<=1,`${buddyFps}: ${h.paints-before}`);
+ }
+ h.state.powerSaving=true;h.preview.draw();assert.equal([...h.timers.values()][0].delay,100);
+ h.state.powerSaving=false;h.preview.draw();assert.equal(h.state.buddyFps,30);assert.equal(h.frames.size,1);
+});
+test('preview waits for applied FPS receipt and anchors animation to the band elapsed time',t=>{
+ const h=harness(t);h.state.buddyFps=30;
+ h.state.runtime.ack={mode:'thinking',settingsApplied:true,drawing:{effectiveFps:10,elapsedMs:1000}};
+ h.state.runtime.lastAckAt=1;h.preview.draw();assert.ok(h.rectangles.some(r=>r[0]===122&&r[1]===50),"glyph uses band elapsed pose");assert.equal([...h.timers.values()][0].delay,100);
+ h.state.runtime.ack.drawing.effectiveFps=30;h.preview.draw();assert.equal(h.frames.size,1);
+ h.state.runtime.ack.drawing.effectiveFps=1000;h.preview.draw();assert.equal(h.frames.size,1);
 });

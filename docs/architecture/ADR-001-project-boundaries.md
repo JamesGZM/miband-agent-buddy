@@ -1,5 +1,7 @@
 # ADR-001: Explicit boundaries without a stack rewrite
 
+**English** · [简体中文](ADR-001-project-boundaries.zh-CN.md) · [繁體中文](ADR-001-project-boundaries.zh-TW.md)
+
 Date: 2026-11-10 Asia/Singapore. Status: accepted by the user's refactor plan.
 
 ## Problem

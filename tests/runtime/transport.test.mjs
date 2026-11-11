@@ -23,3 +23,10 @@ test('stdio adapter writes initial credentials, filters bad frames and stops its
   await Promise.all([handle.stop(),handle.stop()]);
   assert.deepEqual(signals,['SIGTERM']); assert.equal(closes,1);
 });
+
+test('child close forwards only fixed process metadata',()=>{
+  const child=new EventEmitter(),closes=[];child.stdin=new PassThrough();child.stdout=new PassThrough();
+  const handle=transportFactory('/fixture',{spawnChild:()=>child})({onEvent(){},onError(){},onClose:info=>closes.push(info)});
+  handle.start({address:'fixture',key:'0'.repeat(32)});child.emit('close',7,'unknown-private-signal');
+  assert.deepEqual(closes,[{code:7,signal:null}]);
+});

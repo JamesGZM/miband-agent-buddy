@@ -12,16 +12,21 @@ function createKeepScreen(api, clock, schedule, cancel, report) {
   function clear(){if(timer!==null)cancel(timer);timer=null;}
   function request(wanted){
     clear();var id=++generation,settled=false;stats.requests+=1;
-    if(!stats.lastSuccessAt||!wanted)stats.state='pending';
+    if(stats.state!=='on'||!wanted)stats.state='pending';
     function finish(ok,code){
       if(settled||id!==generation)return;settled=true;clear();
       if(ok){stats.successes+=1;stats.lastSuccessAt=clock();stats.state=wanted?'on':'off';}
       else{stats.failures+=1;stats.state='error';}
       report(stats.state,code);
-      if(visible&&wanted)timer=schedule(function(){timer=null;request(true);},30000);
+      if(visible&&wanted)timer=schedule(function(){timer=null;request(true);},ok?30000:2000);
     }
     if(wanted)timer=schedule(function(){timer=null;finish(false,'timeout');},5000);
-    try{api({keepScreenOn:wanted,success:function(){finish(true);},fail:function(data,code){finish(false,code);}});}catch(error){finish(false);}
+    try{api({keepScreenOn:wanted,success:function(data){
+      // Some Vela implementations deliver a failed native status as value=-1
+      // through success. The documented payload-free success remains valid.
+      var rejected=data&&typeof data.value==='number'&&data.value<0;
+      finish(!rejected,rejected?'rejected':undefined);
+    },fail:function(data,code){finish(false,code);}});}catch(error){finish(false);}
   }
   return {
     show:function(){clearHold();activeHold=false;visible=true;stats.shows+=1;request(true);},

@@ -1,5 +1,7 @@
 # ADR-004: Project-scoped local AI Hooks
 
+**English** · [简体中文](ADR-004-local-agent-hooks.zh-CN.md) · [繁體中文](ADR-004-local-agent-hooks.zh-TW.md)
+
 ## Problem
 
 The existing Codex-only setup does not guide a new user through connecting a project, does not support Claude Code or custom harnesses, and cannot label parallel AI work clearly in the desktop.

@@ -1,5 +1,7 @@
 # ADR-006: Relocatable macOS bundles and explicit GitHub updates
 
+**English** · [简体中文](ADR-006-desktop-updates.zh-CN.md) · [繁體中文](ADR-006-desktop-updates.zh-TW.md)
+
 ## Problem
 
 The desktop executable previously embedded checkout and Node paths. A runner-built `.app` could not run on another Mac, so source releases did not provide desktop updates.

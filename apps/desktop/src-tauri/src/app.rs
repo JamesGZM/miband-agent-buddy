@@ -211,6 +211,7 @@ pub fn apply_language(app: &AppHandle, _choice: &str) {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();

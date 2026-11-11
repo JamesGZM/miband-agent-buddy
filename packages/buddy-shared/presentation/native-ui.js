@@ -1,29 +1,23 @@
 var periods={idle:4,thinking:3.2,working:2.4,attention:3.6,complete:3,error:2.6,sleep:6,offline:5};
 var symbolPeriods={idle:2,thinking:1.8,working:1.2,attention:2.4,complete:3,error:1.4,sleep:6};
 var BREATH_LEVELS=32, LOADING_FRAMES=96, NUDGE_STEPS=16;
-function frameDelay(powerSaving) {return powerSaving===true?200:1000/30;}
+function effectiveFps(powerSaving,buddyFps) {
+  if(powerSaving===true)return 10;
+  return typeof buddyFps==='number'&&isFinite(buddyFps)&&buddyFps%1===0&&buddyFps>=10&&buddyFps<=30?buddyFps:10;
+}
+function frameDelay(powerSaving,buddyFps) {return 1000/effectiveFps(powerSaving,buddyFps);}
+function bandFrameDelay(powerSaving,buddyFps) {return frameDelay(powerSaving,buddyFps);}
 function breathLevel(mode,seconds) {
   if(!periods[mode])mode='idle';
   return Math.round((1-Math.cos(seconds*2*Math.PI/periods[mode]))/2*(BREATH_LEVELS-1));
 }
-function ringSource(name,value) {
-  var n=typeof value==='number' && isFinite(value)?Math.max(0,Math.min(100,Math.round(value))):0;
-  return '/common/capsule/'+name+'-'+('00'+n).slice(-3)+'.png';
-}
-function motion(mode,seconds,theme) {
-  var prefix=theme==='claude'?'claude-':theme==='deepseek'?'deepseek-':'';
+function pose(mode,seconds) {
   if(!periods[mode])mode='idle';
   var loading=mode==='thinking'||mode==='working';
   var frame=Math.floor(seconds*(mode==='working'?24:12))%LOADING_FRAMES;
-  // Vela repaints image sources reliably; subpixel motion is baked into small frames.
-  var level=breathLevel(mode,seconds);
   var nudge=Math.round(NUDGE_STEPS*(1-Math.cos(seconds*2*Math.PI/(symbolPeriods[mode]||2)))/2);
-  var symbol=mode==='offline'?'symbols-offline':'symbols-x'+nudge;
-  // Active states share identical ring pixels; retain their own breathing phase.
-  var ringMode=loading?'idle':mode;
-  return {ringSource:'/common/capsule/'+prefix+'ring-'+ringMode+'-b'+level+'.png',ringOpacity:1,
-    loadingSource:loading?'/common/capsule/'+prefix+mode+'-'+('0'+frame).slice(-2)+'.png':'/common/capsule/blank.png',
-    loadingOpacity:1,symbolSource:'/common/capsule/'+prefix+symbol+'.png',symbolLeft:0};
+  return {level:breathLevel(mode,seconds),offset:mode==='offline'?0:4*nudge/NUDGE_STEPS,
+    loading:loading,start:frame/LOADING_FRAMES,fraction:mode==='working'?.16:.24,highlights:mode==='working'?2:1};
 }
 function gesture(dx,dy) {
   if(dx>34 && Math.abs(dx)>Math.abs(dy)*1.2)return 'exit';
@@ -44,5 +38,5 @@ function retargetRing(state,value,now,snap) {
   state.from=ringValue(state,now);state.to=value;state.at=now;
 }
 function ringMoving(state,now) {return state.from!==state.to && now<state.at+state.duration;}
-module.exports={motion:motion,ringSource:ringSource,gesture:gesture,frameDelay:frameDelay,breathLevel:breathLevel,
+module.exports={effectiveFps:effectiveFps,pose:pose,gesture:gesture,frameDelay:frameDelay,bandFrameDelay:bandFrameDelay,breathLevel:breathLevel,
   createRingTransition:createRingTransition,ringValue:ringValue,retargetRing:retargetRing,ringMoving:ringMoving};

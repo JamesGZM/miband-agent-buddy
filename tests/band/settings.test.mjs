@@ -151,3 +151,49 @@ test("latest power choice survives an in-flight write and legacy fields cannot e
   assert.equal(receipt.powerSaving,false);assert.equal(receipt.settingsApplied,true);
   store.close();
 });
+test('frame-rate choices are durable, bounded and preserved by legacy and power updates',()=>{
+ let saved,seen,write;
+ const store=createSettings({get:c=>c.fail(),set:c=>{write=c;}},v=>{seen=v;});store.load();
+ assert.equal(seen.buddyFps,10);
+ store.apply({...config,buddyFps:30});assert.equal(store.snapshot({...config,buddyFps:30}).settingsApplied,false);
+ saved=JSON.parse(write.value);write.success();assert.equal(seen.buddyFps,30);
+ store.apply({...config,powerSaving:true});saved=JSON.parse(write.value);write.success();assert.equal(saved.buddyFps,30);
+ assert.equal(store.snapshot({...config,powerSaving:true}).buddyFps,30);
+ store.apply({...config,powerSaving:false});write.success();assert.equal(seen.buddyFps,30);
+ const reloaded=createSettings({get:c=>c.success(JSON.stringify(saved)),set:()=>assert.fail()},v=>{seen=v;});reloaded.load();assert.equal(seen.buddyFps,30);
+ const base=require('../../packages/buddy-shared/fixtures/v1.json').snapshot;
+ for(const buddyFps of [9,31,10.5,'20',null,{},true])assert.throws(()=>decodeMessage(JSON.stringify({...base,buddyFps})));
+ for(let buddyFps=10;buddyFps<=30;buddyFps++)assert.equal(decodeMessage(JSON.stringify({...base,buddyFps})).buddyFps,buddyFps);
+ store.close();reloaded.close();
+});
+test('completion vibration defaults off and is durable without legacy messages erasing it',()=>{
+ let saved,seen;
+ const store=createSettings({get:c=>c.fail(),set:c=>{saved=JSON.parse(c.value);c.success();}},v=>{seen=v;});store.load();
+ assert.equal(seen.completionVibration,false);store.apply({...config,completionVibration:true});
+ assert.equal(seen.completionVibration,true);assert.equal(store.snapshot({...config,completionVibration:true}).settingsApplied,true);
+ store.apply({...config,powerSaving:true});assert.equal(saved.completionVibration,true);
+ const reload=createSettings({get:c=>c.success(JSON.stringify(saved)),set:()=>assert.fail()},v=>{seen=v;});reload.load();assert.equal(seen.completionVibration,true);
+ store.apply({...config,completionVibration:false});assert.equal(seen.completionVibration,false);store.close();reload.close();
+});
+test('short/long mode defaults short, is durable and survives toggle and legacy updates',()=>{
+ let saved,seen;
+ const store=createSettings({get:c=>c.success(JSON.stringify(config)),set:c=>{saved=JSON.parse(c.value);c.success();}},v=>{seen=v;});store.load();
+ assert.equal(seen.completionVibrationMode,'short');store.apply({...config,completionVibrationMode:'long'});assert.equal(seen.completionVibrationMode,'long');
+ for(const completionVibration of [true,false]){store.apply({...config,completionVibration});assert.equal(seen.completionVibrationMode,'long');}
+ const reloaded=createSettings({get:c=>c.success(JSON.stringify(saved)),set:()=>assert.fail()},v=>{seen=v;});reloaded.load();assert.equal(seen.completionVibrationMode,'long');
+ store.apply({...config,completionVibrationMode:'short'});assert.equal(store.snapshot({...config,completionVibrationMode:'short'}).settingsApplied,true);
+ assert.equal(store.snapshot({...config,completionVibrationMode:'long'}).settingsApplied,false);store.close();reloaded.close();
+});
+
+test('native brightness baseline is durable, legacy-safe and never overwrites a newer choice',()=>{
+  let write;const changed=[];
+  const store=createSettings({get:c=>c.fail(),set:c=>{write=c;}},v=>changed.push(v));
+  store.load();store.rememberBrightness(0);write.success();
+  assert.equal(store.snapshot(config).bandBrightness,0);
+  store.apply({...config,bandBrightness:255});
+  store.rememberBrightness(100);write.success();
+  assert.equal(store.snapshot({...config,bandBrightness:255}).settingsApplied,true);
+  store.apply({...config,powerSaving:true});write.success();
+  assert.equal(store.snapshot(config).bandBrightness,255);
+  assert.equal(changed.at(-1).powerSaving,true);store.close();
+});

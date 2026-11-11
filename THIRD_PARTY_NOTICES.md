@@ -1,5 +1,7 @@
 # Third-party notices
 
+**English** · [简体中文](THIRD_PARTY_NOTICES.zh-CN.md) · [繁體中文](THIRD_PARTY_NOTICES.zh-TW.md)
+
 ## AstroBox — AstralSightStudios
 
 MiBand Agent Buddy uses protocol and account components from [AstralSightStudios](https://github.com/AstralSightStudios). Their AGPL-3.0 licenses and additional attribution notices are preserved.

@@ -1,12 +1,12 @@
-"""Prepare desktop icons and share generated Vela artwork with the Mac preview."""
+"""Prepare desktop icons and three static Buddy theme thumbnails."""
 from pathlib import Path
-import shutil
 from PIL import Image,ImageDraw
 from prepare_shared import prepare
 prepare()
 root=Path(__file__).resolve().parents[1]
 assets=root/'apps/desktop/ui/assets';assets.mkdir(exist_ok=True)
-shutil.copytree(root/'apps/band/src/common/capsule',assets/'capsule',dirs_exist_ok=True)
+from render_band_ui import render_thumbnails
+render_thumbnails()
 icons=root/'apps/desktop/src-tauri/icons';icons.mkdir(parents=True,exist_ok=True)
 with Image.open(root/'apps/desktop/artwork/app-icon.png') as source:
  icon=source.convert('RGBA')
@@ -24,8 +24,3 @@ for x in (10,18):
 sparkle=[(26,1),(27.6,4.4),(31,6),(27.6,7.6),(26,11),(24.4,7.6),(21,6),(24.4,4.4)]
 td.polygon([(x*scale,y*scale) for x,y in sparkle],fill='black')
 tray.resize((32,32),Image.Resampling.LANCZOS).save(icons/'tray-template.png')
-for theme,prefix in [('chatgpt',''),('claude','claude-'),('deepseek','deepseek-')]:
- im=Image.new('RGBA',(490,192),'black')
- for name in [prefix+'ring-idle.png',prefix+'symbols.png']:
-  im.alpha_composite(Image.open(assets/'capsule'/name).convert('RGBA').transpose(Image.Transpose.ROTATE_90))
- im.save(assets/(theme+'-preview.png'))

@@ -1,5 +1,7 @@
 # macOS releases and updates
 
+**English** · [简体中文](RELEASING.zh-CN.md) · [繁體中文](RELEASING.zh-TW.md)
+
 MiBand Agent Buddy is an AGPL-3.0-only project for macOS. The public repository includes source, licenses, notices, contribution and security guidance. Desktop and band versions are independent.
 
 ## Continuous integration

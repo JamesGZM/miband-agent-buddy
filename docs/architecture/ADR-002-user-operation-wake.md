@@ -1,5 +1,7 @@
 # ADR-002: User operations wake the band and report one result
 
+**English** · [简体中文](ADR-002-user-operation-wake.zh-CN.md) · [繁體中文](ADR-002-user-operation-wake.zh-TW.md)
+
 Date: 2026-11-10 Asia/Singapore. Status: accepted by the user's UI/wake plan.
 
 ## Problem

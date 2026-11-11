@@ -8,11 +8,12 @@ const protocol = require('../../packages/buddy-shared/protocol/snapshot.js');
 const ux = fs.readFileSync(new URL('../../apps/band/src/pages/index/index.ux', import.meta.url), 'utf8');
 const {createPageController}=require('../../apps/band/src/controllers/page-controller.js');
 
-function harness({keepScreen=true}={}) {
+function harness({keepScreen=true,render,drawingCapabilities}={}) {
   const requests = [], sent = [], timers = new Set(), exits = [], delays = new Map(), keepTimers = new Set();
   let now = 1000;
   const channel = { getReadyState: ({ success }) => success({ status: 1 }), send: args => sent.push(args) };
   const deps = {
+    render,drawingCapabilities,
     storage:{get:args=>args.success(JSON.stringify({buddyTheme:'chatgpt',settingsRevision:0,keepScreen})),set:args=>args.success()},
     brightness: { setKeepScreenOn: args => requests.push(args) },
     interconnect: { instance: () => channel },
@@ -41,7 +42,7 @@ test('hide releases screen lock and stale success cannot turn UI back on', () =>
   assert.equal(keepTimers.size,0);
   requests[1].success();
   requests[0].success();
-  assert.equal(page.keepResult, 'off');
+  assert.equal(page.diagnostics().keepResult, 'off');
 });
 
 test('received message is ACKed once and becomes stale after 10 seconds', () => {
@@ -50,19 +51,19 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   const data = JSON.stringify({ v: 1, type: 'snapshot', session: 'test', seq: 1, text: 'Hello', value: 0, cpu: 0 });
   channel.onmessage({ data });
   channel.onmessage({ data });
-  assert.equal(page.received, 1);
+  assert.equal(page.diagnostics().received, 1);
   assert.equal(page.cpuText, '0%');
   assert.equal(sent[0].data.appVersion, '0.5.5');
-  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, powerSaving: true});
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, activityRing: true, powerSaving: true, buddyFps: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();
-  assert.equal(page.errorText, '');
+  assert.equal(page.diagnostics().errorText, '');
   assert.equal(sent.length, 1);
   setTime(11000); page.tick();
   assert.equal(page.cpuText, '—');
   channel.onmessage({ data: 'bad' });
-  assert.equal(page.errorText, 'Invalid message');
+  assert.equal(page.diagnostics().errorText, 'Invalid message');
   page.onDestroy();
   assert.equal(channel.onmessage, null);
 });
@@ -70,8 +71,8 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
 test('screen API failure is recorded without adding controls to the band', () => {
   const { page, requests } = harness();
   page.onShow(); requests[0].fail('unsupported', 1002);
-  assert.equal(page.keepResult, 'error');
-  assert.match(page.errorText, /1002/);
+  assert.equal(page.diagnostics().keepResult, 'error');
+  assert.match(page.diagnostics().errorText, /1002/);
   assert.ok(!ux.includes('<input'));
 });
 
@@ -88,7 +89,7 @@ test('Mac page request switches the band page once and invalid pages are rejecte
  channel.onmessage({data:JSON.stringify(base)});assert.equal(page.pageIndex,1);assert.equal(sent.at(-1).data.page,1);
  channel.onmessage({data:JSON.stringify({...base,seq:2,page:undefined})});assert.equal(page.pageIndex,1);
  channel.onmessage({data:JSON.stringify({...base,seq:3,page:0})});assert.equal(page.pageIndex,0);
- channel.onmessage({data:JSON.stringify({...base,seq:4,page:2})});assert.equal(page.pageIndex,0);assert.equal(page.errorText,'Invalid message');
+ channel.onmessage({data:JSON.stringify({...base,seq:4,page:2})});assert.equal(page.pageIndex,0);assert.equal(page.diagnostics().errorText,'Invalid message');
 });
 test('long press exit terminates once, stops timers and releases screen lock',()=>{
  const {page,requests,timers,exits}=harness();page.onShow();page.exitApp();page.exitApp();
@@ -112,35 +113,35 @@ test('remote exit ACK callback and fallback both release the app',()=>{
 function metric(seq,cpu){return {data:JSON.stringify({v:1,type:'snapshot',session:'smooth',seq,text:'',value:0,cpu})};}
 test('resource rings interpolate, settle without polling and invalidate at stale deadline',()=>{
  const {page,channel,setTime,timers,delays}=harness();page.onShow();
- channel.onmessage(metric(1,10));page.act('monitor');assert.match(page.cpuRing,/010.png$/);
- setTime(3000);channel.onmessage(metric(2,90));assert.match(page.cpuRing,/010.png$/);
- setTime(3450);page.tick();assert.match(page.cpuRing,/050.png$/);
- assert.equal(delays.get([...timers][0]),1000/30);assert.equal(timers.size,1);
- setTime(3900);page.tick();assert.match(page.cpuRing,/090.png$/);
+ channel.onmessage(metric(1,10));page.act('monitor');assert.equal(page.diagnostics().cpuProgress,10);
+ setTime(3000);channel.onmessage(metric(2,90));assert.equal(page.diagnostics().cpuProgress,10);
+ setTime(3450);page.tick();assert.equal(page.diagnostics().cpuProgress,50);
+ assert.equal(delays.get([...timers][0]),100);assert.equal(timers.size,1);
+ setTime(3900);page.tick();assert.equal(page.diagnostics().cpuProgress,90);
  assert.equal(delays.get([...timers][0]),9100);
- setTime(13000);page.tick();assert.equal(page.cpuText,'—');assert.match(page.cpuRing,/000.png$/);assert.equal(timers.size,0);
+ setTime(13000);page.tick();assert.equal(page.cpuText,'—');assert.equal(page.diagnostics().cpuProgress,0);assert.equal(timers.size,0);
 });
 test('hidden pages do not update rings and application hide cancels active transition',()=>{
  const {page,channel,setTime,timers}=harness();page.onShow();
- channel.onmessage(metric(1,20));assert.match(page.cpuRing,/000.png$/);
- page.act('monitor');assert.match(page.cpuRing,/020.png$/);
+ channel.onmessage(metric(1,20));assert.equal(page.diagnostics().cpuProgress,0);
+ page.act('monitor');assert.equal(page.diagnostics().cpuProgress,20);
  setTime(3000);channel.onmessage(metric(2,80));page.onHide();assert.equal(timers.size,0);
- setTime(3400);channel.onmessage(metric(3,40));assert.equal(timers.size,0);assert.match(page.cpuRing,/020.png$/);
- page.onShow();assert.match(page.cpuRing,/040.png$/);assert.equal(timers.size,1);
+ setTime(3400);channel.onmessage(metric(3,40));assert.equal(timers.size,0);assert.equal(page.diagnostics().cpuProgress,20);
+ page.onShow();assert.equal(page.diagnostics().cpuProgress,40);assert.equal(timers.size,1);
  page.onDestroy();assert.equal(timers.size,0);
 });
 test('duplicate values do not restart transitions or produce redundant property writes',()=>{
  const {page,channel,setTime}=harness();page.onShow();channel.onmessage(metric(1,20));page.act('monitor');
- let writes=0,value=page.cpuRing;Object.defineProperty(page,'cpuRing',{get:()=>value,set:v=>{writes++;value=v;}});
+
  setTime(3000);channel.onmessage(metric(2,80));setTime(3450);page.tick();
- setTime(3500);channel.onmessage(metric(3,80));setTime(3900);page.tick();assert.match(page.cpuRing,/080.png$/);
- const before=writes;setTime(5000);channel.onmessage(metric(4,80));assert.equal(writes,before);
+ setTime(3500);channel.onmessage(metric(3,80));setTime(3900);page.tick();assert.equal(page.diagnostics().cpuProgress,80);
+ const before=page.diagnostics().frames;setTime(5000);channel.onmessage(metric(4,80));assert.equal(page.diagnostics().frames,before);
 });
 test('throttled final frame is scheduled even if a packet arrives at transition completion',()=>{
  const {page,channel,setTime,timers,delays}=harness();page.onShow();channel.onmessage(metric(1,0));page.act('monitor');
- setTime(3000);channel.onmessage(metric(2,100));setTime(3860);page.tick();assert.match(page.cpuRing,/099.png$/);
- setTime(3890);channel.onmessage(metric(3,100));assert.ok(delays.get([...timers][0])<4);
- setTime(3900);page.tick();assert.match(page.cpuRing,/100.png$/);
+ setTime(3000);channel.onmessage(metric(2,100));setTime(3860);page.tick();assert.equal(page.diagnostics().cpuProgress,99);
+ setTime(3900);channel.onmessage(metric(3,100));assert.equal(delays.get([...timers][0]),60);
+ setTime(3960);page.tick();assert.equal(page.diagnostics().cpuProgress,100);
 });
 
 test('single root click handler debounces taps and ignores clicks after long press or hide',()=>{
@@ -176,35 +177,32 @@ test('activity renewal is capability advertised, replay safe and cannot relight 
  page.onShow();assert.equal(requests.length,2);
  page.exitApp();channel.onmessage({data:JSON.stringify({...base,seq:4})});assert.equal(requests.at(-1).keepScreenOn,false);
 });
-test('pet page replaces its one main ring with task colors and restores it for one task, stale or idle',()=>{
+test('pet geometry responds to counts, stale snapshots and idle without extra UI',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'counts',seq:1,text:'',value:0,cpu:42,mode:'attention',sessionCounts:{thinking:1,working:1,attention:1}};
- channel.onmessage({data:JSON.stringify(base)});assert.match(page.ringSource,/activity-chatgpt-attention-3-b0.png$/);
- setTime(1900);page.tick();assert.match(page.ringSource,/activity-chatgpt-attention-3-b15.png$/);
+ channel.onmessage({data:JSON.stringify(base)});const multi=JSON.stringify([page.drawArcs,page.drawCapsules]);
+ setTime(1900);page.tick();assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),multi);
+ const breathing=JSON.stringify([page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});
- assert.match(page.ringSource,/ring-attention-b15.png$/);
- channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});
- assert.match(page.ringSource,/activity-chatgpt-active-3-b0.png$/);assert.match(page.loadingSource,/working-00.png$/);
- setTime(11900);page.tick();assert.match(page.ringSource,/ring-offline-b\d+.png$/);
+ assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),breathing);
+ channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});const working=JSON.stringify([page.drawArcs,page.drawCapsules]);
+ setTime(11900);page.tick();assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),working);
  channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});
- assert.match(page.ringSource,/ring-idle-b0.png$/);
+ const idle=JSON.stringify([page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:5,sessionCounts:{thinking:128,working:1,attention:0}})});
- assert.match(page.ringSource,/ring-idle-b0.png$/);assert.equal(page.errorText,'Invalid message');
- assert.doesNotMatch(ux,/activity-count|activity-label|activitySource/);
- assert.equal((ux.match(/src="\{\{ ringSource \}\}"/g)||[]).length,1);
- assert.equal((ux.match(/src="\{\{ loadingSource \}\}"/g)||[]).length,1);
- assert.equal(Object.hasOwn(page,'activitySource'),false);
+ assert.equal(JSON.stringify([page.drawArcs,page.drawCapsules]),idle);assert.equal(page.diagnostics().errorText,'Invalid message');
+ assert.doesNotMatch(ux,/<image|activity-count|activity-label|activitySource/);
 });
 
 test('power saving applies live, is acknowledged, and hidden animation has no timer',()=>{
  const {page,channel,sent,timers,delays,setTime}=harness({keepScreen:false});page.onShow();
- assert.equal(delays.get([...timers][0]),1000/30);
+ assert.equal(delays.get([...timers][0]),100);
  const base={v:1,type:'snapshot',session:'power',seq:1,text:'',value:0,cpu:42,mode:'thinking',powerSaving:true};
  channel.onmessage({data:JSON.stringify(base)});
- assert.equal(sent.at(-1).data.powerSaving,true);assert.equal(delays.get([...timers][0]),200);
- const symbol=page.symbolSource;setTime(1400);page.tick();assert.notEqual(page.symbolSource,symbol);
+ assert.equal(sent.at(-1).data.powerSaving,true);assert.equal(delays.get([...timers][0]),100);
+ const symbol=page.glyphLeft;setTime(1400);page.tick();assert.notEqual(page.glyphLeft,symbol);
  channel.onmessage({data:JSON.stringify({...base,seq:2,powerSaving:false})});
- assert.equal(sent.at(-1).data.powerSaving,false);assert.equal(delays.get([...timers][0]),1000/30);
+ assert.equal(sent.at(-1).data.powerSaving,false);assert.equal(delays.get([...timers][0]),100);
  const oldTick=[...timers][0];page.onHide();assert.equal(timers.size,0);oldTick();assert.equal(timers.size,0);
  page.onShow();assert.equal(timers.size,1);page.onDestroy();assert.equal(timers.size,0);
 });
@@ -212,11 +210,106 @@ test('power saving applies live, is acknowledged, and hidden animation has no ti
 test('destroyed controller ignores late channel send and error callbacks',()=>{
  const {page,channel,sent}=harness();page.onShow();
  channel.onmessage(metric(1,42));
- const staleError=channel.onerror,staleMessage=channel.onmessage,received=page.received;
+ const staleError=channel.onerror,staleMessage=channel.onmessage,received=page.diagnostics().received;
  page.onDestroy();
- const before=page.errorText;
+ const before=page.diagnostics().errorText;
  sent[0].success();sent[0].fail('late',999);staleError({code:999});
  staleMessage({data:'bad'});staleMessage(metric(2,84));
- assert.equal(page.received,received);
- assert.equal(page.errorText,before);assert.equal(channel.onmessage,null);
+ assert.equal(page.diagnostics().received,received);
+ assert.equal(page.diagnostics().errorText,before);assert.equal(channel.onmessage,null);
+});
+
+test('fifteen minutes of native animation keep observed arrays and glyph geometry alive',()=>{
+ const {page,channel,setTime,timers}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'endurance',seq:1,text:'',value:0,cpu:42,mode:'working'};
+ channel.onmessage({data:JSON.stringify(base)});
+ const glyphs=page.glyphRects;
+ for(const name of ['drawRects','drawArcs','drawCapsules']){
+  const value=page[name];Object.defineProperty(page,name,{get:()=>value,set:()=>assert.fail(name+' replaced')});
+ }
+ for(let tick=1;tick<=9000;tick++){
+  setTime(1000+tick*100);
+  if(tick%20===0)channel.onmessage({data:JSON.stringify({...base,seq:tick})});else page.tick();
+  assert.equal(page.glyphRects,glyphs);assert.ok(page.drawArcs.length<=4);assert.equal(timers.size,1);
+  for(const list of [page.drawRects,page.drawArcs,page.drawCapsules])assert.equal(new Set(list.map(x=>x.id)).size,list.length);
+ }
+ page.onHide();assert.equal(timers.size,0);
+});
+test('switching resource and pet pages reuses observed lists with bounded arc components',()=>{
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ const lists=[page.drawRects,page.drawArcs,page.drawCapsules];
+ for(let i=1;i<=100;i++){
+  setTime(1000+i*2000);channel.onmessage(metric(i,42));page.act(i%2?'monitor':'pet');
+  for(const [index,name] of ["drawRects","drawArcs","drawCapsules"].entries())assert.equal(page[name],lists[index]);
+  assert.ok(page.drawArcs.length<=6);
+ }
+});
+
+test('unchanged resource snapshots update receipts without recomputing geometry',()=>{
+ let renders=0;const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ const {page,channel,setTime,sent}=harness({keepScreen:false,render:state=>{renders++;return geometry.frame(state);}});
+ page.onShow();channel.onmessage(metric(1,42));page.act('monitor');renders=0;
+ for(let i=2;i<=4;i++){setTime(1000+i*2000);channel.onmessage(metric(i,42));}
+ assert.equal(renders,0);assert.equal(sent.at(-1).data.seq,4);assert.equal(page.cpuText,'42%');
+ setTime(10000);channel.onmessage(metric(5,80));setTime(10450);page.tick();assert.equal(renders,1);
+ page.act('pet');assert.equal(renders,2);page.act('monitor');assert.equal(renders,3);
+});
+test('selected frame rate changes live, power saving forces10 and turning it off restores selection',()=>{
+ const {page,channel,sent,timers,delays}=harness({keepScreen:false,drawingCapabilities:{renderer:'native-geometry'}});page.onShow();
+ const base={v:1,type:'snapshot',session:'fps',seq:1,text:'',value:0,cpu:0,mode:'working',buddyFps:30,powerSaving:false};
+ for(const [seq,buddyFps,powerSaving,fps] of [[1,30,false,30],[2,30,true,10],[3,30,false,30],[4,17,false,17]]){
+  channel.onmessage({data:JSON.stringify({...base,seq,buddyFps,powerSaving})});
+  assert.equal(delays.get([...timers][0]),1000/fps);assert.equal(sent.at(-1).data.buddyFps,buddyFps);
+  assert.equal(sent.at(-1).data.drawing.effectiveFps,fps);
+ }
+ page.onHide();assert.equal(timers.size,0);
+});
+
+test('multi-session animation reuses every bound shape without observer list mutations',()=>{
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'multi-animation',seq:1,text:'',value:0,cpu:0,mode:'working',sessionCounts:{thinking:0,working:6,attention:0}};
+ channel.onmessage({data:JSON.stringify(base)});
+ const lists=[page.drawRects,page.drawArcs,page.drawCapsules],items=lists.map(list=>[...list]);
+ for(const list of lists)list.splice=()=>assert.fail('animation changed an observed shape list');
+ for(let tick=1;tick<=480;tick++){
+  setTime(1000+tick*100);
+  if(tick%20===0)channel.onmessage({data:JSON.stringify({...base,seq:tick})});else page.tick();
+  for(let list=0;list<lists.length;list++){
+   assert.equal(lists[list].length,items[list].length);
+   for(let item=0;item<items[list].length;item++)assert.equal(lists[list][item],items[list][item]);
+  }
+ }
+ page.onDestroy();
+});
+
+test('animation scheduling includes render time in the selected frame budget',()=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ let time=1000,h;
+ h=harness({keepScreen:false,render:state=>{time+=40;h.setTime(time);return geometry.frame(state);}});
+ h.page.onShow();
+ const base={v:1,type:'snapshot',session:'frame-budget',seq:1,text:'',value:0,cpu:0,mode:'working',sessionCounts:{thinking:0,working:6,attention:0}};
+ h.channel.onmessage({data:JSON.stringify(base)});
+ for(let tick=0;tick<20;tick++){
+  const scheduled=[...h.timers][0],delay=h.delays.get(scheduled);
+  assert.equal(delay,60,'40ms rendering must leave60ms of a100ms frame');
+  const previous=time;time+=delay;h.setTime(time);scheduled();assert.equal(time-previous,100);
+  assert.equal(h.timers.size,1);
+ }
+ h.channel.onmessage({data:JSON.stringify({...base,seq:2,buddyFps:30})});
+ assert.equal(h.delays.get([...h.timers][0]),1,'an over-budget frame yields instead of adding a full interval');
+ h.page.onHide();assert.equal(h.timers.size,0);
+});
+
+test('band applies host-prepared colors and never passes AI counts into animation ticks',()=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');let rendered;
+ const {page,channel,setTime,sent}=harness({keepScreen:false,render:state=>{rendered=state;assert.ok(!Object.hasOwn(state,'counts'));return geometry.frame(state);}});
+ page.onShow();
+ const activityRing=['#123456','#ABCDEF'];
+ const base={v:1,type:'snapshot',session:'prepared-ring',seq:1,text:'',value:0,cpu:0,mode:'working',activityRing};
+ channel.onmessage({data:JSON.stringify(base)});
+ assert.deepEqual(rendered.colors,activityRing);assert.equal(sent.at(-1).data.capabilities.activityRing,true);
+ const colors=rendered.colors;setTime(1500);page.tick();assert.equal(rendered.colors,colors);
+ setTime(11000);page.tick();assert.equal(rendered.mode,'offline');assert.equal(rendered.colors,null);
+ channel.onmessage({data:JSON.stringify({...base,seq:2,activityRing:['#77EDBD'],mode:'complete'})});
+ setTime(15000);page.tick();assert.equal(rendered.mode,'idle');assert.equal(rendered.colors,null);
 });

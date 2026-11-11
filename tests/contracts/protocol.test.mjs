@@ -16,6 +16,9 @@ test('canonical v1 snapshot, ACK and both IPC boundaries consume the same fixtur
   assert.equal(protocol.matchesAck(null, fixture.snapshot), false);
   for (const c of fixture.runtimeCommands) assert.deepEqual(wire.decodeRuntimeCommand(c), c);
   for (const e of fixture.transportEvents) assert.deepEqual(wire.decodeTransportEvent(e), e);
+  assert.deepEqual(fixture.transportCommands.find(command=>command.op==='snapshot').payload,fixture.snapshot);
+  assert.deepEqual(fixture.transportEvents.find(event=>event.event==='ack').ack,fixture.ack);
+  assert.deepEqual(fixture.runtimeState.ack,fixture.ack);
   assert.throws(() => protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 2})));
   assert.equal(protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 1})).page, 1);
   for (const c of [{op:'pause',value:'true'}, {op:'configure',settings:{revision:-1}}, {op:'connect',address:'x',key:'bad'}, {op:'unknown'},
@@ -64,16 +67,50 @@ test('session counts are bounded totals and share the same compact presentation'
   for (const counts of [null,{}, {thinking:0,working:0,attention:0}, {thinking:128,working:1,attention:0}]) assert.equal(display.activityLabel(counts,false),'');
   assert.equal(display.activityLabel({thinking:1,working:1,attention:1},true),'');
 });
+test('host-compiled task colors are additive, compact and validated at the band boundary',()=>{
+ const legacy={...fixture.snapshot};delete legacy.activityRing;
+ assert.deepEqual(protocol.decodeMessage(JSON.stringify(legacy)),legacy);
+ for(const activityRing of [[],Array(7).fill('#728BFF'),null,{},true,['red'],['#12345'],['#abcdef'],['#123456',2]]){
+  assert.throws(()=>protocol.decodeMessage(JSON.stringify({...legacy,activityRing})));
+ }
+ for(let size=1;size<=6;size++){
+  const snapshot={...legacy,activityRing:Array(size).fill('#123ABC')};
+  assert.deepEqual(protocol.decodeMessage(JSON.stringify(snapshot)),snapshot);
+  assert.ok(Buffer.byteLength(JSON.stringify(snapshot))<=1024);
+ }
+});
+test('completion setting and notices are strictly bounded, optional and fit the wire limit',()=>{
+ const legacy={...fixture.snapshot};delete legacy.completionVibration;delete legacy.completion;
+ assert.deepEqual(protocol.decodeMessage(JSON.stringify(legacy)),legacy);
+ for(const completionVibration of [null,0,1,'true',{},[]]){
+  assert.throws(()=>wire.decodeRuntimeCommand({op:'configure',settings:{completionVibration}}));
+  assert.throws(()=>protocol.decodeMessage(JSON.stringify({...legacy,completionVibration})));
+ }
+ for(const completion of [null,{},[],{id:'bad id',count:1},{id:'x',count:0},{id:'x',count:129},{id:'x',count:1.5},{id:'x',count:'1'}])assert.throws(()=>protocol.decodeMessage(JSON.stringify({...legacy,completionVibration:true,completion})));
+ assert.throws(()=>protocol.decodeMessage(JSON.stringify({...legacy,completionVibration:false,completion:{id:'x',count:1}})));
+ const max={...legacy,completionVibration:true,completion:{id:'x'.repeat(64),count:128}};
+ assert.deepEqual(protocol.decodeMessage(JSON.stringify(max)),max);assert.ok(Buffer.byteLength(JSON.stringify(max))<=1024);
+});
+test('vibration modes accept only native short/long values at both boundaries',()=>{
+ for(const completionVibrationMode of ['short','long']){
+  assert.equal(wire.decodeRuntimeCommand({op:'configure',settings:{completionVibrationMode}}).settings.completionVibrationMode,completionVibrationMode);
+  assert.equal(protocol.decodeMessage(JSON.stringify({...fixture.snapshot,completionVibrationMode})).completionVibrationMode,completionVibrationMode);
+ }
+ for(const completionVibrationMode of [null,0,1,true,'LONG','short ',5000,{},[]]){
+  assert.throws(()=>wire.decodeRuntimeCommand({op:'configure',settings:{completionVibrationMode}}));
+  assert.throws(()=>protocol.decodeMessage(JSON.stringify({...fixture.snapshot,completionVibrationMode})));
+ }
+});
 test('generated Vela and browser adapters preserve the canonical module exports', async () => {
   const require = createRequire(import.meta.url);
-  for (const [name, source] of [['protocol','protocol/snapshot'],['display','presentation/display'],['native-ui','presentation/native-ui']]) {
+  for (const [name, source] of [['protocol','protocol/snapshot'],['display','presentation/display'],['native-ui','presentation/native-ui'],['geometry','presentation/geometry']]) {
     const canonical = require('../../packages/buddy-shared/'+source+'.js');
     const band = require('../../apps/band/src/common/generated/'+name+'.js');
     const browser = (await import('../../apps/desktop/ui/assets/'+name+'.mjs')).default;
     assert.deepEqual(Object.keys(band).sort(), Object.keys(canonical).sort());
     assert.deepEqual(Object.keys(browser).sort(), Object.keys(canonical).sort());
-    const args = name === 'protocol' ? [JSON.stringify(fixture.snapshot)] : name === 'display' ? [fixture.snapshot,false] : ['working',1.5,'claude'];
-    const method = name === 'protocol' ? 'decodeMessage' : name === 'display' ? 'fields' : 'motion';
+    const args = name === 'protocol' ? [JSON.stringify(fixture.snapshot)] : name === 'display' ? [fixture.snapshot,false] : name==='geometry' ? [{theme:'claude',mode:'working',seconds:1.5}] : ['working',1.5];
+    const method = name === 'protocol' ? 'decodeMessage' : name === 'display' ? 'fields' : name==='geometry' ? 'frame' : 'pose';
     assert.deepEqual(band[method](...args), canonical[method](...args));
     assert.deepEqual(browser[method](...args), canonical[method](...args));
   }
@@ -96,4 +133,28 @@ test('legacy hook executable fails open for invalid input', async () => {
   child.stdin.end('{}');
   const [code] = await done;
   assert.equal(code,0); assert.equal(stdout,''); assert.equal(stderr,'');
+});
+test('frame-rate setting rejects malformed IPC and snapshot values while retaining legacy v1',()=>{
+ for(const buddyFps of [9,31,10.5,'20',null,{},true]){
+  assert.throws(()=>wire.decodeRuntimeCommand({op:'configure',settings:{buddyFps}}));
+  assert.throws(()=>protocol.decodeMessage(JSON.stringify({...fixture.snapshot,buddyFps})));
+ }
+ for(let buddyFps=10;buddyFps<=30;buddyFps++)assert.equal(wire.decodeRuntimeCommand({op:'configure',settings:{buddyFps}}).settings.buddyFps,buddyFps);
+ const legacy={...fixture.snapshot};delete legacy.buddyFps;assert.deepEqual(protocol.decodeMessage(JSON.stringify(legacy)),legacy);
+});
+
+test('brightness is additive and validates integer 0–255 at both boundaries',()=>{
+  const require=createRequire(import.meta.url);
+  const {decodeMessage}=require('../../packages/buddy-shared/protocol/snapshot.js');
+  const {decodeRuntimeCommand,decodeTransportEvent}=require('../../packages/buddy-shared/protocol/runtime.js');
+  const base={v:1,type:'snapshot',session:'brightness',seq:1,text:'',value:0,cpu:0};
+  for(const value of [0,25,128,255]){
+    assert.equal(decodeMessage(JSON.stringify({...base,bandBrightness:value})).bandBrightness,value);
+    assert.equal(decodeRuntimeCommand({op:'configure',settings:{bandBrightness:value}}).settings.bandBrightness,value);
+  }
+  for(const value of [null,-1,256,10.5,'25',true]){
+    assert.throws(()=>decodeMessage(JSON.stringify({...base,bandBrightness:value})));
+    assert.throws(()=>decodeRuntimeCommand({op:'configure',settings:{bandBrightness:value}}));
+  }
+  assert.throws(()=>decodeTransportEvent({event:'battery',percent:19,charging:'yes'}));
 });

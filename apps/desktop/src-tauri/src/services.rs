@@ -1,6 +1,8 @@
 //! Application operations shared by window commands and tray actions.
 use crate::{
-    domain::{Action, BuddyTheme, Credentials, Device, WAKE_HOLD_SECONDS, supported},
+    domain::{
+        Action, BuddyTheme, Credentials, Device, VibrationMode, WAKE_HOLD_SECONDS, supported,
+    },
     persistence,
     protocol::{Connection, RuntimeCommand, RuntimeSettings, RuntimeState},
     state::Session,
@@ -38,6 +40,10 @@ pub fn connect(s: &mut Session, index: usize) -> Result<(), String> {
             wake_hold_ms: Some(u64::from(s.prefs.wake_hold_seconds) * 1000),
             activity_keep_awake: Some(s.prefs.activity_keep_awake),
             power_saving: Some(s.prefs.power_saving),
+            buddy_fps: Some(s.prefs.buddy_fps),
+            band_brightness: s.prefs.band_brightness,
+            completion_vibration: Some(s.prefs.completion_vibration),
+            completion_vibration_mode: Some(s.prefs.completion_vibration_mode),
         },
     })
 }
@@ -197,6 +203,10 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                     wake_hold_ms: None,
                     activity_keep_awake: None,
                     power_saving: None,
+                    buddy_fps: None,
+                    band_brightness: None,
+                    completion_vibration: None,
+                    completion_vibration_mode: None,
                 },
                 request: Some(request),
             })
@@ -237,6 +247,10 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                         wake_hold_ms: None,
                         activity_keep_awake: None,
                         power_saving: None,
+                        buddy_fps: None,
+                        band_brightness: None,
+                        completion_vibration: None,
+                        completion_vibration_mode: None,
                     },
                     request: None,
                 })
@@ -263,6 +277,10 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 wake_hold_ms: Some(u64::from(seconds) * 1000),
                 activity_keep_awake: None,
                 power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             };
             save_band_setting(s, "wake_hold", settings)
         }
@@ -287,6 +305,10 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 wake_hold_ms: None,
                 activity_keep_awake: Some(enabled),
                 power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             };
             save_band_setting(s, "activity_keep_awake", settings)
         }
@@ -303,6 +325,60 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                     .send(RuntimeCommand::ResetActivity { request: None })
             }
         }
+        Action::BandBrightness(value) => {
+            setting_operation_allowed(s)?;
+            s.prefs.band_brightness = Some(value);
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: None,
+                buddy_fps: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
+                band_brightness: Some(value),
+            };
+            save_band_setting(s, "band_brightness", settings)
+        }
+        Action::BuddyFps(fps) => {
+            if !(10..=30).contains(&fps) {
+                return Err("Buddy FPS must be an integer from 10 to 30".into());
+            }
+            setting_operation_allowed(s)?;
+            s.prefs.buddy_fps = fps;
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: None,
+                buddy_fps: Some(fps),
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
+            };
+            save_band_setting(s, "buddy_fps", settings)
+        }
+        Action::CompletionVibration(enabled) => {
+            setting_operation_allowed(s)?;
+            s.prefs.completion_vibration = enabled;
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: Some(enabled),
+                completion_vibration_mode: None,
+            };
+            save_band_setting(s, "completion_vibration", settings)
+        }
         Action::PowerSaving(enabled) => {
             setting_operation_allowed(s)?;
             s.prefs.power_saving = enabled;
@@ -313,8 +389,29 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
                 wake_hold_ms: None,
                 activity_keep_awake: None,
                 power_saving: Some(enabled),
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: None,
             };
             save_band_setting(s, "power_saving", settings)
+        }
+        Action::CompletionVibrationMode(mode) => {
+            setting_operation_allowed(s)?;
+            s.prefs.completion_vibration_mode = mode;
+            let settings = RuntimeSettings {
+                buddy_theme: None,
+                revision: s.prefs.revision,
+                keep_screen: None,
+                wake_hold_ms: None,
+                activity_keep_awake: None,
+                power_saving: None,
+                buddy_fps: None,
+                band_brightness: None,
+                completion_vibration: None,
+                completion_vibration_mode: Some(mode),
+            };
+            save_band_setting(s, "completion_vibration_mode", settings)
         }
     }
 }
@@ -370,6 +467,10 @@ pub struct PreferencesView<'a> {
     keep_screen: bool,
     activity_keep_awake: bool,
     power_saving: bool,
+    buddy_fps: u8,
+    band_brightness: Option<u8>,
+    completion_vibration: bool,
+    completion_vibration_mode: VibrationMode,
     sync_enabled: bool,
     background: bool,
     selected: Option<usize>,
@@ -426,6 +527,10 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
             keep_screen: s.prefs.keep_screen,
             activity_keep_awake: s.prefs.activity_keep_awake,
             power_saving: s.prefs.power_saving,
+            buddy_fps: s.prefs.buddy_fps,
+            band_brightness: s.prefs.band_brightness,
+            completion_vibration: s.prefs.completion_vibration,
+            completion_vibration_mode: s.prefs.completion_vibration_mode,
             sync_enabled: s.prefs.sync_enabled,
             background: s.prefs.background,
             selected: s.prefs.selected,
@@ -441,11 +546,14 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
 mod tests {
     use super::*;
     use crate::{domain::Preferences, protocol::BandAck, runtime::RuntimeClient};
+    static TEST_SESSIONS: AtomicU64 = AtomicU64::new(0);
     fn session() -> Session {
         let token = serde_json::from_value(serde_json::json!({"ssecurity":"fixture-token","service_token":"fixture-token","c_user_id":"fixture-user"})).unwrap();
         let config = std::env::temp_dir()
             .join(format!(
-                "buddy-services-{}",
+                "buddy-services-{}-{}-{}",
+                std::process::id(),
+                TEST_SESSIONS.fetch_add(1, Ordering::Relaxed),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
@@ -603,6 +711,59 @@ mod tests {
         std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
     }
     #[test]
+    fn completion_vibration_is_opt_in_persisted_and_projected() {
+        let mut s = session();
+        assert!(!s.prefs.completion_vibration);
+        for enabled in [true, false] {
+            perform(&mut s, Action::CompletionVibration(enabled)).unwrap();
+            let (saved, _, _) = persistence::load(&s.config);
+            assert_eq!(saved.completion_vibration, enabled);
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["completionVibration"],
+                enabled
+            );
+        }
+        assert!(
+            serde_json::from_value::<Action>(
+                json!({"operation":"completion_vibration","value":"true"})
+            )
+            .is_err()
+        );
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn completion_modes_are_typed_persisted_and_preserved_when_disabled() {
+        let mut s = session();
+        assert_eq!(s.prefs.completion_vibration_mode, VibrationMode::Short);
+        perform(&mut s, Action::CompletionVibrationMode(VibrationMode::Long)).unwrap();
+        assert_eq!(
+            persistence::load(&s.config).0.completion_vibration_mode,
+            VibrationMode::Long
+        );
+        perform(&mut s, Action::CompletionVibration(false)).unwrap();
+        assert_eq!(
+            persistence::load(&s.config).0.completion_vibration_mode,
+            VibrationMode::Long
+        );
+        assert_eq!(
+            serde_json::to_value(view(&s, false)).unwrap()["preferences"]["completionVibrationMode"],
+            "long"
+        );
+        assert!(
+            serde_json::from_value::<Action>(
+                json!({"operation":"completion_vibration_mode","value":5000})
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<Action>(
+                json!({"operation":"completion_vibration_mode","value":"invalid"})
+            )
+            .is_err()
+        );
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
+    }
+    #[test]
     fn power_saving_is_opt_in_persisted_and_projected() {
         let mut s = session();
         assert!(!s.prefs.power_saving);
@@ -706,5 +867,50 @@ mod tests {
             perform(&mut s, Action::Theme(BuddyTheme::Deepseek)).unwrap_err(),
             "背景程序未啟動，請重新開啟 App"
         );
+    }
+    #[test]
+    fn band_brightness_is_optional_bounded_and_restored_after_power_saving() {
+        let mut s = session();
+        assert_eq!(s.prefs.band_brightness, None);
+        for value in [0, 25, 128, 255] {
+            perform(&mut s, Action::BandBrightness(value)).unwrap();
+            assert_eq!(persistence::load(&s.config).0.band_brightness, Some(value));
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["bandBrightness"],
+                value
+            );
+        }
+        perform(&mut s, Action::PowerSaving(true)).unwrap();
+        perform(&mut s, Action::PowerSaving(false)).unwrap();
+        assert_eq!(s.prefs.band_brightness, Some(255));
+        for value in [json!(-1), json!(256), json!(1.5), json!("128")] {
+            assert!(
+                serde_json::from_value::<Action>(
+                    json!({"operation":"band_brightness","value":value})
+                )
+                .is_err()
+            );
+        }
+    }
+    #[test]
+    fn buddy_fps_is_bounded_persisted_and_preserved_by_power_saving() {
+        let mut s = session();
+        assert_eq!(s.prefs.buddy_fps, 10);
+        for fps in [10, 17, 30] {
+            perform(&mut s, Action::BuddyFps(fps)).unwrap();
+            assert_eq!(persistence::load(&s.config).0.buddy_fps, fps);
+            assert_eq!(
+                serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyFps"],
+                fps
+            );
+        }
+        for fps in [0, 9, 31, 255] {
+            assert!(perform(&mut s, Action::BuddyFps(fps)).is_err());
+        }
+        perform(&mut s, Action::PowerSaving(true)).unwrap();
+        assert_eq!(persistence::load(&s.config).0.buddy_fps, 30);
+        perform(&mut s, Action::PowerSaving(false)).unwrap();
+        assert_eq!(persistence::load(&s.config).0.buddy_fps, 30);
+        std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
     }
 }

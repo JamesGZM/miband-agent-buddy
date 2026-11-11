@@ -39,6 +39,26 @@ impl RuntimeClient {
         }
     }
 }
+fn numeric_evidence(value: &Value, keys: &[&str]) -> Value {
+    Value::Object(
+        keys.iter()
+            .filter_map(|key| {
+                value
+                    .get(*key)
+                    .and_then(Value::as_u64)
+                    .filter(|n| *n <= 9_007_199_254_740_991)
+                    .map(|n| ((*key).to_string(), json!(n)))
+            })
+            .collect(),
+    )
+}
+fn enum_evidence(value: &Value, key: &str, allowed: &[&str]) -> Value {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|s| allowed.contains(s))
+        .map_or(Value::Null, |s| json!(s))
+}
 fn health(state: &RuntimeState) -> Value {
     let ack = state.ack.as_ref();
     let field = |name: &str| {
@@ -68,16 +88,103 @@ fn health(state: &RuntimeState) -> Value {
             })
             .collect::<serde_json::Map<String, Value>>()
         });
+    let raw_diagnostics = state.fields.get("diagnostics").unwrap_or(&Value::Null);
+    let mut diagnostics = numeric_evidence(
+        raw_diagnostics,
+        &["starts", "closes", "ackTimeouts", "pingTimeouts", "at"],
+    );
+    diagnostics["phase"] = enum_evidence(
+        raw_diagnostics,
+        "phase",
+        &[
+            "idle",
+            "stopped",
+            "opening",
+            "authenticating",
+            "waiting_buddy",
+            "connected",
+            "connect_timeout",
+            "link_alive",
+            "link_failed",
+            "native_error",
+            "transport_closed",
+            "link_timeout",
+            "buddy_unresponsive",
+        ],
+    );
+    diagnostics["lastCode"] = enum_evidence(
+        raw_diagnostics,
+        "lastCode",
+        &[
+            "connect_timeout",
+            "ack_timeout",
+            "ping_timeout",
+            "ping_failed",
+            "auth_rejected",
+            "timeout",
+            "operation_failed",
+            "event_lagged",
+            "event_closed",
+            "transfer_session_reset",
+            "transfer_send_timeout",
+            "transfer_ack_timeout",
+            "transfer",
+            "app_missing",
+        ],
+    );
+    diagnostics["exitCode"] = raw_diagnostics
+        .get("exitCode")
+        .and_then(Value::as_u64)
+        .filter(|n| *n <= 255)
+        .map_or(Value::Null, |n| json!(n));
+    diagnostics["signal"] = enum_evidence(
+        raw_diagnostics,
+        "signal",
+        &["SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV", "SIGBUS"],
+    );
+    let page_lifecycle = numeric_evidence(
+        &field("pageLifecycle"),
+        &[
+            "createdAt",
+            "created",
+            "destroyed",
+            "shows",
+            "hides",
+            "refreshes",
+            "errors",
+            "live",
+            "visible",
+        ],
+    );
+    let raw_drawing = field("drawing");
+    let mut drawing = numeric_evidence(&raw_drawing, &["frames", "effectiveFps", "elapsedMs"]);
+    let caps = raw_drawing.get("capabilities").unwrap_or(&Value::Null);
+    drawing["renderer"] = enum_evidence(caps, "renderer", &["native-geometry"]);
+    for key in [
+        "queryAvailable",
+        "div",
+        "arc",
+        "percent",
+        "radius",
+        "position",
+        "canvas",
+    ] {
+        drawing[key] = caps
+            .get(key)
+            .and_then(Value::as_bool)
+            .map_or(Value::Null, |v| json!(v));
+    }
     json!({"connection":state.connection,"wake":state.fields.get("wake"),"installation":state.installation,
         "operation":operation,"paused":state.paused,
-        "powerSaving":field("powerSaving"),"wakeDisplay":field("wakeDisplay"),
+        "powerSaving":field("powerSaving"),"buddyFps":field("buddyFps"),"wakeDisplay":field("wakeDisplay"),
         "desiredPowerSaving":state.fields.get("settings").and_then(|settings| settings.get("powerSaving")).and_then(Value::as_bool),
         "operationError":state.fields.get("operationError"),"progress":state.progress,
         "lastAckAt":state.fields.get("lastAckAt"),"battery":state.fields.get("battery"),
         "version":field("appVersion"),"received":field("received"),"page":field("page"),
         "buddyTheme":ack.and_then(|a| a.buddy_theme),"settingsRevision":ack.and_then(|a| a.settings_revision),
         "settingsApplied":ack.and_then(|a| a.settings_applied),"keepScreen":field("keepScreen"),
-        "keepDiagnostics":field("keepDiagnostics"),"mode":field("mode")})
+        "keepDiagnostics":field("keepDiagnostics"),"mode":field("mode"),
+        "diagnostics":diagnostics,"pageLifecycle":page_lifecycle,"drawing":drawing})
 }
 pub fn start(shared: Shared, app: tauri::AppHandle) {
     let (root, node) = runtime_paths();
@@ -100,6 +207,7 @@ pub fn start(shared: Shared, app: tauri::AppHandle) {
             let reader_state = shared.clone();
             let tray_app = app.clone();
             std::thread::spawn(move || {
+                let mut last_battery_notice = 0;
                 let mut last_health =
                     std::time::Instant::now() - std::time::Duration::from_secs(10);
                 for line in BufReader::new(output).lines() {
@@ -120,8 +228,36 @@ pub fn start(shared: Shared, app: tauri::AppHandle) {
                             }
                             last_health = std::time::Instant::now();
                         }
+                        let alert = state.fields.get("lowBattery");
+                        let sequence = alert
+                            .and_then(|v| v.get("sequence"))
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0);
+                        let notice = alert.and_then(|v| v.get("active")).and_then(Value::as_bool)
+                            == Some(true)
+                            && sequence > last_battery_notice;
+                        let percent = state
+                            .fields
+                            .get("battery")
+                            .and_then(Value::as_u64)
+                            .filter(|n| *n < 20);
+                        let language = crate::i18n::current(&s.prefs.language);
                         services::accept_runtime(&mut s, state);
                         drop(s);
+                        if notice {
+                            last_battery_notice = sequence;
+                            if let Some(percent) = percent {
+                                if crate::notifications::low_battery(&tray_app, language, percent)
+                                    .is_err()
+                                {
+                                    if let Ok(mut s) = reader_state.lock() {
+                                        s.runtime
+                                            .fields
+                                            .insert("batteryNotificationError".into(), json!(true));
+                                    }
+                                }
+                            }
+                        }
                         crate::app::schedule_tray_refresh(&tray_app);
                     }
                 }
@@ -196,7 +332,9 @@ mod tests {
                 fields: serde_json::from_value(json!({
                     "powerSaving":true,
                     "wakeDisplay":{"id":"wake-fixture","remainingMs":0,"active":false},
-                    "unexpected":"synthetic-private-value"
+                    "unexpected":"synthetic-private-value",
+                    "pageLifecycle":{"created":1,"live":1,"unexpected":"synthetic-private-value"},
+                    "drawing":{"frames":42,"unexpected":"synthetic-private-value","capabilities":{"renderer":"native-geometry","canvas":false,"div":true,"unexpected":"synthetic-private-value"}}
                 }))
                 .unwrap(),
                 ..Default::default()
@@ -207,6 +345,7 @@ mod tests {
             "settings".into(),
             json!({"powerSaving":true,"unexpected":"synthetic-private-value"}),
         );
+        state.fields.insert("diagnostics".into(), json!({"starts":2,"phase":"connected","lastCode":"synthetic-private-value","signal":"synthetic-private-value","unexpected":"synthetic-private-value"}));
         state.fields.insert("operation".into(), json!({
             "id":"op-fixture","kind":"power_saving","status":"failed","code":"display_unconfirmed",
             "at":10,"settledAt":20,"wakeConfirmed":false,
@@ -216,6 +355,12 @@ mod tests {
         assert_eq!(view["powerSaving"], true);
         assert_eq!(view["desiredPowerSaving"], true);
         assert_eq!(view["paused"], true);
+        assert_eq!(view["diagnostics"]["starts"], 2);
+        assert_eq!(view["diagnostics"]["phase"], "connected");
+        assert!(view["diagnostics"]["lastCode"].is_null());
+        assert_eq!(view["pageLifecycle"]["live"], 1);
+        assert_eq!(view["drawing"]["div"], true);
+        assert_eq!(view["drawing"]["canvas"], false);
         assert_eq!(view["wakeDisplay"]["remainingMs"], 0);
         assert_eq!(view["operation"]["code"], "display_unconfirmed");
         assert_eq!(view["operation"]["settledAt"], 20);

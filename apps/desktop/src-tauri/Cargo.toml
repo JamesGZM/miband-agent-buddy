@@ -1,6 +1,6 @@
 [package]
 name = "miband-agent-buddy"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 publish = false
 
@@ -31,3 +31,4 @@ zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
 
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-notification = "2"

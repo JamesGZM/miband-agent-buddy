@@ -1,5 +1,7 @@
 # Local AI Hooks
 
+**English** · [简体中文](hooks.zh-CN.md) · [繁體中文](hooks.zh-TW.md)
+
 Give an AI working in your project the [Buddy Hooks skill](../../skills/buddy-hooks/SKILL.md), or copy this public link:
 
 `https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md`

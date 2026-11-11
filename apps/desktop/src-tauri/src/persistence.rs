@@ -22,6 +22,9 @@ pub fn load(config: &Path) -> (Preferences, Option<Credentials>, Option<String>)
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     prefs.keep_screen = false;
+    if !(10..=30).contains(&prefs.buddy_fps) {
+        prefs.buddy_fps = 10;
+    }
     let saved = vault::read(&config.with_file_name("credentials.json"));
     let error = saved.as_ref().err().cloned();
     let credentials = saved

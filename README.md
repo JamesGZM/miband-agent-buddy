@@ -26,6 +26,10 @@ Download the package for your Mac from [GitHub Releases](https://github.com/Jame
 
 Current releases are not Apple-notarized. If macOS blocks the first launch, follow the [installation instructions](docs/open-source/RELEASING.md) after checking the download source. Windows and Linux are not supported.
 
+## Band brightness and battery status
+
+Use the Band brightness slider in Settings → Band display (0–255). The first run preserves the band’s current brightness. Power saving uses exactly 25 and 10 FPS; switching it off restores the saved brightness and frame rate. The Mac shows “Charging” beside the battery. Below 20%, it displays an in-app warning and requests a Mac system notification once per low-battery cycle, including while charging. Repeated samples/reconnections do not repeat it; reaching 20% rearms the alert. System notification delivery follows macOS notification settings. Battery/charging are polled about once a minute when the link is available; installation, waking and transport work can delay them.
+
 ## Getting started
 
 1. Open the app and follow the setup guide. Sign in with the Xiaomi account and service region you use in Mi Fitness.
@@ -36,6 +40,8 @@ Current releases are not Apple-notarized. If macOS blocks the first launch, foll
 Tap the band screen to switch between Buddy and resource usage. Long-press to exit Buddy. Click the Mac preview to wake it.
 
 In **Settings**, **Keep awake during tasks** is off by default. When enabled, the idle countdown starts after all tasks finish. **Power saving** is also off by default. Manage Buddy installation and updates in **Band**; check app updates using the version control in **Settings → About**.
+
+In **Settings → Task notifications**, **Task completion vibration** is off by default. Enable it for one vibration per completed AI task, including concurrent tasks that finish separately. Choose **Short** (default) or **Long**; the band system controls duration. It requires Buddy with vibration support and a host that sends real completion Hooks; tool completion, cancellation and approval requests do not trigger it. Settings separate appearance, startup/sync, band display, task notifications and about information.
 
 ## Connect your AI tools
 
