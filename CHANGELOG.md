@@ -22,6 +22,7 @@ Notable changes are documented here. Desktop and Buddy versions are maintained i
 
 ### Fixed
 
+- Gracefully exit a responsive running Buddy before replacing its package, with bounded fallback and cancellation.
 - Resource-ring junctions, doubled strokes and accumulating CPU arc gaps during updates.
 - Brightness-request failure handling, stalled sampling and active-task reconnect recovery, with bounded callbacks and retries.
 - Page/controller ownership and diagnostics distinguish hidden pages, missing receipts and transport failures.

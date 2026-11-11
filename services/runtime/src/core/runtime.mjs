@@ -52,6 +52,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       }
     }});
   let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
+  let installExit=null,installStart=null;
   let operation = null, operationDeadline = null;
   let transport = null,
     credential = null,
@@ -187,6 +188,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       publish();
     }, timings.wake);
   }
+  function clearInstallExit(){cancel(installStart);installStart=null;installExit=null;}
+  function startInstallTransfer(){
+    clearInstallExit();
+    if(transport && desired && state.connection==='installing')write({op:'install',id:'install',path:packagePath});
+  }
   function clearPending() {
     cancel(deadline);
     deadline = null;
@@ -204,6 +210,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     cancel(retryTimer);
     cancel(connectionDeadline);
     cancel(installDeadline);
+    clearInstallExit();
     clearBuddyCheck();
     clearPending();
     const child = transport;
@@ -325,6 +332,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (event.event === "progress") {
         state.progress = Math.max(0, Math.min(100, event.progress * 100));
         publish();
+      }
+      if(event.event==='ack' && installExit && acceptAck(event.ack,installExit)){
+        if(event.ack.exitReady===true){
+          cancel(installStart);installExit=null;
+          installStart=schedule(startInstallTransfer,600);
+        }
+        return;
       }
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
         diagnose('connected');
@@ -503,6 +517,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       transport = null;
       settleOperation("failed", "link_lost");
       cancel(installDeadline);
+      clearInstallExit();
       clearBuddyCheck();
       clearWake();
       cancel(pingDeadline); pingDeadline = null;
@@ -586,14 +601,16 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         if (c.request) beginOperation(c.request, "check_buddy", {});
         else requestBuddy();
         break;
-      case "install":
+      case "install": {
         completions.clear();
         if (!transport || !["connected", "waiting", "standby"].includes(state.connection)) {
           state.error = "請先連線手環";
           publish();
           break;
         }
+        const canExit=state.connection==='connected'&&state.ack?.exitReady===true&&Number.isFinite(state.lastAckAt)&&now()>=state.lastAckAt&&now()-state.lastAckAt<10000;
         clearPending();
+        clearInstallExit();
         settleOperation("cancelled", "install");
         wakePolicy.clear(); clearWake();
         cancel(pingDeadline); pingDeadline = null;
@@ -605,17 +622,19 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         state.progress = 0;
         state.error = null;
         publish();
-        write({
-          op: "install",
-          id: "install",
-          path: packagePath,
-        });
+        if(canExit){
+          // Let the current page release its interconnect before replacing its package.
+          installExit={v:1,type:'snapshot',session,seq:++seq,text:'',value:0,cpu:-1,command:'exit'};
+          installStart=schedule(startInstallTransfer,2000);
+          write({op:'snapshot',id:installExit.seq,payload:{...installExit}});
+        }else startInstallTransfer();
         installDeadline = schedule(() => {
           state.installation = {ok: false, code: "timeout", at: now()};
           state.buddy = {...state.buddy, status: "error", error: "timeout"};
           transport?.kill();
         }, timings.install);
         break;
+      }
     }
   }
   async function tick() {

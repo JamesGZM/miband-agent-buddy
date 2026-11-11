@@ -28,6 +28,12 @@ All Buddy package status and update controls belong to the band page. The About 
 - Always issue a second inventory request on connection/install: rejected because serialized native operations can delay a wake and its receipt deadline.
 - Use the source manifest at runtime: rejected because source and generated package may differ.
 
+## Updating a running page
+
+Before replacing a package, the runtime asks a recently responsive, exit-capable Buddy to exit using the existing snapshot command. A matching receipt starts a 600 ms grace; no receipt falls back to installation after 2 seconds. Other pages install directly without an extra launch. Disconnect and transport replacement cancel the owned preflight timer; late receipts cannot start another transfer. The original total installation deadline remains in force.
+
+Two local updates left Buddy visible but without synchronization until the user exited/reopened it. This supports testing orderly page shutdown before replacement; it does not prove a firmware/interconnect root cause. Tests cover ordering, bounded fallback, cancellation and late receipts; physical validation is separate.
+
 ## Compatibility and evidence
 
 The existing `installed` boolean, install command, package identity and RPK path remain available. `check_buddy`, the native `buddy` event and `state.buddy` are additive private-wire fields. The shared fixture is consumed by JavaScript and Rust. Coordinator tests cover absence, older/current/newer codes, failed/expired checks, retained versions after rejected installation, post-install verification, pause/reconnect without wake, stale transport rejection and metadata/package mismatches. Reconciliation tests cover a fresh bundled-version ACK after a missing installation receipt, repeated cached inventory, changed inventory, stale ACK rejection, unknown numeric codes and newer numeric builds. The native test verifies that inventory projection exposes only presence and version code. These automated checks do not prove a physical installation or screen behavior; observed device evidence belongs in the validation record.
