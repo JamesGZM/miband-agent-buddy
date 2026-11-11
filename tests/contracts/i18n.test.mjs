@@ -9,11 +9,12 @@ const read = path => readFileSync(new URL('../../' + path, import.meta.url), 'ut
 const literals = (text, pattern) => [...text.matchAll(pattern)].map(m => m[1]).filter(v => /[\u4e00-\u9fff]/.test(v));
 
 test('every UI string and backend message has Simplified Chinese and English translations', () => {
-  const app = read('apps/desktop/ui/app.js');
+  const app = ['app', 'integrations', 'onboarding'].map(name => read(`apps/desktop/ui/${name}.js`)).join('\n');
   const keys = new Set([
     ...literals(app, /\bt\("((?:[^"\\]|\\.)*)"/g),
     ...literals(app, /^\s+\w+: "([^"]+)",$/gm),
     ...literals(app, /\["\w+", "([^"]+)"\]/g).filter(v => !['简体中文', '繁體中文'].includes(v)),
+    ...literals(app, /(?:title|detail|kind): "([^"]+)"/g),
   ]);
   const backend = [
     read('services/runtime/src/core/runtime.mjs'),

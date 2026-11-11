@@ -56,3 +56,8 @@ test('explicit connection/install wakes are bounded and do not override pending 
  h.advance(10001);h.event('PermissionRequest');h.policy.requestConnection('installed');assert.equal(h.policy.take(true).reason,'attention');
  h.advance(10001);h.policy.requestConnection('installed');assert.equal(h.policy.take(true).reason,'installed');
 });
+test('clearing event wakes preserves queued user and connection requests',()=>{
+ const h=harness();h.event('PermissionRequest');h.policy.clearEvents();assert.equal(h.policy.take(true),null);
+ h.policy.requestUser('theme','op-reset');h.policy.clearEvents();assert.equal(h.policy.take(true).operation,'op-reset');
+ h.advance(10001);h.policy.requestConnection();h.policy.clearEvents();assert.equal(h.policy.take(true).reason,'connection');
+});

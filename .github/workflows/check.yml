@@ -1,10 +1,17 @@
 name: Source checks
-on: [push, pull_request]
+on:
+  push:
+    branches: ['**']
+  pull_request:
 permissions:
   contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   macos:
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,11 +22,12 @@ jobs:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install -r requirements.txt
-      - run: npm ci --prefix apps/band
-      - run: npm run bootstrap
-      - run: npm run build
+      - name: Generate artwork and adapters for tests
+        run: |
+          python3 scripts/render_band_ui.py
+          python3 scripts/prepare_desktop.py
       - run: npm run check:architecture
       - run: npm test
+      - run: npm run bootstrap
       - run: cargo test --locked --manifest-path native/transport/Cargo.toml
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
-      - run: npm run build:desktop

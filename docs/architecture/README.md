@@ -5,7 +5,7 @@ This is the canonical current architecture. Historical architecture URLs redirec
 ```text
 Desktop UI → bridge → Tauri commands → application services → private files
                                                ↓ JSON Lines
-Codex Hook → loopback HTTP → Node runtime core → transport adapter
+AI Hooks → loopback HTTP → Node runtime core → transport adapter
 Mac sampling ────────────────────┘                    ↓ JSON Lines
                                    Rust SPP/Core transport → Buddy controller
                                                          ← v1 application ACK
@@ -38,7 +38,7 @@ Missing application ACK enters standby with approximately 30-second probes. A se
 
 ## Activity and bounded wake
 
-Hooks carry only event, hashed session identifier and timestamp. The receiver binds `127.0.0.1:10731`, rejects browser-origin writes, and bounds input. Hook failure exits successfully and never makes a tool permission decision. State is bounded to 128 sessions and not persisted. Active tasks remain active until terminal lifecycle events; after 15 minutes without an event they are marked stale. Parallel tool counts and arbitrary user-input waits are not inferred.
+Hooks carry only event, hashed session identifier and timestamp. The receiver binds `127.0.0.1:10731`, rejects browser-origin writes, and bounds input. Codex compatibility paths remain supported; Claude Code and custom harness senders namespace session hashes by provider. The [project skill](../../skills/buddy-hooks/SKILL.md) and merge-only installer provide project-scoped setup ([ADR-004](ADR-004-local-agent-hooks.md)). Hook failure exits successfully and never makes a tool permission decision. State is bounded to 128 sessions and not persisted. Independent main sessions aggregate with attention before working before thinking; one completion cannot hide another active session. Counts do not infer parallel tool calls or subagent tasks. After 15 minutes without an event, a session displays a stale warning but remains active and keeps renewing the display: silence cannot establish that a long task finished. The explicit `reset_activity` operation clears observed activity without cancelling the AI host's work, including a cancelled Claude task whose host did not send a terminal event.
 
 UserPromptSubmit, a new PermissionRequest, and task completion can request wake. Ordinary metrics/tool traffic cannot. One pending event is retained with a 60-second TTL and a 10-second global launch cooldown; attention takes priority. Cancellation/tool resumption invalidates obsolete pending work.
 
@@ -46,7 +46,7 @@ Desktop band actions (theme, page and wake) are user operations ([ADR-002](ADR-0
 
 Explicit connection/startup requests one initial launch; background reconnect does not synthesize another. Native launch checks the installed app list first. Missing Buddy requests installation; successful installation queues a post-install wake unless paused.
 
-Persistent `keepScreen` stays false. Each accepted wake sends a unique ID with a band-local display lease. The lease uses the saved hold (default 20 seconds, 5–1800) clamped to the ACK's `capabilities.maxWakeHoldMs`, or 30 seconds when Buddy advertises none ([ADR-003](ADR-003-band-capabilities.md)). Duplicate IDs and ordinary snapshots cannot extend it. Hide/exit cancels it; local expiry works without more packets. Launch confirmation requires a matching application ACK, lease ID/remaining time and accepted keep-screen request. Firmware controls actual illumination/sleep; ACK is not physical measurement. See the [validation record](../open-source/VALIDATION.md).
+Persistent `keepScreen` stays false. Each accepted wake sends a unique ID with a band-local display lease. The lease uses the saved hold (default 20 seconds, 5–1800) clamped to the ACK's `capabilities.maxWakeHoldMs`, or 30 seconds when Buddy advertises none ([ADR-003](ADR-003-band-capabilities.md)). Duplicate wake IDs cannot extend it. Buddy 0.5.4 advertises `activityHold`: increasing-sequence snapshots can then renew a 15-second local activity watchdog while a confirmed session is thinking, working or awaiting approval. The final terminal event starts the saved idle grace once; ordinary idle snapshots never slide the deadline. Missing synchronization expires locally, and hide/exit cancels every lease. Optional `sessionCounts` provides a shared compact active/waiting label, independent of the selected theme. Legacy Buddy receives its original fields and one-shot lease ([ADR-005](ADR-005-active-display.md)). Launch confirmation requires a matching application ACK, lease ID/remaining time and accepted keep-screen request. Firmware controls actual illumination/sleep; ACK is not physical measurement. See the [validation record](../open-source/VALIDATION.md).
 
 Buddy ACKs advertise `capabilities` (maximum lease, themes, page support). Themes beyond ChatGPT and Claude are applied only when advertised, because older Buddy rejects whole snapshots with unknown enum values. After authentication, every five minutes and on manual refresh, the runtime asks the transport for `device_status`. It exposes the firmware, model, battery, charging and storage values as non-persisted `state.device`; serial number and IMEI are never forwarded.
 

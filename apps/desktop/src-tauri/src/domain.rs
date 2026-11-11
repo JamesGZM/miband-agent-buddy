@@ -172,6 +172,8 @@ pub enum Action {
     WakeHold(u32),
     #[serde(rename = "refresh_device")]
     RefreshDevice,
+    #[serde(rename = "reset_activity")]
+    ResetActivity,
 }
 
 #[cfg(test)]

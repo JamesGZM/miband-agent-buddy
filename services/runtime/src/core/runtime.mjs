@@ -10,6 +10,7 @@ export const DEFAULT_TIMINGS = Object.freeze({
 });
 const LEGACY_WAKE_HOLD_MS = 30000;
 const MAX_WAKE_HOLD_MS = 1800000;
+const ACTIVITY_HOLD_MS = 15000;
 const LINK_READY = ["connected", "waiting", "standby"];
 const OPERATION_ACTIVE = ["waking", "applying"];
 
@@ -186,6 +187,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
     retryAt = 0;
     state.connection = "connecting";
     state.ack = null;
+    capabilities = null;
     state.error = null;
     publish();
     cancel(connectionDeadline);
@@ -363,6 +365,16 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         wakePolicy.clear(); clearWake(); clearPending();
         publish();
         break;
+      case "reset_activity":
+        agent.reset();
+        wakePolicy.clearEvents();
+        if (wakeFlight?.session) {
+          state.wake = {...state.wake, status: "cancelled"};
+          clearWake();
+        }
+        if (!operationActive()) clearPending();
+        publish();
+        break;
       case "configure":
         if (!supportsTheme(c.settings.buddyTheme)) {
           if (c.request) {
@@ -435,6 +447,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         write({op: "ping", id: "link-ping"});
         pingDeadline = schedule(() => transport?.kill(), timings.ack);
       }
+      const activity = agent.status();
       pending = {
         v: 1,
         type: "snapshot",
@@ -446,12 +459,17 @@ export function createRuntime({createTransport, sample, makeId, packagePath,
         memory: metrics.memory,
         disk: metrics.disk,
         character: settings.buddyTheme === "claude" ? "claude" : "codex",
-        mode: wakeFlight?.mode || agent.status().state,
+        mode: activity.activeSessions > 0 ? activity.state : wakeFlight?.mode || activity.state,
         buddyTheme: settings.buddyTheme,
         settingsRevision: settings.revision,
         keepScreen: false,
       };
       if (wakeFlight) { pending.wakeId = wakeFlight.id; pending.wakeHoldMs = wakeHold(); }
+      if (capabilities?.activityHold === true) {
+        pending.activityHoldMs = activity.activeSessions > 0 ? ACTIVITY_HOLD_MS : 0;
+        pending.idleHoldMs = settings.wakeHoldMs ?? 20000;
+        pending.sessionCounts = {...activity.sessionCounts};
+      }
       if (operationActive() && operation.kind === "page") pending.page = operation.target.page;
       const payload = {...pending};
       if (wakeFlight) pending.wakeId = wakeFlight.id;

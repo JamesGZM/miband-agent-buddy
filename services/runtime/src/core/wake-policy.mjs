@@ -30,5 +30,6 @@ export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000
       const next = pending; pending = null; lastLaunch = now(); return next;
     },
     clear() { pending = null; },
+    clearEvents() { if (pending?.session) pending = null; },
   };
 }

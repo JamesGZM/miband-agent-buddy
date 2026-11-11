@@ -17,7 +17,7 @@ function createPageController(deps) {
   var rings = null, snapMetrics = true, lastRingPaint = 0;
   return {
     private: {
-      pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0,
+      pageIndex: 0, received: 0, keepResult: 'pending', errorText: '', gestureCount: 0, activityLabel: '',
       ringSource: '/common/capsule/ring-idle-b0.png', ringOpacity: 1,
       loadingSource: '/common/capsule/blank.png', loadingOpacity: 1,
       symbolSource: '/common/capsule/symbols.png', symbolLeft: 0,
@@ -44,11 +44,12 @@ function createPageController(deps) {
           settingsController.apply(msg);
           if(msg.page!=null&&msg.page!==self.pageIndex){self.pageIndex=msg.page;snapMetrics=true;metricsStamp='';}
           if(visible&&msg.wakeId)keepController.hold(msg.wakeId,msg.wakeHoldMs);
+          if(visible&&msg.activityHoldMs!=null)keepController.activity(msg.activityHoldMs,msg.idleHoldMs);
           lastMessage=msg; receivedAt=clock(); self.received+=1;
           if((msg.mode||'idle')!==activeMode){activeMode=msg.mode||'idle';modeAt=receivedAt;}
           self.tick();
           var ack=protocol.makeAck(msg,self.keepResult,self.received);
-          ack.appVersion='0.5.3';ack.capabilities={maxWakeHoldMs:1800000,themes:['chatgpt','claude','deepseek'],page:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
+          ack.appVersion='0.5.4';ack.capabilities={maxWakeHoldMs:1800000,themes:['chatgpt','claude','deepseek'],page:true,activityHold:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
           ack.character=buddyTheme==='claude'?'claude':'codex';ack.mode=activeMode;ack.gestures=self.gestureCount;ack.exitReady=true;
           if(msg.command==='exit')exitTimer=schedule(function(){self.exitApp();},500);
           channel.send({data:ack,success:function(){if(!alive)return;self.errorText='';if(msg.command==='exit')self.exitApp();},fail:function(data,code){if(!alive)return;self.errorText='ACK error '+code;if(msg.command==='exit')self.exitApp();}});
@@ -117,6 +118,8 @@ function createPageController(deps) {
         // Static resource pages only wake for incoming data or the stale deadline.
         delay=moving?Math.max(1,80-(now-lastRingPaint)):(!stale?Math.max(1,10000-(now-receivedAt)):0);
       }else{
+        var activityLabel=display.activityLabel(lastMessage&&lastMessage.sessionCounts,stale);
+        if(this.activityLabel!==activityLabel)this.activityLabel=activityLabel;
         var mode=stale&&lastMessage?'offline':activeMode;
         if(mode==='complete'&&now-modeAt>=4000)mode='idle';
         var motion=ui.motion(mode,Math.max(0,(now-modeAt)/1000),buddyTheme);

@@ -1,0 +1,41 @@
+name: Release packages
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/band/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python -m pip install -r requirements.txt
+      - run: npm ci --prefix apps/band
+      - run: npm run bootstrap
+      - run: npm run build
+      - run: npm run check:architecture
+      - run: npm test
+      - run: cargo test --locked --manifest-path native/transport/Cargo.toml
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Validate source-checkout macOS app
+        run: npm run build:desktop
+      - name: Attach band package and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/buddy.debug.rpk dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber

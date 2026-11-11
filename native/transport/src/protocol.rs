@@ -56,7 +56,10 @@ mod tests {
         .unwrap();
         assert!(Credentials::decode(f["credentials"].clone()).is_ok());
         for command in f["transportCommands"].as_array().unwrap() {
-            assert!(serde_json::from_value::<Command>(command.clone()).is_ok());
+            let parsed = serde_json::from_value::<Command>(command.clone()).unwrap();
+            if let Operation::Snapshot { payload } = parsed.operation {
+                assert_eq!(payload, f["snapshot"]);
+            }
         }
         for bad in [
             serde_json::json!({"op":"launch_buddy","id":{}}),

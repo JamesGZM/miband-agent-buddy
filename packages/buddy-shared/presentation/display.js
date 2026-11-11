@@ -9,4 +9,15 @@ function fields(msg, stale) {
     memoryWidth:!stale && msg && msg.memory?msg.memory.percent:0,
     diskWidth:!stale && msg && msg.disk?msg.disk.percent:0};
 }
-module.exports={fields:fields};
+function activityLabel(counts,stale) {
+  if(stale||!counts)return '';
+  var total=0,names=['thinking','working','attention'];
+  for(var i=0;i<names.length;i++){
+    var value=counts[names[i]];
+    if(typeof value!=='number'||!isFinite(value)||value%1!==0||value<0)return '';
+    total+=value;
+  }
+  if(!total||total>128)return '';
+  return total+' ACTIVE'+(counts.attention?' · '+counts.attention+' WAIT':'');
+}
+module.exports={fields:fields,activityLabel:activityLabel};

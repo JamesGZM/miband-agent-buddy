@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-loading="true">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="app">
+    <div id="startup" role="status" aria-live="polite"><img class="startup-icon" src="assets/app-icon.png" alt=""><p>MiBand Agent Buddy</p><span class="spinner" aria-hidden="true"></span></div>
+    <div id="app" aria-busy="true">
       <aside>
         <div class="titlebar" data-tauri-drag-region></div>
         <div class="brand" data-tauri-drag-region>

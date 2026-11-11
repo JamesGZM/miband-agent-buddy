@@ -2,6 +2,8 @@ import { bridge } from "./bridge.js";
 import { initialState } from "./state.js";
 import { startPreview } from "./preview.js";
 import { createToast } from "./toast.js";
+import { integrationsPage, setupRequest, SKILL_URL } from "./integrations.js";
+import { onboardingCard } from "./onboarding.js";
 import { t, formatTime, resolveLanguage, setLanguage } from "./i18n.js";
 const $ = (s) => document.querySelector(s),
   escape = (s) =>
@@ -25,9 +27,12 @@ let state = initialState(),
   signature = "",
   confirmLogout = false,
   refreshingSince = 0,
-  settledOperation = undefined;
+  settledOperation = undefined,
+  hydrated = !bridge.available,
+  refreshing = false;
 const toast = createToast(() => $("#toast"));
 const icons = {
+  hooks: '<path d="M8 7V4m8 3V4M6 7h12v4a6 6 0 0 1-6 6v4m-6-10V7"/>',
   buddy: '<circle cx="12" cy="12" r="8"/><path d="M9 10h.01M15 10h.01M9 14.5c1.6 1.4 4.4 1.4 6 0"/>',
   devices:
     '<rect x="8" y="3" width="8" height="18" rx="4"/><path d="M12 8v4"/>',
@@ -55,6 +60,7 @@ const labels = {
   devices: "手環",
   account: "帳號",
   settings: "設定",
+  hooks: "AI 接入",
 };
 const connectionNames = {
   disconnected: "未連線",
@@ -125,7 +131,7 @@ const appliedTheme = () =>
   state.runtime.ack?.settingsApplied === true
     ? state.runtime.ack.buddyTheme
     : null;
-const previewTheme = () => draftTheme || appliedTheme() || "chatgpt";
+const previewTheme = () => draftTheme || appliedTheme() || state.preferences.buddyTheme || "chatgpt";
 const capabilities = () => state.runtime.ack?.capabilities || null;
 const themeSupported = (id) =>
   id !== "deepseek" || !!capabilities()?.themes?.includes(id);
@@ -148,6 +154,11 @@ function holdMessage(seconds) {
   return seconds <= 30
     ? t("亮屏時長已儲存為 {n} 秒", { n: seconds })
     : t("已儲存為 {duration}，較長的亮屏時間會增加手環耗電", { duration: duration(seconds) });
+}
+function holdLimitMessage() {
+  return holdSeconds() > effectiveHold()
+    ? t("此版本的 Buddy 最多亮屏 {duration}，更新 Buddy 可使用設定時長。", { duration: duration(effectiveHold()) })
+    : "";
 }
 function screenRemaining() {
   const r = state.runtime;
@@ -202,10 +213,17 @@ function activityText() {
   if (r.paused) return t("同步已暫停");
   if (!online() && r.connection !== "standby") return t("未連線");
   return (
-    "Codex " +
+    "AI " +
     t(modes[r.agent?.state] || "待機") +
+    (r.agent?.activeSessions > 0 ? " · " + t("{n} 個任務", { n: r.agent.activeSessions }) : "") +
     (r.agent?.stale ? t("（較久沒有更新）") : "")
   );
+}
+function sessionsText() {
+  const counts = state.runtime.agent?.sessionCounts;
+  if (!counts || !state.runtime.agent.activeSessions) return "";
+  return t("{working} 執行 · {thinking} 思考 · {attention} 等待確認", counts) +
+    (state.runtime.agent.staleSessions ? " · " + t("{n} 個任務狀態待確認", { n: state.runtime.agent.staleSessions }) : "");
 }
 function buddyPage() {
   const op = operation();
@@ -216,14 +234,14 @@ function buddyPage() {
   const ready = linkReady();
   const screen = `<button class="screen" data-action="wake" title="${ready ? t("點按喚醒手環") : t("連線手環後可點按喚醒")}" ${!ready || operationActive() || busyAction ? "disabled" : ""}><canvas id="band" width="490" height="192" aria-label="${t("手環畫面預覽")}"></canvas>${waking ? `<span class="screen-overlay">${spinner}${t("喚醒手環中…")}</span>` : ""}</button>`;
   const top = `<div class="hero-top"><span class="chip status-chip" title="${t("活動")}"><i id="buddy-dot" class="buddy-dot"></i><span id="activity">${escape(activityText())}</span></span><span id="screen-badge" class="chip screen-badge"></span></div>`;
-  const bottom = `<div class="hero-bottom"><div class="segments" role="group" aria-label="${t("手環頁面")}">${segment(0, t("角色"))}${segment(1, t("資源"))}</div><div class="hero-meta"><span class="meta" title="${t("最後同步")}">${svg(glyphs.sync)}<span id="last-sync">${syncText()}</span></span><span class="meta" title="${t("喚醒後亮屏時長")}">${svg(glyphs.hold)}<span id="hold-duration">${duration(effectiveHold())}</span></span></div></div>`;
+  const bottom = `<div class="hero-bottom"><div class="segments" role="group" aria-label="${t("手環頁面")}">${segment(0, t("角色"))}${segment(1, t("資源"))}</div><div class="hero-meta"><span class="meta" title="${t("最後同步")}">${svg(glyphs.sync)}<span id="last-sync">${syncText()}</span></span><span class="meta" title="${t("喚醒後亮屏時長")}">${svg(glyphs.hold)}<span id="hold-duration">${duration(holdSeconds())}</span></span></div></div>`;
   const cards = THEMES.map(({ id, name }) => {
     const supported = themeSupported(id);
     return `<button class="theme-card ${previewTheme() === id ? "selected" : ""}" data-theme-choice="${id}" ${operationActive() ? "disabled" : ""}><span class="theme-thumb"><img alt="" src="assets/${id}-preview.png"></span><span class="theme-name">${name}</span>${!supported ? `<span class="theme-note">${t("需要更新 Buddy")}</span>` : appliedTheme() === id ? `<span class="theme-note">${t("使用中")}</span>` : ""}</button>`;
   }).join("");
   const selected = previewTheme();
   const themeTip = themeSupported(selected) ? t("只影響手環畫面。") : t("手環上的 Buddy 需要更新才能使用此主題。");
-  return `<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}</section><section class="group"><div class="section-head"><div class="section-titles"><h2>${t("手環主題")}</h2><p class="section-sub">${themeTip}</p></div>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div></section>`;
+  return `${onboardingCard(state)}<section class="group"><div class="panel preview-panel">${top}${screen}${bottom}</div><p id="session-summary" class="footnote">${sessionsText()}</p>${ready ? "" : `<p class="footnote">${t("未連線時只切換預覽。")}</p>`}${holdLimitMessage() ? `<p class="footnote">${holdLimitMessage()}</p>` : ""}${ready && !capabilities()?.activityHold ? `<p class="footnote">${t("更新手環上的 Buddy 後，任務進行中可持續亮屏。")}</p>` : ""}</section><section class="group"><div class="section-head"><div class="section-titles"><h2>${t("手環主題")}</h2><p class="section-sub">${themeTip}</p></div>${bandButton("theme", t("套用主題"), "primary", selected === appliedTheme() || !themeSupported(selected))}</div><div class="theme-strip" role="listbox" aria-label="${t("手環主題")}">${cards}</div></section>`;
 }
 function devicesPage() {
   const r = state.runtime,
@@ -409,15 +427,18 @@ function settingsPage() {
         row(t("關閉視窗後繼續同步"), "", toggle("background", p.background)) +
         row(
           t("同步與事件喚醒"),
-          t("新任務、需要確認、任務完成時亮屏約 {duration}。", { duration: duration(effectiveHold()) }),
+          t("思考、執行與等待確認時保持亮屏；全部待機後再倒數 {duration}。", { duration: duration(holdSeconds()) }),
           actionButton(r.paused ? t("恢復") : t("暫停"), "pause"),
         ) +
         row(
-          t("亮屏時長"),
-          holdSeconds() > effectiveHold()
-            ? t("目前手環上的 Buddy 最多亮屏 30 秒，更新後會使用 {duration}。", { duration: duration(holdSeconds()) })
-            : t("喚醒手環後保持亮屏的時間，5 到 1800 秒。"),
+          t("待機後亮屏時長"),
+          holdLimitMessage() || t("全部任務結束或手動喚醒後的亮屏時間，5 到 1800 秒。"),
           `<span class="hold-field"><input id="wake-hold" class="number" type="number" inputmode="numeric" min="5" max="1800" step="1" value="${holdSeconds()}"><span class="unit">${t("秒")}</span>${actionButton(t("儲存"), "wake_hold")}</span>`,
+        ) +
+        row(
+          t("重設活動狀態"),
+          t("若已停止的任務仍顯示工作中，可清除本機活動；下一個事件會恢復更新。"),
+          actionButton(t("清除活動"), "reset_activity"),
         ),
     ) +
     group(
@@ -459,11 +480,14 @@ function savePreferences(next, { relayout = false } = {}) {
     .catch((e) => toast.show("error", t(String(e))));
 }
 function render() {
+  if (!hydrated) return;
   const p = state.preferences,
     r = state.runtime,
     device = selectedDevice();
   applyChrome();
-  $("#navigation").innerHTML = ["buddy", "devices", "account", "settings"]
+  document.documentElement.dataset.loading = "false";
+  $("#app").ariaBusy = "false";
+  $("#navigation").innerHTML = ["buddy", "devices", "hooks", "account", "settings"]
     .map(
       (k) =>
         `<button class="nav ${page === k ? "active" : ""}" data-page="${k}" data-label="${t(labels[k])}" aria-label="${t(labels[k])}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[k]}</svg><span class="nav-label">${t(labels[k])}</span></button>`,
@@ -486,16 +510,28 @@ function render() {
       ? buddyPage()
       : page === "devices"
         ? devicesPage()
+        : page === "hooks"
+          ? integrationsPage(state.runtime.agent, escape)
         : page === "account"
           ? accountPage()
           : settingsPage();
   updateLive();
+  preview.draw();
+}
+function renderLoading(error = false) {
+  applyChrome();
+  document.documentElement.dataset.loading = "true";
+  $("#app").ariaBusy = "true";
+  $("#startup").innerHTML = `<img class="startup-icon" src="assets/app-icon.png" alt=""><p>${error ? t("無法讀取本機服務狀態") : t("載入中…")}</p>${error ? `<button class="button" data-action="retry">${t("重新載入")}</button>` : spinner}`;
 }
 function updateLive() {
   if ($("#last-sync")) $("#last-sync").textContent = syncText();
   if ($("#device-sync")) $("#device-sync").textContent = syncText();
-  if ($("#hold-duration")) $("#hold-duration").textContent = duration(effectiveHold());
+  if ($("#hold-duration")) $("#hold-duration").textContent = duration(holdSeconds());
   if ($("#activity")) $("#activity").textContent = activityText();
+  if ($("#session-summary")) $("#session-summary").textContent = sessionsText();
+  if (page === "hooks" && state.runtime.agent?.eventCount && $("#hook-receipt"))
+    $("#hook-receipt").textContent = t("已收到 {n} 個事件，最後更新 {time}", { n: state.runtime.agent.eventCount, time: formatTime(state.runtime.agent.lastEventAt) });
   const dot = $("#buddy-dot");
   if (dot) {
     const kind = dotState();
@@ -505,7 +541,7 @@ function updateLive() {
   if (badge) {
     const remaining = screenRemaining(),
       ready = linkReady();
-    badge.textContent = !ready ? "" : remaining > 0 ? screenText(remaining) : t("息屏");
+    badge.textContent = !ready ? "" : remaining > 0 ? state.runtime.ack?.wakeDisplay?.active ? t("任務中保持亮屏") : screenText(remaining) : t("息屏");
     badge.className = `chip screen-badge ${!ready ? "hidden" : remaining > 0 ? "on" : "off"}`;
     const screen = $(".screen");
     if (screen) screen.classList.toggle("asleep", ready && remaining <= 0);
@@ -545,10 +581,14 @@ function settleRefresh() {
   }
 }
 async function refresh() {
-  if (!bridge.available) return;
+  if (!bridge.available || refreshing) return;
+  refreshing = true;
   try {
     const wasLoggedIn = state.loggedIn;
+    const selected = state.preferences.selected;
     state = await bridge.getState();
+    hydrated = true;
+    if (selected !== state.preferences.selected) draftTheme = null;
     const reported = state.runtime.ack?.page;
     if (typeof reported === "number" && reported !== ackPage) {
       ackPage = reported;
@@ -579,22 +619,26 @@ async function refresh() {
       state.runtime.installation,
       state.runtime.progress,
       state.runtime.paused,
+      Number(state.runtime.agent?.eventCount) > 0,
       op?.id,
       op?.status,
       state.autostart,
       refreshingSince,
     ]);
     if (next !== signature) {
-      signature = next;
       if (
         !busyAction &&
         !["SELECT", "INPUT"].includes(document.activeElement?.tagName)
-      )
+      ) {
+        signature = next;
         render();
-      else updateLive();
+      } else updateLive();
     } else updateLive();
   } catch {
-    $("#notice").textContent = t("無法讀取本機服務狀態");
+    if (hydrated) $("#notice").textContent = t("無法讀取本機服務狀態");
+    else renderLoading(true);
+  } finally {
+    refreshing = false;
   }
 }
 async function perform(op, value, success = "") {
@@ -628,6 +672,19 @@ async function perform(op, value, success = "") {
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || busyAction || b.disabled) return;
+  if (b.dataset.action === "retry") {
+    renderLoading();
+    refresh();
+    return;
+  }
+  if (!hydrated) return;
+  if (b.dataset.copySkill || b.dataset.copyProvider) {
+    const text = b.dataset.copySkill ? SKILL_URL : setupRequest(b.dataset.copyProvider);
+    if (text) bridge.copyText(text)
+      .then(() => toast.show("success", t("已複製，可貼到 AI 的專案對話")))
+      .catch(() => toast.show("error", t("無法複製，請手動選取下方文字")));
+    return;
+  }
   if (b.dataset.page) {
     page = b.dataset.page;
     confirmLogout = false;
@@ -657,6 +714,10 @@ document.addEventListener("click", (e) => {
   confirmLogout = false;
   if (op === "wake_hold") {
     saveHold();
+    return;
+  }
+  if (op === "reset_activity") {
+    perform(op, null, t("活動狀態已重設"));
     return;
   }
   if (op === "refresh_device") refreshingSince = Date.now();
@@ -702,13 +763,17 @@ document.addEventListener("change", (e) => {
   );
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
-render();
-refresh();
-setInterval(refresh, 1000);
-const stopPreview = startPreview(() => ({
+const preview = startPreview(() => ({
   runtime: state.runtime,
   theme: previewTheme(),
   online: online(),
   bandPage,
 }));
-window.addEventListener("pagehide", stopPreview, { once: true });
+if (hydrated) render();
+else renderLoading();
+refresh();
+const refreshTimer = setInterval(refresh, 1000);
+window.addEventListener("pagehide", () => {
+  clearInterval(refreshTimer);
+  preview.stop();
+}, { once: true });

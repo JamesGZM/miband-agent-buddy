@@ -1,5 +1,15 @@
 # Validation record
 
+## 2026-11-11 — Startup, project Hooks and active-task display
+
+- 130 Node tests, 17 desktop Rust tests, 3 native transport Rust tests, architecture checks over 86 authored sources, both builds and diff whitespace checks passed locally. Hook integration tests required loopback-listener sandbox permission; project installer fixtures isolate user/ancestor paths and use synthetic data.
+- Fake clocks verify eight hours without a new lifecycle Hook while synchronization continues: active display renewal remains on, with no periodic app launch. Concurrent task completion preserves other active tasks; only all-idle starts the saved grace. Pause, disconnect, replay, hidden-page callbacks, reset and legacy capabilities have regression coverage.
+- Startup tests cover delayed/failed/timed-out hydration, saved device theme before the first ACK, immediate preview paint and one-minute setting reflection. New-user checklist and project skill copy/navigation passed automated tests and a local browser visual check. Installer review fixes include private external backups, scope conflict detection, update locking and refusal to follow project configuration directories outside the selected project.
+- The rebuilt Mac app was installed with a local backup, binary/icon hashes verified, and reopened. Its existing connection returned, the Buddy page showed the saved one-minute duration, and a real local AI Hook updated the activity count. A new-account login was not exercised in this pass.
+- Buddy 0.5.4 installation returned success and the next device view reported version 0.5.4. During a real local AI task, the desktop displayed the active retention receipt and one active session. The user confirmed the physical band display was currently staying lit. This passes a short active-task illumination smoke, not an endurance test. The earlier long-duration firmware/lifecycle failure below remains unresolved by an actual endurance retest; no new physical endurance claim is made.
+
+The entries below are historical evidence and retain their original scope and outcomes.
+
 Date: 2026-11-10 (Asia/Singapore).
 
 ## Automated

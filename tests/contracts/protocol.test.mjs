@@ -6,6 +6,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import protocol from '../../packages/buddy-shared/protocol/snapshot.js';
 import wire from '../../packages/buddy-shared/protocol/runtime.js';
+import display from '../../packages/buddy-shared/presentation/display.js';
 import {createBridge} from '../../apps/desktop/ui/bridge.js';
 
 const fixture = JSON.parse(await fs.readFile(new URL('../../packages/buddy-shared/fixtures/v1.json', import.meta.url)));
@@ -18,12 +19,39 @@ test('canonical v1 snapshot, ACK and both IPC boundaries consume the same fixtur
   assert.throws(() => protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 2})));
   assert.equal(protocol.decodeMessage(JSON.stringify({...fixture.snapshot, page: 1})).page, 1);
   for (const c of [{op:'pause',value:'true'}, {op:'configure',settings:{revision:-1}}, {op:'connect',address:'x',key:'bad'}, {op:'unknown'},
-    {op:'configure',settings:{revision:1},request:'bad id'}, {op:'show_page',page:2,request:'op-1'}, {op:'show_page',page:1}, {op:'wake'}]) {
+    {op:'configure',settings:{revision:1},request:'bad id'}, {op:'show_page',page:2,request:'op-1'}, {op:'show_page',page:1}, {op:'wake'}, {op:'reset_activity',value:true}]) {
     assert.throws(() => wire.decodeRuntimeCommand(c));
   }
   for (const e of [{event:'battery',percent:101}, {event:'ack',ack:null}, {event:'result',id:1,ok:'yes'}]) {
     assert.throws(() => wire.decodeTransportEvent(e));
   }
+});
+test('activity lease fields are additive, paired and bounded at the band boundary', () => {
+  const base = {...fixture.snapshot};
+  delete base.activityHoldMs; delete base.idleHoldMs;
+  assert.deepEqual(protocol.decodeMessage(JSON.stringify(base)), base);
+  for (const [activityHoldMs, idleHoldMs] of [[15000,60000],[0,5000],[1000,1800000]]) {
+    assert.equal(protocol.decodeMessage(JSON.stringify({...base,activityHoldMs,idleHoldMs})).activityHoldMs, activityHoldMs);
+  }
+  for (const pair of [{activityHoldMs:15000},{idleHoldMs:60000},{activityHoldMs:15001,idleHoldMs:60000},
+    {activityHoldMs:-1,idleHoldMs:60000},{activityHoldMs:999,idleHoldMs:60000},{activityHoldMs:0,idleHoldMs:4999},
+    {activityHoldMs:15000,idleHoldMs:1800001},{activityHoldMs:true,idleHoldMs:60000}]) {
+    assert.throws(() => protocol.decodeMessage(JSON.stringify({...base,...pair})));
+  }
+});
+test('session counts are bounded totals and share the same compact presentation', () => {
+  for (const sessionCounts of [{thinking:1,working:1,attention:1},{thinking:0,working:0,attention:128}]) {
+    assert.deepEqual(protocol.decodeMessage(JSON.stringify({...fixture.snapshot,sessionCounts})).sessionCounts, sessionCounts);
+  }
+  for (const sessionCounts of [{thinking:128,working:1,attention:0},{thinking:-1,working:0,attention:0},
+    {thinking:0,working:0,attention:0.5},{thinking:1},[],true]) {
+    assert.throws(() => protocol.decodeMessage(JSON.stringify({...fixture.snapshot,sessionCounts})));
+  }
+  assert.equal(display.activityLabel({thinking:1,working:1,attention:1},false),'3 ACTIVE · 1 WAIT');
+  assert.equal(display.activityLabel({thinking:0,working:128,attention:0},false),'128 ACTIVE');
+  assert.equal(display.activityLabel({thinking:0,working:0,attention:128},false),'128 ACTIVE · 128 WAIT');
+  for (const counts of [null,{}, {thinking:0,working:0,attention:0}, {thinking:128,working:1,attention:0}]) assert.equal(display.activityLabel(counts,false),'');
+  assert.equal(display.activityLabel({thinking:1,working:1,attention:1},true),'');
 });
 test('generated Vela and browser adapters preserve the canonical module exports', async () => {
   const require = createRequire(import.meta.url);

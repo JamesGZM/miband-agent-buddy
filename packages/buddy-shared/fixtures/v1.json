@@ -23,7 +23,14 @@
     "settingsRevision": 2,
     "keepScreen": false,
     "wakeId": "wake-fixture",
-    "wakeHoldMs": 20000
+    "wakeHoldMs": 20000,
+    "activityHoldMs": 15000,
+    "idleHoldMs": 60000,
+    "sessionCounts": {
+      "thinking": 1,
+      "working": 1,
+      "attention": 1
+    }
   },
   "ack": {
     "v": 1,
@@ -32,13 +39,14 @@
     "seq": 1,
     "received": 1,
     "keepScreen": "on",
-    "appVersion": "0.5.1",
+    "appVersion": "0.5.4",
     "buddyTheme": "chatgpt",
     "settingsRevision": 2,
     "settingsApplied": true,
     "wakeDisplay": {
       "id": "wake-fixture",
-      "remainingMs": 20000
+      "remainingMs": 15000,
+      "active": true
     },
     "keepDiagnostics": {
       "visible": true
@@ -52,7 +60,8 @@
         "claude",
         "deepseek"
       ],
-      "page": true
+      "page": true,
+      "activityHold": true
     }
   },
   "credentials": {
@@ -115,6 +124,9 @@
     },
     {
       "op": "refresh_device"
+    },
+    {
+      "op": "reset_activity"
     }
   ],
   "transportCommands": [
@@ -145,7 +157,14 @@
         "settingsRevision": 2,
         "keepScreen": false,
         "wakeId": "wake-fixture",
-        "wakeHoldMs": 20000
+        "wakeHoldMs": 20000,
+        "activityHoldMs": 15000,
+        "idleHoldMs": 60000,
+        "sessionCounts": {
+          "thinking": 1,
+          "working": 1,
+          "attention": 1
+        }
       }
     },
     {
@@ -193,19 +212,30 @@
         "seq": 1,
         "received": 1,
         "keepScreen": "on",
-        "appVersion": "0.5.1",
+        "appVersion": "0.5.4",
         "buddyTheme": "chatgpt",
         "settingsRevision": 2,
         "settingsApplied": true,
         "wakeDisplay": {
           "id": "wake-fixture",
-          "remainingMs": 20000
+          "remainingMs": 15000,
+          "active": true
         },
         "keepDiagnostics": {
           "visible": true
         },
         "page": 0,
-        "mode": "thinking"
+        "mode": "thinking",
+        "capabilities": {
+          "maxWakeHoldMs": 1800000,
+          "themes": [
+            "chatgpt",
+            "claude",
+            "deepseek"
+          ],
+          "page": true,
+          "activityHold": true
+        }
       }
     },
     {
@@ -242,13 +272,14 @@
       "seq": 1,
       "received": 1,
       "keepScreen": "on",
-      "appVersion": "0.5.1",
+      "appVersion": "0.5.4",
       "buddyTheme": "chatgpt",
       "settingsRevision": 2,
       "settingsApplied": true,
       "wakeDisplay": {
         "id": "wake-fixture",
-        "remainingMs": 20000
+        "remainingMs": 15000,
+        "active": true
       },
       "keepDiagnostics": {
         "visible": true
@@ -262,7 +293,8 @@
           "claude",
           "deepseek"
         ],
-        "page": true
+        "page": true,
+        "activityHold": true
       }
     },
     "paused": false,
@@ -349,6 +381,10 @@
     },
     {
       "operation": "refresh_device",
+      "value": null
+    },
+    {
+      "operation": "reset_activity",
       "value": null
     },
     {

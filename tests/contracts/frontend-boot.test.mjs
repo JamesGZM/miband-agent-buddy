@@ -3,24 +3,35 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 test('actual frontend boots, refreshes native state and renders every existing page', async t => {
-  const nodes = new Map(), handlers = new Map(), calls = [], frames = [], paints = [], texts = [], intervals = [];
+  const nodes = new Map(), handlers = new Map(), calls = [], frames = [], paints = [], texts = [], intervals = [], copies = [];
   const ctx = {clearRect() {},fillRect() {},save() {},translate() {},rotate() {},restore() {},fillText(text) {texts.push(text);},drawImage() {paints.push('image');}};
   const node = selector => {
-    if (selector === '#band') return {getContext:()=>ctx};
+    if (selector === '#band') return nodes.get('#content')?.innerHTML.includes('<canvas') ? {getContext:()=>ctx} : null;
     if (!nodes.has(selector)) nodes.set(selector,{innerHTML:'',textContent:'',className:'',dataset:{},classList:{toggle() {}}});
     return nodes.get(selector);
   };
   const state = {loggedIn:true,devices:[{index:0,name:'Fixture Band 9',address:'masked',supported:true}],
-    preferences:{appTheme:'claude',appearance:'system',keepScreen:false,background:true,selected:0,language:'zh-Hant'},
+    preferences:{appTheme:'claude',appearance:'system',keepScreen:false,background:true,selected:0,language:'zh-Hant',buddyTheme:'claude'},
     runtime:{connection:'connected',agent:{state:'thinking'},ack:{appVersion:'0.5.2',page:0,buddyTheme:'chatgpt',settingsApplied:true},lastAckAt:Date.now(),metrics:{
       sampledAt:Date.now(),cpu:42,memory:{usedBytes:8*2**30,totalBytes:16*2**30,percent:50},
       disk:{usedBytes:60e9,totalBytes:100e9,percent:60},
     }},autostart:false};
+  const initialAck = state.runtime.ack;
+  delete state.runtime.ack;
+  let failInitialState;
+  const firstState = new Promise((resolve, reject) => {failInitialState = reject;});
+  let firstRead = true;
   const globals = {
+    navigator: {languages: ['zh-Hant'], clipboard: {writeText: async text => {copies.push(text);}}},
     document:{querySelector:node,documentElement:{dataset:{}},activeElement:null,hidden:false,
       addEventListener:(event,fn)=>handlers.set(event,fn)},
     window:{addEventListener() {}},
-    __TAURI__:{core:{invoke:async (command,args)=>{calls.push([command,args]);return structuredClone(state);}}},
+    __TAURI__:{core:{invoke:async (command,args)=>{
+      calls.push([command,args]);
+      if (command === 'get_state' && firstRead) {firstRead = false; await firstState;}
+      if (command === 'action' && args.operation === 'wake_hold') state.preferences.wakeHoldSeconds = args.value;
+      return structuredClone(state);
+    }}},
     matchMedia:()=>({matches:false,addEventListener() {}}),
     Image:class {constructor() {this.complete=true;this.naturalWidth=192;}},
     setTimeout:fn=>{frames.push(fn);return frames.length;},clearTimeout:()=>{},setInterval:fn=>{intervals.push(fn);return 2;},
@@ -34,13 +45,51 @@ test('actual frontend boots, refreshes native state and renders every existing p
   const click = dataset => handlers.get('click')({target:{closest:()=>({dataset,disabled:false})}});
   const refresh = async () => {await intervals[0](); await settle();};
   await import('../../apps/desktop/ui/app.js');
+  assert.ok(!node('#content').innerHTML.includes('<canvas'), 'do not render default Buddy before hydration');
+  assert.equal(globalThis.document.documentElement.dataset.loading,'true');
+  failInitialState(new Error('fixture service unavailable'));
+  await settle();
+  assert.match(node('#startup').innerHTML,/data-action="retry"/);
+  assert.ok(!node('#content').innerHTML.includes('<canvas'));
+  click({action:'retry'});
   await settle();
   assert.ok(calls.some(([command])=>command==='get_state'));
   assert.ok(node('#content').innerHTML.includes('<canvas'));
+  assert.equal(globalThis.document.documentElement.dataset.loading,'false');
+  assert.match(node('#content').innerHTML,/theme-card selected" data-theme-choice="claude"/);
+  assert.ok(paints.length > 0, 'paint preview in the same turn as the first real render');
+  state.runtime.ack = initialAck;
+  await refresh();
+  assert.match(node('#content').innerHTML,/theme-card selected" data-theme-choice="chatgpt"/);
+  const paintCount = paints.length;
+  await refresh();
+  assert.equal(paints.length,paintCount,'unchanged polling must not rebuild or repaint the preview');
   for (const [page,expected] of [['devices','Fixture Band 9'],['account','小米帳號已登入'],['settings','主題'],['buddy','<canvas']]) {
     click({page});
     assert.ok(node('#content').innerHTML.includes(expected),page);
   }
+  click({page: 'hooks'});
+  assert.match(node('#content').innerHTML, /等待第一個事件/);
+  click({copySkill: 'true'});
+  await settle();
+  assert.equal(copies.at(-1), 'https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md');
+  click({copyProvider: 'claude-code'});
+  await settle();
+  assert.match(copies.at(-1), /Claude Code/);
+  assert.match(copies.at(-1), /專案級 Hooks/);
+  state.runtime.agent = {state: 'attention', eventCount: 3, lastEventAt: Date.now(), activeSessions: 3, sessionCounts: {thinking: 1, working: 1, attention: 1}};
+  await refresh();
+  assert.match(node('#content').innerHTML, /已收到 Hooks 事件/);
+  click({page: 'buddy'});
+  assert.doesNotMatch(node('#content').innerHTML, /開始使用 Buddy/);
+  assert.match(node('#activity').textContent, /3 個任務/);
+  assert.equal(node('#session-summary').textContent, '1 執行 · 1 思考 · 1 等待確認');
+  state.runtime.agent.state = 'thinking';
+  await refresh();
+  state.runtime.agent.staleSessions = 1;
+  await refresh();
+  assert.match(node('#session-summary').textContent, /1 個任務狀態待確認/);
+  state.runtime.agent.staleSessions = 0;
   const content = node('#content').innerHTML;
   for (const decoration of ['⌘','⌁','◌','✓','eyebrow','OPEN SOURCE']) assert.ok(!content.includes(decoration),decoration);
   assert.ok(paints.length>0);
@@ -170,6 +219,7 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.ok(node('#content').innerHTML.includes('id="wake-hold"'));
   for (const [value,kind,text] of [
     ['20','success','亮屏時長已儲存為 20 秒'],
+    ['60','success','已儲存為 1 分鐘，較長的亮屏時間會增加手環耗電'],
     ['300','success','已儲存為 5 分鐘，較長的亮屏時間會增加手環耗電'],
     ['3','error','請輸入 5 到 1800 之間的整數秒數'],
     ['12.5','error','請輸入 5 到 1800 之間的整數秒數'],
@@ -180,17 +230,21 @@ test('actual frontend boots, refreshes native state and renders every existing p
     await settle();
     assert.equal(node('#toast').textContent,text,value);
     assert.match(node('#toast').className,new RegExp(kind));
+    if (value === '60') {
+      click({page:'buddy'});
+      assert.equal(node('#hold-duration').textContent,'1 分鐘');
+      click({page:'settings'});
+    }
   }
-  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='wake_hold').map(([,args])=>args.value),[20,300]);
-  state.preferences.wakeHoldSeconds = 300;
-  await refresh();
+  assert.deepEqual(calls.filter(([command,args])=>command==='action'&&args.operation==='wake_hold').map(([,args])=>args.value),[20,60,300]);
 
-  // Buddy page shows the saved hold; legacy bands without capabilities stay capped at 30s while linked.
+  // A saved hold appears immediately; legacy caps are separate from the saved preference.
   click({page:'buddy'});
   assert.equal(node('#hold-duration').textContent,'5 分鐘');
   delete state.runtime.ack.capabilities;
   await refresh();
-  assert.equal(node('#hold-duration').textContent,'30 秒');
+  assert.equal(node('#hold-duration').textContent,'5 分鐘');
+  assert.match(node('#content').innerHTML,/此版本的 Buddy 最多亮屏 30 秒/);
   state.runtime.connection = 'disconnected';
   await refresh();
   assert.equal(node('#hold-duration').textContent,'5 分鐘');
@@ -213,6 +267,15 @@ test('actual frontend boots, refreshes native state and renders every existing p
   state.preferences.appTheme='claude';
   await refresh();
 
+  // A focused field defers layout without consuming the changed state.
+  globalThis.document.activeElement = {tagName:'INPUT'};
+  state.runtime.connection = 'standby';
+  await refresh();
+  assert.doesNotMatch(node('#device-summary').innerHTML,/手環休眠中/);
+  globalThis.document.activeElement = null;
+  await refresh();
+  assert.match(node('#device-summary').innerHTML,/手環休眠中/);
+
   // Switching language re-renders every label, including backend messages from the shared catalog.
   state.preferences.language = 'en';
   state.runtime.error = '請先連線手環';
@@ -228,6 +291,10 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.ok(node('#content').innerHTML.includes('手环主题'));
   click({page:'settings'});
   assert.match(node('#content').innerHTML,/<select id="language">[\s\S]*value="zh-Hans" selected/);
+  click({action:'reset_activity'});
+  await settle();
+  assert.deepEqual(calls.filter(([command,args]) => command === 'action' && args.operation === 'reset_activity').at(-1), ['action', {operation:'reset_activity',value:null}]);
+  assert.equal(node('#toast').textContent, '活动状态已重置');
 });
 
 test('narrow windows collapse the sidebar into an icon rail', () => {

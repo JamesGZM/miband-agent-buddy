@@ -219,6 +219,7 @@ pub fn perform(s: &mut Session, action: Action) -> Result<(), String> {
             Ok(())
         }
         Action::RefreshDevice => s.worker.send(RuntimeCommand::RefreshDevice),
+        Action::ResetActivity => s.worker.send(RuntimeCommand::ResetActivity),
     }
 }
 pub fn finish_login(
@@ -268,6 +269,7 @@ pub struct DeviceView {
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesView<'a> {
     app_theme: &'a str,
+    buddy_theme: Option<&'a str>,
     appearance: &'a str,
     keep_screen: bool,
     background: bool,
@@ -315,6 +317,10 @@ pub fn view(s: &Session, autostart: bool) -> AppView<'_> {
         busy: s.busy,
         preferences: PreferencesView {
             app_theme: &s.prefs.app_theme,
+            buddy_theme: s.prefs.selected
+                .and_then(|index| s.credentials.as_ref()?.devices.get(index))
+                .and_then(|device| s.prefs.themes.get(&device.addr))
+                .map(String::as_str),
             appearance: &s.prefs.appearance,
             keep_screen: s.prefs.keep_screen,
             background: s.prefs.background,
@@ -372,6 +378,18 @@ mod tests {
             assert!(!output.contains(secret));
         }
         assert!(output.contains("55:66"));
+    }
+    #[test]
+    fn ui_projection_restores_only_the_selected_devices_saved_theme() {
+        let mut s = session();
+        s.prefs.themes.insert("11:22:33:44:55:66".into(), "claude".into());
+        let output = serde_json::to_value(view(&s, false)).unwrap();
+        assert_eq!(output["preferences"]["buddyTheme"], "claude");
+        assert!(output["runtime"]["ack"].is_null());
+        s.prefs.selected = None;
+        assert!(serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null());
+        s.prefs.selected = Some(99);
+        assert!(serde_json::to_value(view(&s, false)).unwrap()["preferences"]["buddyTheme"].is_null());
     }
     #[test]
     fn only_durable_current_revision_ack_updates_device_theme() {

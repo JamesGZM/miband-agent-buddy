@@ -89,6 +89,7 @@ pub enum RuntimeCommand {
     },
     Install,
     RefreshDevice,
+    ResetActivity,
 }
 
 #[cfg(test)]
@@ -165,5 +166,7 @@ mod tests {
         };
         assert_eq!(serde_json::to_value(hold).unwrap(), f["runtimeCommands"][8]);
         assert_eq!(serde_json::to_value(RuntimeCommand::RefreshDevice).unwrap(), f["runtimeCommands"][9]);
+        assert_eq!(serde_json::to_value(RuntimeCommand::ResetActivity).unwrap(), f["runtimeCommands"][10]);
+        assert!(serde_json::from_value::<Action>(serde_json::json!({"operation":"reset_activity","value":true})).is_err());
     }
 }

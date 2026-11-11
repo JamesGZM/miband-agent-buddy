@@ -16,6 +16,12 @@ open 'apps/desktop/dist/MiBand Agent Buddy.app'
 
 `bootstrap` is the explicit network-fetch step for pinned upstream sources. Offline development can add `--offline` to Cargo commands after dependencies are available. The build commands generate assets/packages but do not install Buddy, change hooks, start services or connect devices. `npm run hooks:install` is a separate explicit setup action; it retains the stable compatibility Hook path.
 
+New users can follow the desktop Buddy checklist and **AI connections** page. The [project Hooks skill](../../skills/buddy-hooks/SKILL.md) provides Codex and Claude Code setup in an existing project and a generic harness sender; [Hooks development](hooks.md) documents supported lifecycle events, scope conflicts and privacy. Configured hooks, host trust, received events and physical display response are distinct checks.
+
+The checklist follows the account → device → application → integration progression used in [AstroBox's device connection guide](https://abox.run/docs/usage/connection), while retaining this app's existing official account flow. It derives completion from current account, connection, Buddy ACK and event evidence. A fresh runtime waits for a new Hook event instead of treating an old installation as proof of a live connection.
+
+Branch/PR CI generates test resources and runs source checks without packaging. Published GitHub Releases run the macOS build and attach only redistributable band artifacts; see [release policy](../open-source/RELEASING.md). The checkout-bound desktop bundle is not a portable download.
+
 ## Layout and change workflow
 
 Read root `AGENTS.md` and the [architecture](../architecture/README.md). Applications live in `apps`, Node backend in `services/runtime`, native SPP in `native/transport`, canonical shared code in `packages/buddy-shared`, and all build entrypoints in `scripts`.

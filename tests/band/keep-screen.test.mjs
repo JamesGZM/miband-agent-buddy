@@ -34,3 +34,31 @@ test('half-hour lease keeps renewing every 30 seconds and still expires on the b
  assert.equal(h.calls.at(-1).keepScreenOn,false);assert.equal(h.controller.display().remainingMs,0);
  h.advance(120000);assert.equal(h.calls.length,61);
 });
+test('active snapshots renew a watchdog without brightness requests for every sample',()=>{
+ const h=harness();h.controller.hold('task',20000);h.calls[0].success();
+ h.controller.activity(15000,60000);
+ for(let elapsed=0;elapsed<60000;elapsed+=2000){h.advance(2000);h.controller.activity(15000,60000);h.calls.at(-1).success();}
+ assert.equal(h.controller.display().active,true);assert.equal(h.controller.display().remainingMs,15000);
+ assert.equal(h.calls.length,3);assert.equal(h.calls.every(c=>c.keepScreenOn),true);
+ h.advance(15000);assert.equal(h.calls.at(-1).keepScreenOn,false);assert.equal(h.controller.display().active,false);
+});
+test('last active task starts one idle grace period and idle snapshots never extend it',()=>{
+ const h=harness();h.controller.activity(15000,60000);h.calls[0].success();h.advance(10000);
+ h.controller.activity(0,60000);assert.equal(h.controller.display().active,false);
+ for(let elapsed=0;elapsed<60000;elapsed+=2000){h.advance(2000);h.controller.activity(0,60000);h.calls.at(-1).success();}
+ assert.equal(h.controller.display().remainingMs,0);assert.equal(h.calls.at(-1).keepScreenOn,false);
+ h.controller.activity(0,60000);assert.equal(h.controller.display().remainingMs,0);
+});
+test('new work interrupts idle grace, while hide cancels both timers and stale callbacks',()=>{
+ const h=harness();h.controller.activity(15000,60000);const stale=h.calls[0];
+ h.controller.activity(0,60000);h.advance(2000);h.controller.activity(15000,60000);
+ assert.equal(h.controller.display().active,true);assert.equal(h.controller.display().remainingMs,15000);
+ h.controller.hide();h.calls.at(-1).success();stale.success();h.advance(120000);
+ assert.equal(h.controller.display().remainingMs,0);assert.equal(h.controller.snapshot().state,'off');
+ assert.equal(h.calls.at(-1).keepScreenOn,false);
+});
+test('malformed activity leases cannot acquire or extend the display',()=>{
+ const h=harness();
+ for(const [hold,idle] of [[-1,20000],[999,20000],[15001,20000],[1.5,20000],[15000,4999],[15000,1800001],[15000,'20000']])assert.equal(h.controller.activity(hold,idle),false);
+ assert.equal(h.calls.length,0);assert.equal(h.controller.display().remainingMs,0);
+});

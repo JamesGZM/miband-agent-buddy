@@ -39,6 +39,9 @@ function decodeRuntimeCommand(value) {
       if (typeof value.value !== 'boolean') throw new Error('Invalid pause');
       break;
     case 'disconnect': case 'install': case 'refresh_device': break;
+    case 'reset_activity':
+      if (Object.keys(value).length !== 1) throw new Error('Invalid activity reset');
+      break;
     default: throw new Error('Unknown command');
   }
   return value;

@@ -52,8 +52,8 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   channel.onmessage({ data });
   assert.equal(page.received, 1);
   assert.equal(page.cpuText, '0%');
-  assert.equal(sent[0].data.appVersion, '0.5.3');
-  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true});
+  assert.equal(sent[0].data.appVersion, '0.5.4');
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();
@@ -159,6 +159,33 @@ test('natural-sleep mode acquires a bounded hold only on a new wake event',()=>{
  channel.onmessage({data:JSON.stringify({...base,seq:2})});assert.equal(requests.length,1);
  page.onHide();assert.equal(requests.at(-1).keepScreenOn,false);
  channel.onmessage({data:JSON.stringify({...base,seq:3,wakeId:'event-2'})});assert.equal(requests.length,2);
+});
+test('activity renewal is capability advertised, replay safe and cannot relight a hidden page',()=>{
+ const {page,channel,requests,sent,setTime}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'activity',seq:1,text:'',value:0,cpu:42,mode:'working',activityHoldMs:15000,idleHoldMs:60000};
+ channel.onmessage({data:JSON.stringify(base)});requests[0].success();
+ assert.equal(sent.at(-1).data.capabilities.activityHold,true);
+ assert.equal(sent.at(-1).data.wakeDisplay.active,true);
+ setTime(3000);channel.onmessage({data:JSON.stringify(base)});assert.equal(sent.length,1);
+ channel.onmessage({data:JSON.stringify({...base,seq:2})});assert.equal(sent.at(-1).data.wakeDisplay.remainingMs,15000);
+ assert.equal(requests.length,1);
+ page.onHide();requests.at(-1).success();
+ channel.onmessage({data:JSON.stringify({...base,seq:3})});
+ assert.equal(requests.length,2);assert.equal(sent.at(-1).data.wakeDisplay.active,false);
+ assert.equal(sent.at(-1).data.wakeDisplay.remainingMs,0);
+ page.onShow();assert.equal(requests.length,2);
+ page.exitApp();channel.onmessage({data:JSON.stringify({...base,seq:4})});assert.equal(requests.at(-1).keepScreenOn,false);
+});
+test('pet page shows only bounded aggregate counts and clears them when stale or idle',()=>{
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'counts',seq:1,text:'',value:0,cpu:42,mode:'attention',sessionCounts:{thinking:1,working:1,attention:1}};
+ channel.onmessage({data:JSON.stringify(base)});assert.equal(page.activityLabel,'3 ACTIVE · 1 WAIT');
+ setTime(11000);page.tick();assert.equal(page.activityLabel,'');
+ channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:0}})});
+ assert.equal(page.activityLabel,'');
+ channel.onmessage({data:JSON.stringify({...base,seq:3,sessionCounts:{thinking:128,working:1,attention:0}})});
+ assert.equal(page.activityLabel,'');assert.equal(page.errorText,'Invalid message');
+ assert.match(ux,/class="activity-count"/);assert.match(ux,/padding-top: 158px/);
 });
 
 test('destroyed controller ignores late channel send and error callbacks',()=>{

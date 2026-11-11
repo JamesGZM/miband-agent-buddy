@@ -3,7 +3,7 @@ import bandDisplay from './assets/display.mjs';
 
 export function startPreview(getState) {
   const $ = selector => document.querySelector(selector);
-  let timer;
+  let timer, stopped = false;
   const previewRings = {
     cpu: bandUI.createRingTransition(),
     memory: bandUI.createRingTransition(),
@@ -14,12 +14,14 @@ export function startPreview(getState) {
   function image(path) {
     if (!images.has(path)) {
       const im = new Image();
+      im.onload = draw;
       im.src = "assets/capsule/" + path;
       images.set(path, im);
     }
     return images.get(path);
   }
   function draw() {
+    if (stopped) return;
     const {runtime: r, theme, online, bandPage} = getState();
     const canvas = $("#band");
     if (canvas) {
@@ -45,6 +47,10 @@ export function startPreview(getState) {
         layer(motion.ringSource.split("/").pop(), motion.ringOpacity);
         layer(motion.loadingSource.split("/").pop(), motion.loadingOpacity);
         layer(motion.symbolSource.split("/").pop(), 1, motion.symbolLeft);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#b9c5c0";
+        ctx.font = "14px -apple-system";
+        ctx.fillText(bandDisplay.activityLabel(r.agent?.sessionCounts, !online), 245, 174);
       } else {
         layer("resource-tracks.png");
         const m =
@@ -106,8 +112,11 @@ export function startPreview(getState) {
         });
       }
     }
-    timer = setTimeout(draw, document.hidden ? 1000 : 100);
   }
-  draw();
-  return () => clearTimeout(timer);
+  function tick() {
+    draw();
+    timer = setTimeout(tick, document.hidden ? 1000 : 100);
+  }
+  tick();
+  return {draw, stop() {stopped = true; clearTimeout(timer);}};
 }
