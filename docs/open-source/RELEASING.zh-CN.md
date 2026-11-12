@@ -32,8 +32,8 @@ MiBand Agent Buddy 使用 AGPL-3.0-only。公开仓库提供源码、许可证�
 
 App 内含 Node、运行时、共享模块、原生传输与 Buddy 包，可脱离源码目录移动。执行 `npm run build` 后执行 `npm run build:desktop`；加 `-- --release` 选择优化构建，不会发布。`python3 scripts/package_release.py` 生成 ZIP，若 Vivo MsgPack 意外进入依赖则失败。
 
-首次安装时解压并移到 `/Applications` 或用户可写的应用目录。目前为 ad-hoc 签名，**未经 Apple 公证**。首次打开可能需要在系统设置 → 隐私与安全性中明确批准。不要自动清除 quarantine，也不要将校验和当作 Apple 公证。
+首次安装时解压并移到 `/Applications` 或用户可写的应用目录。GitHub 包使用不带证书的 ad-hoc 签名，**未经 Apple 公证**；CI 不创建／导入证书，也不使用本地签名身份。本地构建要求已有证书，见[开发签名](../development/README.zh-CN.md#macos-签名)。首次打开可能需要在系统设置 → 隐私与安全性中明确批准。不要自动清除 quarantine，也不要将校验和当作 Apple 公证。
 
 设置 → 关于 → 检查更新读取本项目最新稳定 GitHub Release，下载时验证架构、摘要与解压后的 App。**安装并重启**是独立动作，会保留 App 数据，并在旁边留下 `MiBand Agent Buddy.previous-*.app`。目录不可写时先移到用户可写位置。App Translocation 路径和开发可执行文件不能原地更新。
 
-本地构建或没有发布版本时会如实显示，不会把源码归档当成可执行更新。未配置 Windows／Linux 包或 Apple Developer ID 签名与公证。
+本地构建或没有发布版本时会如实显示，不会把源码归档当成可执行更新。未配置 Windows／Linux 包或 GitHub Developer ID 签名与公证；本地证书签名使用钥匙串中的已有身份。

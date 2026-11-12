@@ -40,6 +40,18 @@ npm run build:desktop
 
 开发 App 输出到 `apps/desktop/dist/MiBand Agent Buddy.app`。优化构建使用 `npm run build:desktop -- --release`。该参数仅选择优化构建，不执行发布；打包与标签说明见[发布流程](../open-source/RELEASING.zh-CN.md)。
 
+## macOS 签名
+
+本地构建默认 `--signing-mode local`，要求钥匙串中已有有效代码签名身份。只有一个时自动选择；多个时通过 `--signing-identity` 或 `BUDDY_SIGNING_IDENTITY` 指定完整名称／SHA-1。不导出私钥、不创建证书，也不会静默退回 ad-hoc。下面的占位符应替换成已有证书的引用。
+
+```sh
+npm run build:desktop -- --signing-mode local
+BUDDY_SIGNING_IDENTITY='EXISTING_CERTIFICATE_SHA1' npm run build:desktop -- --release --signing-mode local
+npm run build:desktop -- --release --signing-mode ci
+```
+
+GitHub 明确使用 `ci`，不读取钥匙串并拒绝传入证书身份，不创建或导入任何证书，包括临时／自签证书。其 ad-hoc 程序签名不使用证书，用于满足 Apple Silicon 执行代码的签名要求。本地 App、Node 和传输程序使用同一已有证书及各自固定标识；跨构建保持证书和标识一致，才能保留稳定 designated requirement。首次从 ad-hoc 切换或改装 GitHub 包可能重新要求 macOS 授权。签名不等于公证。参见 [Apple TN3127](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)。
+
 ## 目录结构
 
 | 路径 | 职责 |

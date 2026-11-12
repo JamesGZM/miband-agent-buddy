@@ -20,6 +20,7 @@ export function installationTimeout(sizeBytes) {
 const LEGACY_WAKE_HOLD_MS = 30000;
 const MAX_WAKE_HOLD_MS = 1800000;
 const ACTIVITY_HOLD_MS = 15000;
+const RESPONSE_RECOVERY = 'activity_unresponsive';
 const LINK_READY = ["connected", "waiting", "standby"];
 const OPERATION_ACTIVE = ["waking", "applying"];
 
@@ -35,7 +36,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   let timer = null, connectionDeadline = null, closing = false, started = false;
   let sampleFlight = null, sampleValue = null, sampleAt = null;
   const diagnostics = {starts:0,closes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null};
-  const diagnosticCodes = ['auth_rejected','timeout','operation_failed','event_lagged','event_closed','transfer_session_reset','transfer_send_timeout','transfer_ack_timeout','transfer','app_missing'];
+  const diagnosticCodes = ['auth_rejected','timeout','operation_failed','event_lagged','event_closed','transfer_session_reset','transfer_send_timeout','transfer_ack_timeout','transfer','app_missing','app_query_failed','app_sync_failed','app_launch_failed','bluetooth_open_failed','bluetooth_link_closed'];
   function diagnose(phase, code) {
     diagnostics.phase = phase; diagnostics.at = now();
     if (code) diagnostics.lastCode = code;
@@ -44,11 +45,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   const wakePolicy = createWakePolicy({now, cooldown: timings.cooldown, ttl: timings.ttl});
   const batteryAlert=createBatteryAlert();
   let batteryAt=0,batteryDevice=null,chargingKnown=null,chargingTimer=null,probeFailures=0,buddyDisplayed=false;
+  let responseRecoveryTimer=null,responseRecoveryAttempted=false;
   const completions = createCompletionQueue({now,makeId});
   const agent = createCodexState({now,onEvent(event, previous) {
       if (desired && !paused && state.connection !== "installing") {
         wakePolicy.observe(event, previous);
         completions.observe(event,previous,settings.completionVibration);
+        if(agent.status().activeSessions===0)cancelResponseRecovery();
       }
     }});
   let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
@@ -90,6 +93,33 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       diagnostics,
     });
   function clearChargingRecovery(){cancel(chargingTimer);chargingTimer=null;}
+  function clearResponseRecovery(){
+    cancel(responseRecoveryTimer);responseRecoveryTimer=null;
+    wakePolicy.clearConnection(RESPONSE_RECOVERY);
+  }
+  function cancelResponseRecovery(){
+    clearResponseRecovery();
+    if(wakeFlight?.reason===RESPONSE_RECOVERY){
+      state.wake={...state.wake,status:'cancelled'};
+      clearWake();clearPending();
+    }
+  }
+  function responseRecoveryEligible(){
+    return desired && transport && !paused && settings.activityKeepAwake && agent.status().activeSessions>0 &&
+      state.installed===true && capabilities?.activityHold===true && state.ack?.pageLifecycle?.visible===1 &&
+      LINK_READY.includes(state.connection) && state.connection!=='connected';
+  }
+  function scheduleResponseRecovery(){
+    if(responseRecoveryAttempted || responseRecoveryTimer!==null || wakeFlight || operationActive() || !responseRecoveryEligible())return;
+    const owner=transport;
+    // Let the retry snapshot answer first; a single lost ACK must not reopen Buddy.
+    responseRecoveryTimer=schedule(()=>{
+      responseRecoveryTimer=null;
+      if(owner!==transport || wakeFlight || operationActive() || !responseRecoveryEligible())return;
+      responseRecoveryAttempted=true;
+      wakePolicy.requestConnection(RESPONSE_RECOVERY);launchPendingWake();
+    },timings.sample);
+  }
   function observeCharging(value){
     if(typeof value!=='boolean')return;
     const previous=chargingKnown;chargingKnown=value;
@@ -115,6 +145,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function operationActive() {
     return OPERATION_ACTIVE.includes(operation?.status);
   }
+  function deliveryRetry() {
+    return !paused && settings.activityKeepAwake && agent.status().activeSessions > 0 ? timings.sample : timings.probe;
+  }
   function configureKind(value) {
     if (value.buddyTheme !== undefined) return "theme";
     if (value.activityKeepAwake !== undefined) return "activity_keep_awake";
@@ -135,6 +168,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     return operationActive() && !!flight && flight.operation === operation.id;
   }
   function beginOperation(request, kind, target) {
+    clearResponseRecovery();
     settleOperation("cancelled", "superseded");
     operation = {id: request, kind, status: "waking", code: null, at: now(), target};
     if (!transport || !desired || !LINK_READY.includes(state.connection)) settleOperation("failed", "not_connected");
@@ -150,6 +184,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function launchPendingWake() {
     if (!transport || !desired || (paused && !operationActive()) || wakeFlight || pingDeadline || !LINK_READY.includes(state.connection)) return;
     const wake = wakePolicy.take(true);
+    if(wake?.reason===RESPONSE_RECOVERY && !responseRecoveryEligible())return;
     if (["activity_reconnect","charging_recovery"].includes(wake?.reason) && (paused || !settings.activityKeepAwake || agent.status().activeSessions === 0)) return;
     if(wake?.reason==='charging_recovery'&&chargingKnown!==true)return;
     if (wake) launchWake(wake);
@@ -199,6 +234,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     cancel(wakeDeadline); wakeDeadline = null; wakeFlight = null;
   }
   function launchWake(event) {
+    if(event.reason!==RESPONSE_RECOVERY)clearResponseRecovery();
     clearPending();
     wakeFlight = { ...event, id: "wake-" + makeId(), queued: false };
     state.wake = { reason: event.reason, status: "sending", at: now() };
@@ -209,7 +245,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (ownsWake(wakeFlight)) settleOperation("failed", code);
       clearWake(); clearPending();
       state.connection = "standby";
-      retryAt = now() + timings.probe;
+      retryAt = now() + deliveryRetry();
       publish();
     }, timings.wake);
   }
@@ -224,6 +260,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     pending = null;
   }
   async function stop() {
+    cancelResponseRecovery();
     completions.clear();clearChargingRecovery();buddyDisplayed=false;
     diagnose('stopped');
     desired = false;
@@ -272,6 +309,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   }
   function connect() {
     if (!desired || !credential) return;
+    cancelResponseRecovery();responseRecoveryAttempted=false;
     const child = createTransport({
       onEvent: handleEvent,
       onError: handleError,
@@ -366,6 +404,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         return;
       }
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
+        clearResponseRecovery();
+        if(event.ack.keepScreen==='on' && event.ack.pageLifecycle?.visible===1)responseRecoveryAttempted=false;
         diagnose('connected');probeFailures=0;cancel(pingDeadline);pingDeadline=null;
         const ack = event.ack;if(ack.pageLifecycle?.visible===1)buddyDisplayed=true;
         if(pending.completion&&ack.completion?.id===pending.completion.id)completions.acknowledge(ack.completion);
@@ -463,7 +503,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (event.event === "result" && event.id === "link-ping") {
         if(pingDeadline===null)return;
         cancel(pingDeadline); pingDeadline = null;
-        if(event.ok){probeFailures=0;diagnose('link_alive');}
+        if(event.ok){probeFailures=0;diagnose('link_alive');scheduleResponseRecovery();}
         else failedProbe(child,false);
         return;
       }
@@ -475,6 +515,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
           state.connection = "waiting";
           retryAt = now() + timings.launch;
         } else {
+          diagnose('native_error',diagnosticCodes.includes(event.code)?event.code:'operation_failed');
           state.wake = {...state.wake, status: "failed", code: event.code};
           if (ownsWake(wakeFlight)) {
             // A missing package is a valid inventory result, and cannot be woken.
@@ -542,6 +583,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     function handleClose(info) {
       cancel(watchdog);
       if (child !== transport) return;
+      cancelResponseRecovery();
       clearChargingRecovery();
       diagnostics.closes++;
       diagnostics.exitCode = Number.isInteger(info?.code) ? info.code : null;
@@ -580,6 +622,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         publish();
         break;
       case "pause":
+        cancelResponseRecovery();
         clearChargingRecovery();
         if(c.value)completions.clear();
         const checkAfterPause = !!c.value && buddyFromLaunch && !operationActive();
@@ -592,6 +635,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         publish();
         break;
       case "reset_activity":
+        cancelResponseRecovery();
         completions.clear();clearChargingRecovery();
         agent.reset();
         wakePolicy.clearEvents();
@@ -604,6 +648,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         else publish();
         break;
       case "configure":
+        if(c.settings.activityKeepAwake===false)cancelResponseRecovery();
         if(c.settings.activityKeepAwake===false)clearChargingRecovery();
         if (!supportsTheme(c.settings.buddyTheme)) {
           if (c.request) {
@@ -637,6 +682,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         else requestBuddy();
         break;
       case "install": {
+        cancelResponseRecovery();
         completions.clear();clearChargingRecovery();
         if (!transport || !["connected", "waiting", "standby"].includes(state.connection)) {
           state.error = "請先連線手環";
@@ -692,6 +738,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     if (closing) return;
     metrics = sampleAt !== null && now() >= sampleAt && now() - sampleAt <= timings.sample * 2 ? sampleValue : null;
     if (!desired || (paused && !operationActive()) || state.connection === "installing") wakePolicy.clear();
+    if(!responseRecoveryEligible())clearResponseRecovery();
     launchPendingWake();
     if (transport && !paused && LINK_READY.includes(state.connection) && now() - deviceAt >= timings.device) requestDevice();
     if(transport && !pingDeadline && !wakeFlight && !pending && LINK_READY.includes(state.connection) && now()-deviceAt>=timings.sample && now()-batteryAt>=timings.battery){batteryAt=now();write({op:"ping",id:"battery-poll"});}
@@ -752,7 +799,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         state.connection = "standby";
         state.error = null;
         // A user waiting on the band must not sit behind the idle probe interval.
-        retryAt = now() + (probeFailures?timings.probeRetry:(operationActive() ? timings.launch : timings.probe));
+        retryAt = now() + (probeFailures?timings.probeRetry:(operationActive() ? timings.launch : deliveryRetry()));
         publish();
 
       }, timings.ack);

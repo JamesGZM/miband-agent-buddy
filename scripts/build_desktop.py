@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 from PIL import Image
@@ -11,6 +12,7 @@ from PIL import Image
 PROJECT = Path(__file__).resolve().parents[1]
 DESKTOP = PROJECT / 'apps/desktop'
 APP_NAME = 'MiBand Agent Buddy.app'
+BUNDLE_ID = 'io.github.jamesgzm.miband-agent-buddy'
 
 
 def run(args, **kwargs):
@@ -29,10 +31,59 @@ def copy_tree(source, target):
     shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', 'node_modules', '.DS_Store'))
 
 
+def local_signing_identities():
+    output = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning'], text=True)
+    identities = []
+    for line in output.splitlines():
+        match = re.fullmatch(r'\s*\d+\)\s+([0-9A-Fa-f]{40})\s+"([^"]+)"\s*', line)
+        if match and 'Installer' not in match[2]:
+            identities.append((match[1], match[2]))
+    return identities
+
+
+def signing_identity(mode, requested=None, environ=None, discover=None):
+    environ = os.environ if environ is None else environ
+    requested = requested or environ.get('BUDDY_SIGNING_IDENTITY')
+    if environ.get('GITHUB_ACTIONS') == 'true' and mode != 'ci':
+        raise ValueError('GitHub builds must use certificate-free CI signing')
+    if mode == 'ci':
+        if requested:
+            raise ValueError('CI mode does not accept a signing certificate identity')
+        return '-'
+    if requested == '-':
+        raise ValueError('Local signing requires an existing certificate; ad-hoc fallback is disabled')
+    identities = (discover or local_signing_identities)()
+    selected = [item for item in identities if not requested or requested in item]
+    if len(selected) != 1:
+        raise ValueError('Select one valid local certificate with --signing-identity or BUDDY_SIGNING_IDENTITY; no certificate is created or exported')
+    return selected[0][0]
+
+
+def sign_bundle(destination, identity, command=run):
+    contents = destination / 'Contents'
+    runtime = contents / 'Resources/runtime'
+    # Stable, distinct identifiers prevent helper identities from inheriting build UUIDs.
+    items = [
+        (runtime / 'bin/node', BUNDLE_ID + '.node'),
+        (runtime / 'native/transport/target/debug/buddy-transport', BUNDLE_ID + '.transport'),
+        (contents / 'MacOS/miband-agent-buddy', BUNDLE_ID),
+        (destination, BUNDLE_ID),
+    ]
+    for path, identifier in items:
+        command(['codesign', '--force', '--sign', identity, '--identifier', identifier, '--timestamp=none', str(path)])
+    command(['codesign', '--verify', '--deep', '--strict', str(destination)])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release', action='store_true')
+    parser.add_argument('--signing-mode', choices=['local', 'ci'], default='ci' if os.environ.get('GITHUB_ACTIONS') == 'true' else 'local')
+    parser.add_argument('--signing-identity', help='Existing local certificate SHA-1 or exact name; never exported')
     args = parser.parse_args()
+    try:
+        identity = signing_identity(args.signing_mode, args.signing_identity)
+    except ValueError as error:
+        parser.error(str(error))
     node = Path(shutil.which('node') or '')
     if not node.is_file():
         raise SystemExit('Node 22+ is required')
@@ -97,17 +148,14 @@ def main():
         raise SystemExit('package.json and Tauri versions must match')
     (contents / 'Info.plist').write_bytes(plistlib.dumps({
         'CFBundleExecutable': 'miband-agent-buddy',
-        'CFBundleIdentifier': 'io.github.jamesgzm.miband-agent-buddy',
+        'CFBundleIdentifier': BUNDLE_ID,
         'CFBundleName': 'MiBand Agent Buddy', 'CFBundleDisplayName': 'MiBand Agent Buddy',
         'CFBundlePackageType': 'APPL', 'CFBundleIconFile': 'Buddy.icns',
         'CFBundleShortVersionString': version, 'CFBundleVersion': version,
         'LSMinimumSystemVersion': '11.0', 'NSHighResolutionCapable': True,
         'NSBluetoothAlwaysUsageDescription': 'Connect to your Xiaomi Smart Band to synchronize Buddy and install its updates.',
     }))
-    for binary in [runtime / 'bin/node', runtime / 'native/transport/target/debug/buddy-transport', contents / 'MacOS/miband-agent-buddy']:
-        run(['codesign', '--force', '--sign', '-', str(binary)])
-    run(['codesign', '--force', '--sign', '-', str(destination)])
-    run(['codesign', '--verify', '--deep', '--strict', str(destination)])
+    sign_bundle(destination, identity)
     print(destination)
 
 

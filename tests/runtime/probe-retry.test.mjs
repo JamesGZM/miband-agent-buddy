@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runtimeHarness,ack} from '../helpers/runtime.mjs';
+
+test('one missed ACK during an opted-in task recovers before the band activity watchdog expires',async t=>{
+  let drop=false;
+  const h=runtimeHarness({onWrite(c,child){
+    if(c.op==='launch_buddy')child.later({event:'result',id:c.id,ok:true});
+    if(c.op==='ping')child.later({event:'result',id:c.id,ok:true});
+    if(c.op==='snapshot'){
+      if(drop){drop=false;return;}
+      child.later(ack(c.payload,{capabilities:{activityHold:true},keepScreen:'on',wakeDisplay:{id:c.payload.wakeId,remainingMs:20000}}));
+    }
+  }});t.after(()=>h.runtime.stop());
+  await h.runtime.dispatch({op:'configure',settings:{activityKeepAwake:true}});
+  await h.connect();h.hook('UserPromptSubmit');await h.clock.advance(6000);
+  const before=h.state.lastAckAt,launches=h.calls.filter(c=>c.op==='launch_buddy').length;
+  drop=true;await h.clock.advance(14000);
+  assert.equal(h.state.connection,'connected');
+  const resumed=h.states.find(s=>s.lastAckAt>before);
+  assert.ok(resumed&&resumed.lastAckAt-before<15000,'do not spend the activity lease in the idle probe backoff');
+  assert.equal(h.calls.filter(c=>c.op==='launch_buddy').length,launches,'retry delivery without periodically reopening Buddy');
+});
 async function setup({transient=false}={}){
   let awake=true,pings=0;
   const h=runtimeHarness({onWrite(c,child){

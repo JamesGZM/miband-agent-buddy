@@ -77,7 +77,7 @@ const connectionNames = {
   connecting: "連線中",
   authenticated: "已認證",
   waiting: "等待 Buddy 回應",
-  standby: "已連線，手環休眠中",
+  standby: "Buddy 暫未回應",
   connected: "已連線",
   retrying: "重新連線中",
   installing: "正在安裝",
@@ -129,6 +129,9 @@ const operationErrors = {
   display_unconfirmed: "手環未確認亮屏",
   brightness_failed: "手環未能套用亮度，請重試",
   launch_failed: "無法開啟手環上的 Buddy",
+  app_query_failed: "無法查詢手環應用，請稍後重試",
+  app_sync_failed: "無法同步 Buddy 連線，請稍後重試",
+  app_launch_failed: "手環未接受 Buddy 開啟指令，請稍後重試",
 };
 const operationCancelled = {
   paused: "同步已暫停，操作已取消",
@@ -341,7 +344,7 @@ function devicesPage() {
     r.connection === "connected"
       ? ["online", t("已連線")]
       : r.connection === "standby"
-        ? ["standby", t("休眠中")]
+        ? ["standby", t("Buddy 暫未回應")]
         : r.connection === "installing"
           ? ["standby", t("安裝中")]
           : ["connecting", "waiting", "retrying"].includes(r.connection)
@@ -678,11 +681,12 @@ function updateLive() {
   const badge = $("#screen-badge");
   if (badge) {
     const remaining = screenRemaining(),
-      ready = linkReady();
-    badge.textContent = !ready ? "" : progress || (remaining > 0 ? state.runtime.ack?.wakeDisplay?.active ? t("任務中保持亮屏") : screenText(remaining) : t("息屏"));
-    badge.className = `chip screen-badge ${!ready ? "hidden" : progress ? "busy" : remaining > 0 ? "on" : "off"}`;
+      ready = linkReady(),
+      unknown = state.runtime.connection !== "connected" || !state.runtime.ack;
+    badge.textContent = !ready ? "" : progress || (unknown ? t("亮屏狀態待確認") : remaining > 0 ? state.runtime.ack?.wakeDisplay?.active ? t("任務中保持亮屏") : screenText(remaining) : t("息屏"));
+    badge.className = `chip screen-badge ${!ready ? "hidden" : progress || unknown ? "busy" : remaining > 0 ? "on" : "off"}`;
     const screen = $(".screen");
-    if (screen) screen.classList.toggle("asleep", ready && remaining <= 0);
+    if (screen) screen.classList.toggle("asleep", ready && !unknown && remaining <= 0);
   }
 }
 // Each settled operation is announced once; the first state only seeds history.

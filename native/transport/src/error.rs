@@ -25,8 +25,18 @@ pub fn classify_error(error: &anyhow::Error) -> &'static str {
         "transfer_send_timeout"
     } else if text.contains("MASS") {
         "transfer"
-    } else if text.contains("App not installed") {
+    } else if text.contains("App not installed") || text.contains("AppInfo not found") {
         "app_missing"
+    } else if text.contains("Bluetooth SPP connection failed") {
+        "bluetooth_open_failed"
+    } else if text.contains("Bluetooth SPP link closed") {
+        "bluetooth_link_closed"
+    } else if text.contains("Buddy inventory query failed") {
+        "app_query_failed"
+    } else if text.contains("Buddy status sync failed") {
+        "app_sync_failed"
+    } else if text.contains("Buddy launch command failed") {
+        "app_launch_failed"
     } else if text.contains("timed out") || text.contains("deadline") {
         "timeout"
     } else {
@@ -36,6 +46,36 @@ pub fn classify_error(error: &anyhow::Error) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn actual_bluetooth_close_is_distinct_from_missing_application_receipts() {
+        assert_eq!(
+            classify_error(&anyhow::anyhow!("Bluetooth SPP connection failed")),
+            "bluetooth_open_failed"
+        );
+        assert_eq!(
+            classify_error(&anyhow::anyhow!("Bluetooth SPP link closed")),
+            "bluetooth_link_closed"
+        );
+    }
+    #[test]
+    fn buddy_failures_identify_the_stage_without_forwarding_native_details() {
+        for (context, code) in [
+            ("Buddy inventory query failed", "app_query_failed"),
+            ("Buddy status sync failed", "app_sync_failed"),
+            ("Buddy launch command failed", "app_launch_failed"),
+        ] {
+            assert_eq!(
+                classify_error(&anyhow::anyhow!("synthetic internal detail").context(context)),
+                code
+            );
+        }
+        assert_eq!(
+            classify_error(
+                &anyhow::anyhow!("App not installed").context("Buddy status sync failed")
+            ),
+            "app_missing"
+        );
+    }
     #[test]
     fn event_receiver_failures_have_distinct_fixed_codes() {
         assert_eq!(

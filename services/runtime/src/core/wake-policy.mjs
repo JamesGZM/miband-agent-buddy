@@ -1,4 +1,4 @@
-// Events, never elapsed task time or metric samples, request a wake.
+// Events and bounded recovery evidence, never elapsed task time or metrics, request a wake.
 export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000 } = {}) {
   let pending = null, lastLaunch = -Infinity;
   return {
@@ -19,6 +19,7 @@ export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000
     requestConnection(reason = 'connection') {
       if (!pending || now()-pending.at > ttl) pending = {reason, mode:'idle', at:now()};
     },
+    clearConnection(reason) { if (pending?.reason === reason && !pending.user && !pending.session) pending = null; },
     // A direct user operation replaces any queued event and is not rate limited.
     requestUser(kind, operation) {
       pending = {reason: 'user', kind, operation, mode: null, user: true, at: now()};

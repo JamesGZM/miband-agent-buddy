@@ -32,7 +32,9 @@ pub async fn buddy_status(addr: String) -> Result<()> {
 }
 
 pub async fn sync_app(addr: String) -> Result<()> {
-    corelib::device::resource::request_quick_app_list_json(addr.clone()).await?;
+    corelib::device::resource::request_quick_app_list_json(addr.clone())
+        .await
+        .context("Buddy inventory query failed")?;
     let sync_addr = addr.clone();
     corelib::ecs::with_rt_mut(move |rt| {
         use corelib::device::xiaomi::components::{
@@ -65,7 +67,8 @@ pub async fn sync_app(addr: String) -> Result<()> {
         })
         .context("Device missing")?
     })
-    .await?;
+    .await
+    .context("Buddy status sync failed")?;
     Ok(())
 }
 fn battery_charging(battery: &pb::xiaomi::protocol::device_status::Battery) -> Option<bool> {
@@ -99,10 +102,10 @@ pub async fn cached_battery(addr: String) -> Option<serde_json::Value> {
 async fn info_request<T: Send + 'static>(
     addr: &str,
     request: impl FnOnce(
-        &mut corelib::device::xiaomi::components::info::InfoSystem,
-    ) -> tokio::sync::oneshot::Receiver<Result<T>>
-    + Send
-    + 'static,
+            &mut corelib::device::xiaomi::components::info::InfoSystem,
+        ) -> tokio::sync::oneshot::Receiver<Result<T>>
+        + Send
+        + 'static,
 ) -> Result<T> {
     use corelib::device::xiaomi::components::info::InfoSystem;
     let addr = addr.to_string();
@@ -125,15 +128,12 @@ pub async fn battery(addr: String) -> Result<()> {
 }
 /// Display-only status. Serial number and IMEI are deliberately never forwarded.
 pub async fn device_status(addr: String) -> Result<()> {
-    let info = info_request(&addr, |info| info.request_device_info())
-        .await
-        .ok();
-    let status = info_request(&addr, |info| info.request_device_status())
-        .await
-        .ok();
-    let storage = info_request(&addr, |info| info.request_device_storage())
-        .await
-        .ok();
+    let (info, status, storage) = tokio::join!(
+        info_request(&addr, |info| info.request_device_info()),
+        info_request(&addr, |info| info.request_device_status()),
+        info_request(&addr, |info| info.request_device_storage()),
+    );
+    let (info, status, storage) = (info.ok(), status.ok(), storage.ok());
     anyhow::ensure!(
         info.is_some() || status.is_some() || storage.is_some(),
         "No device status"
@@ -153,7 +153,7 @@ pub async fn device_status(addr: String) -> Result<()> {
 }
 pub async fn install(addr: String, path: String) -> Result<()> {
     use corelib::device::xiaomi::{
-        XiaomiDevice, components::install::InstallSystem, packet::mass::MassDataType,
+        components::install::InstallSystem, packet::mass::MassDataType, XiaomiDevice,
     };
     let bytes = std::fs::read(path)?;
     anyhow::ensure!(bytes.len() < 16 * 1024 * 1024, "Package too large");
@@ -261,7 +261,7 @@ mod tests {
     }
     #[test]
     fn battery_updates_project_only_bounded_percent_and_charging() {
-        use pb::xiaomi::protocol::device_status::{Battery, battery::ChargeInfo};
+        use pb::xiaomi::protocol::device_status::{battery::ChargeInfo, Battery};
         for (state, charging) in [
             (None, None),
             (Some(0), None),

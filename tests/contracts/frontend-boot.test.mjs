@@ -213,6 +213,11 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.match(node('#screen-badge').className,/ off/);
   assert.match(node('#buddy-dot').className,/alert/);
   const savedAck = state.runtime.ack;
+  state.runtime.connection = 'standby';
+  await refresh();
+  assert.match(node('#device-summary').innerHTML,/Buddy 暫未回應/);
+  assert.doesNotMatch(node('#device-summary').innerHTML,/休眠/);
+  assert.equal(node('#screen-badge').textContent,'亮屏狀態待確認');
   state.runtime.connection = 'waiting'; state.runtime.ack = null;
   await refresh();
   assert.equal(node('#activity').textContent,'等待 Buddy 回應');
@@ -559,7 +564,7 @@ test('actual frontend boots, refreshes native state and renders every existing p
   assert.doesNotMatch(node('#device-summary').innerHTML,/手環休眠中/);
   globalThis.document.activeElement = null;
   await refresh();
-  assert.match(node('#device-summary').innerHTML,/手環休眠中/);
+  assert.match(node('#device-summary').innerHTML,/Buddy 暫未回應/);
 
   // Switching language re-renders every label, including backend messages from the shared catalog.
   state.preferences.language = 'en';

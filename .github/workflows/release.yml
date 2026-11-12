@@ -64,7 +64,7 @@ jobs:
         run: cargo test --locked --manifest-path native/transport/Cargo.toml -p corelib device::xiaomi::sar::tests
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build relocatable macOS app
-        run: npm run build:desktop -- --release
+        run: npm run build:desktop -- --release --signing-mode ci
       - name: Package app and checksums
         run: python3 scripts/package_release.py
       - name: Verify relocated package through the updater

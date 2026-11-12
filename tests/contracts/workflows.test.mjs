@@ -27,6 +27,8 @@ test('only version tags or an explicit release dispatch package and publish port
   assert.match(workflow, /runner: macos-15-intel/);
   assert.match(workflow, /runner: macos-15\n/);
   assert.match(workflow, /needs: macos/);
+  assert.match(workflow, /npm run build:desktop -- --release --signing-mode ci/);
+  assert.doesNotMatch(workflow, /BUDDY_SIGNING_IDENTITY|security import|create-keychain|\.p12/);
   assert.match(workflow, /--verify-tag/);
   assert.match(workflow, /Tag and desktop version must match/);
   assert.match(workflow, /Tauri version must match/);

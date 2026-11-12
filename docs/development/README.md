@@ -42,6 +42,18 @@ npm run build:desktop
 
 The development app is written to `apps/desktop/dist/MiBand Agent Buddy.app`. An optimized build is available with `npm run build:desktop -- --release`. Distribution packaging and version tags are covered by the [release process](../open-source/RELEASING.md).
 
+## macOS signing
+
+Local builds default to `--signing-mode local` and require an existing valid code-signing identity in the login keychain. A single identity is selected automatically; otherwise use its exact name/SHA-1 via `--signing-identity` or `BUDDY_SIGNING_IDENTITY`. No private key is exported and no certificate is created. Local signing never silently falls back to ad-hoc. Replace the placeholder below with an existing certificate reference.
+
+```sh
+npm run build:desktop -- --signing-mode local
+BUDDY_SIGNING_IDENTITY='EXISTING_CERTIFICATE_SHA1' npm run build:desktop -- --release --signing-mode local
+npm run build:desktop -- --release --signing-mode ci
+```
+
+GitHub explicitly uses `ci`, does not inspect the keychain and rejects supplied certificate identities. It creates/imports no certificates, including temporary or self-signed ones. Its ad-hoc code signature uses no certificate and provides the signature required to execute Apple Silicon code. Local App, Node and transport share the selected certificate with distinct fixed identifiers. Keep the same certificate and identifiers across rebuilds for stable designated requirements; the first transition from ad-hoc or switching to a GitHub package can require new macOS authorization. Signing is not notarization. See [Apple TN3127](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
 ## Project layout
 
 | Path | Responsibility |

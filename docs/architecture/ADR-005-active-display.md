@@ -36,6 +36,24 @@ A failed device-status probe is not sufficient proof that Bluetooth disconnected
 
 A charging transition from false to true can request one recovery after a 2-second settling delay, when synchronization/task keep-awake are enabled, a task remains active, and Buddy was displayed earlier in this connection. Hidden charging-page ACKs do not erase that prior display context. Initial/repeated charging samples do not relaunch it. Pause, task reset, disabling keep-awake, unplugging, disconnect and install cancel pending recovery. Transport generation and task/settings checks also apply before launch. Ordinary battery samples never periodically reopen Buddy.
 
+## ACK forwarding and active delivery retry
+
+Problem: awaiting a slow native command inside the event-receiver branch withheld Buddy ACKs, and a missed ACK then imposed 30 seconds of idle backoff, exceeding the 15-second activity watchdog.
+
+Decision: keep one serial command future and drive its event receiver concurrently. Dropping the owner cancels that future before device cleanup; no detached command worker survives. Run the three independent info queries concurrently within their existing five-second bounds and omit the redundant pre-loop battery query. Reuse session metadata for subsequent wakes; installation invalidates readiness. Fixed sanitized failure codes identify inventory, sync and launch stages. An opted-in active task retries snapshot delivery after two seconds; idle/paused/disabled behavior retains its previous backoff. Standby and stale screen receipts are shown as unconfirmed, never inferred physical sleep.
+
+Keeping the blocking command branch or periodically launching Buddy would preserve the timeout loop or interrupt navigation. The decision preserves serial command order, protocol v1 and the existing bounded manual wake. Fake-clock tests reproduce a single missed ACK and verify recovery before watchdog expiry without another launch; native tests prove ACK forwarding during a pending command and cancellation when the event owner closes. Physical endurance still requires device verification.
+
+The owned SPP adapter forwards terminal open/close errors into a session-local signal instead of discarding them. The connection attempt and active event pump stop immediately on that signal, cancel pending work and report fixed `bluetooth_open_failed` / `bluetooth_link_closed` codes; raw native details never enter diagnostics. This leaves the pinned main-thread transport unchanged.
+
+## One recovery wake for an unresponsive active Buddy
+
+A live Bluetooth link can outlast its foreground Buddy page. After an application ACK timeout, an opted-in active task still retries snapshots promptly. A successful current link probe starts a two-second settling window so the retry ACK can arrive first. If Buddy remains unresponsive, was last acknowledged in the foreground and supports activity hold, request one `activity_unresponsive` wake through the existing cooldown, TTL and 15-second confirmation bound. A normal ACK cancels settling/queued recovery. Only a foreground keep-screen-on receipt rearms a later outage; repeated probes and timeouts cannot repeatedly launch Buddy during the same outage.
+
+A failed/missing probe, idle task, paused sync, disabled hold or acknowledged hidden page cannot trigger this recovery. Manual operations and event wakes retain priority. Task completion/reset, disabling hold, pause, disconnect, installation and owner replacement cancel pending recovery, and eligibility is checked again before launch. This replaces passive waiting for an app that can no longer consume snapshots without adding periodic relaunches or changing protocol v1. Fake-clock tests cover recovery/confirmation, transient reply loss, cooldown cancellation, one-attempt limits, rearming and owner/settings/task cancellation. Physical behavior remains subject to the device verification guide.
+
+An already-sent recovery also abandons its wake ID when tasks end or policy/ownership changes, so a late native launch result cannot create a display lease.
+
 ## Alternatives
 
 - An unlimited persistent keep-screen setting has no band-local recovery after host failure.

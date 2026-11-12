@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runtimeHarness,ack} from '../helpers/runtime.mjs';
 
+test('a reported native Bluetooth close is retained and reconnects instead of remaining in standby',async t=>{
+  const h=runtimeHarness();t.after(()=>h.runtime.stop());await h.connect();
+  h.children[0].event({event:'error',code:'bluetooth_link_closed',message:'synthetic link closure'});
+  h.children[0].handlers.onClose({code:1});
+  assert.equal(h.state.diagnostics.lastCode,'bluetooth_link_closed');
+  assert.equal(h.state.connection,'retrying');
+  await h.clock.advance(3000);
+  assert.equal(h.children.length,2);
+  assert.equal(h.state.connection,'connecting');
+});
+
 test('connection evidence distinguishes open/auth/ACK/link failure and retains fixed close metadata',async t=>{
   let respond=true;
   const h=runtimeHarness({onWrite(c,child){

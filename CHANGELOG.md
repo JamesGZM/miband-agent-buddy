@@ -4,6 +4,23 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.1] - 2026-11-12
+
+### Fixed
+
+- Keep forwarding Buddy acknowledgements while native device queries are pending; bound independent queries concurrently and reuse known app metadata for later wakes.
+- Report actual Bluetooth open/close failures immediately instead of treating a lost link as a sleeping band. Standby now says Buddy is not responding and leaves screen state unconfirmed.
+- Retry opted-in active-task delivery promptly after a missed acknowledgement. A successful link probe can request one bounded recovery wake; repeated failures cannot continually reopen Buddy.
+- Cancel queued and in-flight recovery when tasks end, settings change or the connection owner stops; late launch results cannot create a display lease.
+
+### Build and signing
+
+- Local builds require an existing signing certificate and use fixed App/Node/transport identifiers, preserving stable certificate-based code identity across rebuilds.
+- GitHub builds explicitly use certificate-free ad-hoc signing. They do not read the local keychain, accept local signing identities, or create/import temporary certificates.
+- Add regression coverage and three-language signing and verification guidance. Local certificate authorization persistence and a manual wake receipt were verified; physical automatic recovery and extended screen-on reliability still require device testing.
+
+Buddy remains **0.5.10**; no band reinstall is required.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added

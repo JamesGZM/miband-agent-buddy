@@ -130,6 +130,11 @@ fn health(state: &RuntimeState) -> Value {
             "transfer_ack_timeout",
             "transfer",
             "app_missing",
+            "app_query_failed",
+            "app_sync_failed",
+            "app_launch_failed",
+            "bluetooth_open_failed",
+            "bluetooth_link_closed",
         ],
     );
     diagnostics["exitCode"] = raw_diagnostics
