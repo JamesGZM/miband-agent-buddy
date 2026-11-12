@@ -1,13 +1,14 @@
 export const EVENTS=['SessionStart','UserPromptSubmit','PreToolUse','PostToolUse','PermissionRequest','Stop','Interrupt','SessionEnd'];
 const modes={SessionStart:'idle',UserPromptSubmit:'thinking',PreToolUse:'working',PostToolUse:'thinking',PermissionRequest:'attention',Stop:'complete',Interrupt:'idle',SessionEnd:'idle'};
 const staleAfter=15*60*1000;
+const terminal=new Set(['Stop','Interrupt','SessionEnd']);
 export function createCodexState({now=Date.now,onEvent=()=>{}}={}){
  const sessions=new Map();let lastEventAt=null,eventCount=0;
  function accept(event){
   const at=now();
   if(!event||!EVENTS.includes(event.event)||!/^\w{64}$/.test(event.session)||!Number.isSafeInteger(event.at)||Math.abs(at-event.at)>30000)throw new Error('Invalid Codex event');
   const old=sessions.get(event.session);
-  if(old&&(event.at<old.at||(event.at===old.at&&old.seen.includes(event.event))))return;
+  if(old&&(event.at<old.at||(event.at===old.at&&(old.seen.includes(event.event)||terminal.has(old.event)&&!terminal.has(event.event)))))return;
   if(!old&&sessions.size>=128)sessions.delete(sessions.keys().next().value);
   sessions.set(event.session,{at:event.at,mode:modes[event.event],event:event.event,seen:old?.at===event.at?[...old.seen,event.event]:[event.event]});lastEventAt=at;eventCount++;onEvent(event,old);
  }

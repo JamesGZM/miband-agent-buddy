@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {EVENTS} from '../core/codex-state.mjs';
+import {deliverHook} from './hook-delivery.mjs';
 
 export const HOOK_PROVIDERS = ['claude-code', 'deepseek', 'custom', 'chatgpt', 'claude-desktop'];
 export const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse',
@@ -20,10 +21,5 @@ export function sanitizeAgentHook(data, provider, event, at = Date.now()) {
 export async function forwardAgentHook(data, provider, event, {
   endpoint = 'http://127.0.0.1:10731/api/codex-event', at = Date.now(),
 } = {}) {
-  const url = new URL(endpoint);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') throw Error('Local endpoint required');
-  const response = await fetch(url, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(600),
-    headers: {'Content-Type': 'application/json', 'X-Band-Codex': '1'},
-    body: JSON.stringify(sanitizeAgentHook(data, provider, event, at))});
-  if (!response.ok) throw Error('Monitor unavailable');
+  await deliverHook(sanitizeAgentHook(data, provider, event, at), {endpoint});
 }

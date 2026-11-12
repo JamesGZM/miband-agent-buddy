@@ -1,6 +1,6 @@
 # Project development rules
 
-Read [architecture](docs/architecture/README.md) and [development](docs/development/README.md) before structural changes. Explicit user instructions take precedence.
+Read [architecture](docs/en/architecture/README.md) and [development](docs/en/development/README.md) before structural changes. Explicit user instructions take precedence.
 
 ## Repository responsibilities
 
@@ -22,9 +22,9 @@ Read [architecture](docs/architecture/README.md) and [development](docs/developm
 - Each owner cancels its timers/listeners and stops its children. Ignore callbacks from abandoned sessions. Stop must be idempotent.
 - Tests use dependency injection and fake clocks. Do not copy/replace production source to alter timeouts or dependencies.
 - Never hand-edit generated adapters/assets, downloaded upstream code or vendored account code. Upstream changes require an isolated recorded patch and attribution.
-- Prefer code-drawn band UI from shared geometry, preserving the approved design. Avoid bitmap animation frames; retain the launcher icon. Follow [Quick App UI development](docs/development/quickapp-ui.md) for image exceptions, performance and physical validation.
-- Compute multi-AI aggregation, priority, display mode and task-color plans on the Mac before delivery. The band validates/applies compact display results and owns local animation, lifecycle and display safety; never move AI state inference or per-frame session aggregation onto it. Capability-gate additive fields and retain legacy compatibility ([ADR-009](docs/architecture/ADR-009-host-activity-display.md)).
-- Task-completion vibration is opt-in. Derive per-task notifications from real host lifecycle transitions on the Mac, independently of aggregate mode; preserve durable delivery deduplication and timer cleanup ([ADR-010](docs/architecture/ADR-010-completion-vibration.md)).
+- Prefer code-drawn band UI from shared geometry, preserving the approved design. Avoid bitmap animation frames; retain the launcher icon. Follow [Quick App UI development](docs/en/development/quickapp-ui.md) for image exceptions, performance and physical validation.
+- Compute multi-AI aggregation, priority, display mode and task-color plans on the Mac before delivery. The band validates/applies compact display results and owns local animation, lifecycle and display safety; never move AI state inference or per-frame session aggregation onto it. Capability-gate additive fields and retain legacy compatibility ([ADR-009](docs/en/architecture/ADR-009-host-activity-display.md)).
+- Task-completion vibration is opt-in. Derive per-task notifications from real host lifecycle transitions on the Mac, independently of aggregate mode; preserve durable delivery deduplication and timer cleanup ([ADR-010](docs/en/architecture/ADR-010-completion-vibration.md)).
 
 ## Changes and verification
 

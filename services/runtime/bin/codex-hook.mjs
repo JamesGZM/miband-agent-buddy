@@ -1,11 +1,12 @@
 import {pathToFileURL} from 'node:url';
-import {forwardHook} from '../src/adapters/codex-hook.mjs';
+import {sanitizeHook} from '../src/adapters/codex-hook.mjs';
+import {dispatchHook} from '../src/adapters/hook-delivery.mjs';
 export {sanitizeHook,forwardHook} from '../src/adapters/codex-hook.mjs';
-export async function runHook(){
- const watchdog=setTimeout(()=>process.exit(0),1200);
+export async function runHook({input=process.stdin,event=process.argv[2],dispatch=dispatchHook,at=Date.now()}={}){
+ const watchdog=setTimeout(()=>process.exit(0),150);
  try{
-  let input='',bytes=0;for await(const chunk of process.stdin){bytes+=chunk.length;if(bytes>2*1024*1024)throw Error('Input too large');input+=chunk;}
-  await forwardHook(JSON.parse(input),process.argv[2]);
+  let body='',bytes=0;for await(const chunk of input){bytes+=Buffer.byteLength(chunk);if(bytes>2*1024*1024)throw Error('Input too large');body+=chunk;}
+  dispatch(sanitizeHook(JSON.parse(body),event,at));
  }catch{}finally{clearTimeout(watchdog);}
 }
 

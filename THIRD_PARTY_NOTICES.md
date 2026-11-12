@@ -1,6 +1,6 @@
 # Third-party notices
 
-**English** · [简体中文](THIRD_PARTY_NOTICES.zh-CN.md) · [繁體中文](THIRD_PARTY_NOTICES.zh-TW.md)
+**English** · [简体中文](docs/zh-CN/THIRD_PARTY_NOTICES.md) · [繁體中文](docs/zh-TW/THIRD_PARTY_NOTICES.md)
 
 ## AstroBox — AstralSightStudios
 
@@ -19,7 +19,7 @@ The upstream Core/Bluetooth/SPP READMEs request author and repository attributio
 
 ## Other dependencies
 
-The desktop builder runs `scripts/collect_licenses.py` to include the resolved macOS Rust dependencies' license texts and attribution under `Contents/Resources/licenses/rust`. Reviewed supplements are recorded in [the license receipts](docs/open-source/licenses/README.md). Packages whose published crates omit full license files, MPL packages, and locally adapted upstream crates include their corresponding package source in that directory. Account-module notices and the bundled official Node distribution's license are included separately.
+The desktop builder runs `scripts/collect_licenses.py` to include the resolved macOS Rust dependencies' license texts and attribution under `Contents/Resources/licenses/rust`. Reviewed supplements are recorded in [the license receipts](docs/en/open-source/licenses/README.md). Packages whose published crates omit full license files, MPL packages, and locally adapted upstream crates include their corresponding package source in that directory. Account-module notices and the bundled official Node distribution's license are included separately.
 
 Tauri and its plugins, Rust dependencies and the Vela `aiot-toolkit` development tool retain their own licenses. Exact versions are recorded in Cargo.lock and apps/band/package-lock.json. Python Pillow is used only for local artwork generation. Portable macOS bundles include the official Node distribution license and upstream component notices under `Contents/Resources/licenses`. Exact project source is available in the matching GitHub release tag; additional release source archives include patched upstream sources and linked Rust package sources. Pinned upstream source and its isolated patches are identified by `native/transport/upstream-lock.json` and the bootstrap script. The build rejects non-system dylib dependencies, and release packaging rejects an active Vivo MsgPack dependency.
 

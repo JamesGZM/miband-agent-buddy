@@ -17,7 +17,8 @@ export function hookDefinitions(provider, {nodePath = process.execPath, root = p
   const events = provider === 'codex' ? EVENTS : CLAUDE_EVENTS;
   const script = join(root, provider === 'codex' ? 'mac/codex-hook.mjs' : 'services/runtime/bin/agent-hook.mjs');
   return Object.fromEntries(events.map(event => [event, {
-    hooks: [{type: 'command', command: `${quote(nodePath)} ${quote(script)} ${provider === 'codex' ? '' : 'claude-code '}${event}`, timeout: 2}],
+    hooks: [{type: 'command', command: `${quote(nodePath)} ${quote(script)} ${provider === 'codex' ? '' : 'claude-code '}${event}`,
+      timeout: 2, async: !(provider === 'codex' && event === 'SessionEnd')}],
   }]));
 }
 
@@ -50,7 +51,15 @@ export function updateHookConfig(original, definitions, {remove = false} = {}) {
       }
       if (next.length) root.hooks[event] = next;
       else if (groups.length) delete root.hooks[event];
-    } else if (!groups.some(group => (!group.matcher || group.matcher === '*') && group.hooks.some(matches))) {
+    } else if (groups.some(group => (!group.matcher || group.matcher === '*') && group.hooks.some(matches))) {
+      for (const group of groups) for (const hook of group.hooks) {
+        if (!matches(hook)) continue;
+        for (const field of ['async', 'timeout']) if (hook[field] !== definition.hooks[0][field]) {
+          hook[field] = definition.hooks[0][field];
+          changed = true;
+        }
+      }
+    } else {
       root.hooks ??= {};
       root.hooks[event] = [...groups, structuredClone(definition)];
       changed = true;
@@ -169,6 +178,10 @@ export async function manageAgentHooks({provider, remove = false, dryRun = false
         group.hooks.some(hook => hook.type === 'command' && hook.command === definition.hooks[0].command))).length;
     const result = {provider, scope, path: configPath, installed: installedEvents === Object.keys(definitions).length,
       installedEvents, totalEvents: Object.keys(definitions).length, changed: !status && !blocked && update.changed,
+      needsUpgrade: !remove && Object.entries(definitions).some(([event, definition]) =>
+        output.hooks?.[event]?.some(group => group.hooks.some(hook => hook.type === 'command' &&
+          hook.command === definition.hooks[0].command &&
+          (hook.async !== definition.hooks[0].async || hook.timeout !== definition.hooks[0].timeout)))),
       backupPath: null, blocked, reason: blocked ? 'existing_scope' : null, conflictingPaths};
     if (status || dryRun || blocked || !update.changed) return result;
     const suffix = randomUUID();

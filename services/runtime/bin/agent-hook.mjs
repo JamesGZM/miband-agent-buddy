@@ -1,8 +1,11 @@
 import {pathToFileURL} from 'node:url';
-import {forwardAgentHook} from '../src/adapters/agent-hook.mjs';
+import {sanitizeAgentHook} from '../src/adapters/agent-hook.mjs';
+import {dispatchHook} from '../src/adapters/hook-delivery.mjs';
 
-export async function runAgentHook(args = process.argv.slice(2), input = process.stdin) {
-  const watchdog = setTimeout(() => process.exit(0), 1200);
+export async function runAgentHook(args = process.argv.slice(2), input = process.stdin, {
+  dispatch = dispatchHook, at = Date.now(),
+} = {}) {
+  const watchdog = setTimeout(() => process.exit(0), 150);
   try {
     const [provider, event, flag, session] = args;
     let data;
@@ -17,7 +20,7 @@ export async function runAgentHook(args = process.argv.slice(2), input = process
       }
       data = JSON.parse(body);
     } else throw Error('Invalid arguments');
-    await forwardAgentHook(data, provider, event);
+    dispatch(sanitizeAgentHook(data, provider, event, at));
   } catch {
     // Observational only: never print payloads or influence permission decisions.
   } finally { clearTimeout(watchdog); }

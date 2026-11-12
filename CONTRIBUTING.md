@@ -1,6 +1,6 @@
 # Contributing to MiBand Agent Buddy
 
-**English** · [简体中文](CONTRIBUTING.zh-CN.md) · [繁體中文](CONTRIBUTING.zh-TW.md)
+**English** · [简体中文](docs/zh-CN/CONTRIBUTING.md) · [繁體中文](docs/zh-TW/CONTRIBUTING.md)
 
 Contributions are welcome: bug reports, device testing, translations, documentation and code. This guide describes how to prepare a change for review.
 
@@ -14,22 +14,22 @@ English, Simplified Chinese and Traditional Chinese are welcome in issues and pu
 
 ## Development setup
 
-Fork the repository, create a branch from `main`, and follow the [development guide](docs/development/README.md). It covers macOS dependencies, local builds, the project layout and validation commands.
+Fork the repository, create a branch from `main`, and follow the [development guide](docs/en/development/README.md). It covers macOS dependencies, local builds, the project layout and validation commands.
 
 Keep each pull request focused on one problem. Avoid mixing formatting changes, generated output or unrelated refactors with a behavior change. Add regression tests when fixing a bug, and update documentation for changes that affect users or contributors.
 
 ## Engineering guidelines
 
 - Keep Mac appearance, band themes and AI activity independent.
-- Prefer code-drawn band interfaces and preserve the approved Buddy design. Follow the [Quick App UI guide](docs/development/quickapp-ui.md) for image resources, animation cost and physical validation.
-- Follow the ownership boundaries in the [architecture](docs/architecture/README.md). Platform access belongs in adapters; shared presentation and protocol modules remain platform-independent.
+- Prefer code-drawn band interfaces and preserve the approved Buddy design. Follow the [Quick App UI guide](docs/en/development/quickapp-ui.md) for image resources, animation cost and physical validation.
+- Follow the ownership boundaries in the [architecture](docs/en/architecture/README.md). Platform access belongs in adapters; shared presentation and protocol modules remain platform-independent.
 - Validate data at process and application boundaries. For protocol changes, update all affected consumers and the shared synthetic fixtures together.
 - Use injected clocks and dependencies for runtime tests. Cancel owned timers, listeners and child processes when an operation ends; ignore callbacks from abandoned sessions.
 - Edit source generators rather than generated assets. Keep upstream changes in isolated patches with attribution; do not modify downloaded or vendored source in place.
 - Keep UI strings in the localization catalog and update all three interface languages. Preserve keyboard access, visible progress and meaningful error states.
 - Propose new network services, analytics or telemetry before adding them. Keep credentials, prompts, conversations, device keys and personal identifiers out of source, tests and diagnostics.
 
-Significant ownership or protocol decisions should include a short ADR under `docs/architecture/` covering the problem, decision, alternatives, compatibility and evidence. [AGENTS.md](AGENTS.md) records the same repository boundaries for coding assistants.
+Significant ownership or protocol decisions should include a short ADR under `docs/en/architecture/` covering the problem, decision, alternatives, compatibility and evidence. [AGENTS.md](AGENTS.md) records the same repository boundaries for coding assistants.
 
 ## Validation
 
@@ -40,7 +40,7 @@ npm test
 npm run check:architecture
 ```
 
-Run the affected Rust suites and builds as listed in the [development guide](docs/development/README.md#validation). UI changes need screenshots or a short recording. Device-related changes need the exact model and firmware tested, the action performed and the observed result. If no device was available, say so; a passing build or software receipt does not establish physical screen behavior.
+Run the affected Rust suites and builds as listed in the [development guide](docs/en/development/README.md#validation). UI changes need screenshots or a short recording. Device-related changes need the exact model and firmware tested, the action performed and the observed result. If no device was available, say so; a passing build or software receipt does not establish physical screen behavior.
 
 For documentation-only changes, check links, commands and consistency across the translated READMEs. Report which checks you ran rather than copying a generic test checklist.
 
@@ -55,7 +55,7 @@ A useful pull request explains:
 
 Do not attach private logs, credentials, account screenshots with identifiers, raw Bluetooth captures or local backups. Build products, caches, editor indexes and `.agent` notes belong outside the published source tree. The pull request template is a starting point; keep its final description specific to the change.
 
-Maintainers may request changes or split a proposal before merging. A merged change does not imply an immediate release; versioning and publication follow the [release process](docs/open-source/RELEASING.md).
+Maintainers may request changes or split a proposal before merging. A merged change does not imply an immediate release; versioning and publication follow the [release process](docs/en/open-source/RELEASING.md).
 
 ## Community conduct
 

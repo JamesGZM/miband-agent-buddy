@@ -13,7 +13,7 @@ Set up local activity reporting for the user's selected project. The macOS Buddy
 - **Claude Code / Claude desktop Code tab:** use `claude-code` for a local project that loads Claude Code settings. Do not claim the desktop Chat tab or remote sessions can reach this Mac's loopback receiver.
 - **DeepSeek or another harness:** use its real lifecycle callbacks and the generic sender below. The model name alone does not imply a hook configuration format. Inspect the harness before changing it.
 
-Read [the integration guide](../../docs/development/hooks.md) for event semantics, removal and limitations. Official configuration references: [Codex Hooks](https://learn.chatgpt.com/docs/hooks), [Claude Code Hooks](https://code.claude.com/docs/en/hooks).
+Read [the integration guide](../../docs/en/development/hooks.md) for event semantics, removal and limitations. Official configuration references: [Codex Hooks](https://learn.chatgpt.com/docs/hooks), [Claude Code Hooks](https://code.claude.com/docs/en/hooks).
 
 ## Install into the selected project
 
@@ -26,7 +26,7 @@ node "$BUDDY_ROOT/scripts/install_agent_hooks.mjs" codex --scope project --proje
 node "$BUDDY_ROOT/scripts/install_agent_hooks.mjs" codex --scope project --project-root "$TARGET_PROJECT" --json
 ```
 
-Replace `codex` with `claude-code` for Claude Code. Codex writes `<project>/.codex/hooks.json`; Claude Code writes `<project>/.claude/settings.local.json`. The installer merges only Buddy entries and preserves unrelated configuration. Backups stay outside the project in the app's private `hook-backups` directory. Linked project configuration directories are rejected. It embeds the current absolute Node and Buddy paths, so rerun setup after moving the checkout or replacing Node. Do not install globally unless the user requests all projects. Do not add local config to version control.
+Replace `codex` with `claude-code` for Claude Code. Codex writes `<project>/.codex/hooks.json`; Claude Code writes `<project>/.claude/settings.local.json`. The installer merges only Buddy entries and preserves unrelated configuration. Backups stay outside the project in the app's private `hook-backups` directory. Linked project configuration directories are rejected. It embeds the current absolute Node and Buddy paths, so rerun setup after moving the checkout or replacing Node. Reinstalling the same scope also upgrades owned handler `async` and `timeout` fields while preserving unrelated settings. `--status --json` reports `needsUpgrade` for old handlers. Background hooks are observational; Codex `SessionEnd` remains synchronous but its sender does not await HTTP. Do not install globally unless the user requests all projects. Do not add local config to version control.
 
 Keep one effective Buddy Hook scope. If the installer reports `blocked: true`, inspect its `conflictingPaths` without printing unrelated configuration. Existing global, ancestor or project-shared hooks can load alongside the requested local hooks; choose the user's intended scope and remove only the previous Buddy definitions before installing another. `installed` describes the requested file, not whether a different scope is trusted or active. The detector recognizes Buddy's standard command paths and Codex inline hook sections; manually review custom wrappers and other plugin sources in `/hooks`.
 
@@ -44,7 +44,7 @@ Counts represent independent main conversations. Claude child events carrying `a
 
 ## Custom harness
 
-Use `services/runtime/bin/agent-hook.mjs <provider> <event> --session <id>` with provider `deepseek` or `custom`. Generate a non-secret, stable ID for each independent conversation/task and reuse it until that task ends. Await each hook invocation to retain ordering, catch delivery failures, and preserve the harness's original return values and errors. No prompt, tool arguments, transcript, API key, model response, or file contents belong in arguments or payloads.
+Use `services/runtime/bin/agent-hook.mjs <provider> <event> --session <id>` with provider `deepseek` or `custom`. Generate a non-secret, stable ID for each independent conversation/task and reuse it until that task ends. Enqueue notifications in lifecycle callback order on a background queue; never await HTTP delivery in the agent execution path. The CLI sanitizes input and detaches a bounded delivery worker, so awaiting CLI exit waits only for local ingress, not delivery. Catch local launch failures and preserve the harness's original return values and errors. No prompt, tool arguments, transcript, API key, model response, or file contents belong in arguments or payloads.
 
 Map actual callbacks to `UserPromptSubmit` (thinking), `PreToolUse` (working), `PostToolUse` (thinking), `PermissionRequest` (needs user), `Stop` (completed), and `Interrupt` or `SessionEnd` (cancelled/closed). Always send a terminal event on completion or cancellation; do not generate a new ID for every event. Multiple active tasks stay independent, and completion of one must not clear another.
 

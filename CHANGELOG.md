@@ -1,6 +1,6 @@
 # Changelog
 
-**English** · [简体中文](CHANGELOG.zh-CN.md) · [繁體中文](CHANGELOG.zh-TW.md)
+**English** · [简体中文](docs/zh-CN/CHANGELOG.md) · [繁體中文](docs/zh-TW/CHANGELOG.md)
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
@@ -20,7 +20,7 @@ Notable changes are documented here. Desktop and Buddy versions are maintained i
 ### Verification limits
 
 - Includes normal Buddy **0.5.18 / code 40**; use the Band page to update an older installation. The local same-version review-fix package was explicitly reinstalled before this release.
-- Short visual feedback accepted the restored effects with two real tasks. Firmware memory use, physical panel FPS, six-task stability, long-duration illumination and restart avoidance remain unverified. Compilation, unit tests, layout bounds and ACKs do not establish those results; see [verification and compatibility](docs/testing.md).
+- Short visual feedback accepted the restored effects with two real tasks. Firmware memory use, physical panel FPS, six-task stability, long-duration illumination and restart avoidance remain unverified. Compilation, unit tests, layout bounds and ACKs do not establish those results; see [verification and compatibility](docs/en/testing.md).
 - GitHub macOS packages remain certificate-free ad-hoc signed and are not Apple-notarized. Windows installers remain unsigned and experimental; Windows Bluetooth/SPP has not been tested on real Windows hardware.
 
 ### Release automation
@@ -98,7 +98,7 @@ Buddy remains **0.5.10**; no band reinstall is required.
 - Brightness-request failure handling, stalled sampling and active-task reconnect recovery, with bounded callbacks and retries.
 - Page/controller ownership and diagnostics distinguish hidden pages, missing receipts and transport failures.
 
-Includes stable Buddy **0.5.10** without a test suffix. Physical panel FPS, battery impact and extended screen-on reliability remain unmeasured; see the [verification guide](docs/testing.md).
+Includes stable Buddy **0.5.10** without a test suffix. Physical panel FPS, battery impact and extended screen-on reliability remain unmeasured; see the [verification guide](docs/en/testing.md).
 
 ## [0.6.0] - 2026-11-11
 
@@ -126,7 +126,7 @@ Includes stable Buddy **0.5.10** without a test suffix. Physical panel FPS, batt
 - Premature wake failures when an application response arrives before its display is ready.
 - Lost transport acknowledgements when sequence numbers wrap during large transfers.
 
-This release includes Buddy 0.5.5. See the [verification guide](docs/testing.md) for compatibility and current limitations.
+This release includes Buddy 0.5.5. See the [verification guide](docs/en/testing.md) for compatibility and current limitations.
 
 [0.6.0]: https://github.com/JamesGZM/miband-agent-buddy/releases/tag/v0.6.0
 [0.7.0]: https://github.com/JamesGZM/miband-agent-buddy/releases/tag/v0.7.0

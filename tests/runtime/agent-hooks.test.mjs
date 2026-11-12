@@ -7,6 +7,75 @@ import {sanitizeAgentHook, forwardAgentHook, CLAUDE_EVENTS} from '../../services
 import {sanitizeHook} from '../../services/runtime/src/adapters/codex-hook.mjs';
 import {createCodexState} from '../../services/runtime/src/core/codex-state.mjs';
 import {createHookServer} from '../../services/runtime/src/adapters/hook-server.mjs';
+import {Readable} from 'node:stream';
+import {EventEmitter} from 'node:events';
+import {runAgentHook} from '../../services/runtime/bin/agent-hook.mjs';
+import {runHook} from '../../services/runtime/bin/codex-hook.mjs';
+import {dispatchHook} from '../../services/runtime/src/adapters/hook-delivery.mjs';
+
+test('CLI ingress dispatches only sanitized events without awaiting delivery', async () => {
+  const raw = {hook_event_name:'Stop',session_id:'fixture',prompt:'synthetic-private-text',tool_input:{secret:'synthetic'}};
+  const sent = [];
+  const dispatch = event => {sent.push(event); return new Promise(()=>{});};
+  await runAgentHook(['claude-code','Stop'],Readable.from([JSON.stringify(raw)]),{dispatch,at:1000});
+  await runHook({input:Readable.from([JSON.stringify(raw)]),event:'Stop',dispatch,at:1000});
+  assert.deepEqual(sent,[sanitizeAgentHook(raw,'claude-code','Stop',1000),sanitizeHook(raw,'Stop',1000)]);
+  assert.doesNotMatch(JSON.stringify(sent),/synthetic|prompt|tool_input/);
+});
+
+test('delivery worker inherits no host pipes and a spawn failure stays observational', () => {
+  const event = sanitizeHook({hook_event_name:'Stop',session_id:'fixture'},'Stop',1000);
+  const child = new EventEmitter(); let released = false;
+  child.unref = () => {released = true;};
+  dispatchHook(event,{start:(executable,args,options)=>{
+    assert.equal(executable,process.execPath);
+    assert.match(args[0],/deliver-hook.mjs$/);
+    assert.deepEqual(JSON.parse(args[1]),event);
+    assert.deepEqual(options,{detached:true,stdio:'ignore',windowsHide:true});
+    return child;
+  }});
+  assert.equal(released,true);
+  assert.doesNotThrow(()=>child.emit('error',Error('fixture unavailable')));
+});
+
+test('CLI closes while a detached delivery worker is still busy', async () => {
+  const script = `
+    import {spawn} from 'node:child_process';
+    import {dispatchHook} from './services/runtime/src/adapters/hook-delivery.mjs';
+    import {runAgentHook} from './services/runtime/bin/agent-hook.mjs';
+    await runAgentHook(['custom','Stop','--session','fixture'],undefined,{
+      dispatch:event=>dispatchHook(event,{start:(exe,args,options)=>spawn(exe,['-e','setTimeout(()=>{},2000)'],options)})
+    });`;
+  const start = performance.now();
+  const child = spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});
+  let output = ''; child.stdout.on('data',x=>output+=x); child.stderr.on('data',x=>output+=x);
+  const [code] = await once(child,'close');
+  assert.equal(code,0); assert.equal(output,'');
+  assert.ok(performance.now()-start<1500,'ingress waited for the 2-second worker');
+});
+
+test('open stdin is bounded and emits no decision', async () => {
+  for (const args of [['mac/codex-hook.mjs','Stop'],['services/runtime/bin/agent-hook.mjs','claude-code','Stop']]) {
+    const start = performance.now();
+    const child = spawn(process.execPath,args,{stdio:['pipe','pipe','pipe']});
+    let output = ''; child.stdout.on('data',x=>output+=x); child.stderr.on('data',x=>output+=x);
+    const [code] = await once(child,'close');
+    assert.equal(code,0); assert.equal(output,'');
+    assert.ok(performance.now()-start<1000,'stdin exceeded ingress deadline');
+  }
+});
+
+test('delayed task events cannot reopen a completed task, including equal-millisecond delivery', () => {
+  const state = createCodexState({now:()=>1000}), session='a'.repeat(64);
+  state.accept({event:'Stop',session,at:1000});
+  state.accept({event:'PreToolUse',session,at:999});
+  state.accept({event:'PostToolUse',session,at:1000});
+  state.accept({event:'UserPromptSubmit',session,at:1000});
+  assert.equal(state.status().state,'complete');
+  assert.equal(state.status().eventCount,1);
+  state.accept({event:'UserPromptSubmit',session,at:1001});
+  assert.equal(state.status().state,'thinking');
+});
 
 test('providers share the private event contract without sharing session identities', () => {
   const input = {hook_event_name:'Stop',session_id:'synthetic-session',prompt:'synthetic-private-text',

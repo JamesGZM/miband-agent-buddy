@@ -1,6 +1,6 @@
 # Security and privacy
 
-**English** · [简体中文](SECURITY.zh-CN.md) · [繁體中文](SECURITY.zh-TW.md)
+**English** · [简体中文](docs/zh-CN/SECURITY.md) · [繁體中文](docs/zh-TW/SECURITY.md)
 
 ## Reporting a vulnerability
 

@@ -121,7 +121,7 @@ test('frontend bridge retains Tauri command names and argument shape', async () 
   assert.deepEqual(calls,[['get_state'],['open_login',{region:'sg'}],['finish_login',{region:'cn'}],['action',{operation:'pause',value:true}]]);
 });
 test('core, executable modules and compatibility entries import without opening ports or children', async () => {
-  const modules = ['services/runtime/src/core/runtime.mjs','services/runtime/bin/buddy-runtime.mjs','services/runtime/bin/codex-hook.mjs','mac/buddy-runtime.mjs','mac/codex-hook.mjs'];
+  const modules = ['services/runtime/src/core/runtime.mjs','services/runtime/bin/buddy-runtime.mjs','services/runtime/bin/codex-hook.mjs','services/runtime/bin/agent-hook.mjs','services/runtime/bin/cursor-hook.mjs','services/runtime/bin/deliver-hook.mjs','mac/buddy-runtime.mjs','mac/codex-hook.mjs'];
   await promisify(execFile)(process.execPath,['--input-type=module','-e',`await Promise.all(${JSON.stringify(modules)}.map(p=>import('./'+p)));`],{timeout:5000});
 });
 test('legacy hook executable fails open for invalid input', async () => {

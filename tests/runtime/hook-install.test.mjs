@@ -7,6 +7,31 @@ import {hookDefinitions, hookConfigPath, updateHookConfig, manageAgentHooks} fro
 
 const definitions = hookDefinitions('claude-code',{nodePath:'/fixture/node path',root:"/fixture/Buddy's checkout"});
 
+test('observational hooks use background execution except Codex synchronous-only SessionEnd', () => {
+  for (const provider of ['codex','claude-code']) for (const [event, group] of Object.entries(hookDefinitions(provider))) {
+    assert.equal(group.hooks[0].async, !(provider === 'codex' && event === 'SessionEnd'));
+  }
+});
+
+test('reinstall upgrades owned synchronous handlers while preserving custom settings and other hooks', () => {
+  const original = updateHookConfig({}, definitions).root;
+  for (const groups of Object.values(original.hooks)) {
+    delete groups[0].hooks[0].async;
+    groups[0].hooks[0].timeout = 90;
+    groups[0].hooks[0].statusMessage = 'fixture status';
+  }
+  const unrelated = {type:'command',command:'other-hook',async:false,timeout:90};
+  original.hooks.Stop[0].hooks.push(unrelated);
+  const {root,changed} = updateHookConfig(original,definitions);
+  assert.equal(changed,true);
+  assert.equal(root.hooks.Stop[0].hooks[0].async,true);
+  assert.equal(root.hooks.Stop[0].hooks[0].timeout,2);
+  assert.equal(root.hooks.Stop[0].hooks[0].statusMessage,'fixture status');
+  assert.deepEqual(root.hooks.Stop[0].hooks[1],unrelated);
+  assert.equal(original.hooks.Stop[0].hooks[0].async,undefined);
+  assert.equal(updateHookConfig(root,definitions).changed,false);
+});
+
 test('install merges, quotes paths, is idempotent and removes only owned hook commands', () => {
   const existing = {permissions:{allow:['Read']},env:{SYNTHETIC_SETTING:'fixture'},hooks:{Stop:[{matcher:'',hooks:[{type:'command',command:'existing-hook'}]}]}};
   const {root,changed} = updateHookConfig(existing,definitions);
@@ -62,6 +87,31 @@ test('installation keeps private backup, performs read-only previews and restore
   const removed = await manageAgentHooks({...options,remove:true});
   assert.equal(removed.installed,false);
   assert.deepEqual(JSON.parse(await readFile(configPath,'utf8')),JSON.parse(original));
+});
+
+test('status detects an old synchronous installation and reinstall backs up then upgrades it', async t => {
+  const directory = await mkdtemp(join(tmpdir(),'buddy-upgrade-fixture-'));
+  t.after(()=>rm(directory,{recursive:true,force:true}));
+  const configPath=join(directory,'hooks.json');
+  const options={provider:'codex',configPath,nodePath:'/fixture/node',root:'/fixture/buddy',backupDirectory:join(directory,'backups')};
+  const old=updateHookConfig({unrelated:'fixture'},hookDefinitions('codex',options)).root;
+  for(const groups of Object.values(old.hooks))delete groups[0].hooks[0].async;
+  const source=JSON.stringify(old);
+  await writeFile(configPath,source);
+  const status=await manageAgentHooks({...options,status:true});
+  assert.equal(status.installed,true); assert.equal(status.needsUpgrade,true); assert.equal(status.changed,false);
+  assert.equal(await readFile(configPath,'utf8'),source);
+  const preview=await manageAgentHooks({...options,dryRun:true});
+  assert.equal(preview.needsUpgrade,true); assert.equal(preview.changed,true);
+  assert.equal(await readFile(configPath,'utf8'),source);
+  const result=await manageAgentHooks(options);
+  assert.equal(result.needsUpgrade,false); assert.equal(result.changed,true);
+  assert.equal(await readFile(result.backupPath,'utf8'),source);
+  const upgraded=JSON.parse(await readFile(configPath,'utf8'));
+  assert.equal(upgraded.unrelated,'fixture');
+  assert.equal(upgraded.hooks.Stop[0].hooks[0].async,true);
+  assert.equal(upgraded.hooks.SessionEnd[0].hooks[0].async,false);
+  assert.equal((await manageAgentHooks({...options,status:true})).needsUpgrade,false);
 });
 
 test('project installs target the selected project and invalid JSON is left untouched', async t => {
