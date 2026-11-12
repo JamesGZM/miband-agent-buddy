@@ -1,6 +1,16 @@
 name: Windows preview installers
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Optional stable release tag; otherwise build the selected ref
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -20,10 +30,13 @@ jobs:
     env:
       PYTHONUTF8: '1'
       CARGO_TERM_COLOR: never
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - name: Preserve pinned patch line endings
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
@@ -32,6 +45,21 @@ jobs:
         with:
           python-version: '3.13'
           architecture: ${{ matrix.arch }}
+      - name: Validate release tag and version
+        if: inputs.tag != ''
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, re, subprocess, tomllib
+          tag = os.environ['RELEASE_TAG']
+          version = json.load(open('package.json'))['version']
+          assert re.fullmatch(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', tag), 'Expected a stable vX.Y.Z tag'
+          assert tag == 'v' + version, 'Tag and desktop version must match'
+          assert json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'] == version, 'Tauri version must match'
+          with open('apps/desktop/src-tauri/Cargo.toml', 'rb') as source:
+              assert tomllib.load(source)['package']['version'] == version, 'Cargo version must match'
+          subprocess.run(['git', 'show-ref', '--verify', 'refs/tags/' + tag], check=True)
+          PY
       - uses: dtolnay/rust-toolchain@stable
       - name: Select matching native Rust host
         run: rustup default stable-${{ matrix.target }}

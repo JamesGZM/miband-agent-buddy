@@ -4,7 +4,7 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
-## [0.7.4] - 2026-11-12
+## [0.7.5] - 2026-11-12
 
 ### Improved
 
@@ -21,7 +21,13 @@ Notable changes are documented here. Desktop and Buddy versions are maintained i
 
 - Includes normal Buddy **0.5.18 / code 40**; use the Band page to update an older installation. The local same-version review-fix package was explicitly reinstalled before this release.
 - Short visual feedback accepted the restored effects with two real tasks. Firmware memory use, physical panel FPS, six-task stability, long-duration illumination and restart avoidance remain unverified. Compilation, unit tests, layout bounds and ACKs do not establish those results; see [verification and compatibility](docs/testing.md).
-- GitHub macOS packages remain certificate-free ad-hoc signed and are not Apple-notarized. Windows installers remain experimental and are not attached to the macOS Release.
+- GitHub macOS packages remain certificate-free ad-hoc signed and are not Apple-notarized. Windows installers remain unsigned and experimental.
+
+### Release automation
+
+- Stable tags automatically build Mac arm64/x64 and Windows x64/ARM64 from the same tag; publication waits for all four jobs. Windows compilation and packaging run on GitHub Actions, not on the local Mac.
+- Publish Windows NSIS installers, hashes and corresponding sources alongside Mac downloads. Validate all 16 release assets and their checksums before publishing. Manual Windows diagnostics remain available with read-only permissions.
+- Supersedes the cancelled, unpublished v0.7.4 release attempt; its existing tag is retained.
 
 ## [0.7.3] - 2026-11-12
 

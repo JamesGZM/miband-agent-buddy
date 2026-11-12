@@ -119,7 +119,7 @@ UI 文案位於 `apps/desktop/ui/locales.js`，英文、簡體與繁體同步更
 
 [Hooks 指南](hooks.zh-TW.md)說明事件、安裝、驗證與移除。安裝 Hooks 是與構建／測試分開的明確操作；測試安裝器請使用一次性項目。
 
-分支和 PR 的 CI 只檢查原始碼，不生成發佈包。版本標籤工作流驗證支援的兩種 Mac 架構後才發佈。版本、原始碼歸檔、許可證與發佈說明見[發佈流程](../open-source/RELEASING.zh-TW.md)。
+分支和 PR 的 CI 只檢查原始碼，不生成發佈包。版本標籤工作流驗證兩種 Mac 與兩種 Windows 架構全部成功後才發佈。版本、原始碼歸檔、許可證與發佈說明見[發佈流程](../open-source/RELEASING.zh-TW.md)。
 
 ## 本地實機測試建置
 
@@ -132,4 +132,4 @@ npm run build:desktop
 
 ## Windows 預覽建置
 
-手動觸發的 [Windows 工作流程](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)使用原生 x64/ARM64 runner，上傳無證書 NSIS 安裝包、校驗值和對應原始碼，不發布 Release，也不阻擋 Mac 發布。在對應架構的 Windows Rust/Node 主機完成 bootstrap 和手環建置後，執行 `npm ci --prefix scripts/windows` 和 `python scripts/build_windows.py --arch x64`（或 `arm64`）。將 `BUDDY_NODE_LICENSE` 指向官方 Node LICENSE，Python 使用 UTF-8 模式。Windows 認證與設定使用目前使用者範圍 DPAPI，複製到另一帳號/機器不能遷移登入。預覽版不支援 App 內更新，配對、登入、安裝、通知和硬體行為尚待 Windows 驗證。見 [ADR-012](../architecture/ADR-012-windows-preview.zh-TW.md)。
+可重用的 [Windows 工作流程](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)使用原生 x64/ARM64 runner。穩定發布標籤會自動呼叫它，與兩種 Mac 建置一起作為發布門檻；四個架構全部成功後才發布，Release 附帶無證書 NSIS 安裝包、校驗值和對應原始碼。保留手動觸發用於診斷，獨立手動執行只上傳 Actions Artifact，不發布。在對應架構的 Windows Rust/Node 主機完成 bootstrap 和手環建置後，執行 `npm ci --prefix scripts/windows` 和 `python scripts/build_windows.py --arch x64`（或 `arm64`）。將 `BUDDY_NODE_LICENSE` 指向官方 Node LICENSE，Python 使用 UTF-8 模式。Windows 認證與設定使用目前使用者範圍 DPAPI，複製到另一帳號/機器不能遷移登入。預覽版不支援 App 內更新，配對、登入、安裝、通知和硬體行為尚待 Windows 驗證。見 [ADR-012](../architecture/ADR-012-windows-preview.zh-TW.md)。

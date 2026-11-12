@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 
 const readWorkflow = name => readFileSync(new URL('../../.github/workflows/' + name, import.meta.url), 'utf8');
 
 test('Windows preview builds native x64 and ARM64 installers without publishing or certificates', () => {
   const workflow = readWorkflow('windows.yml');
   assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.match(workflow, /^  workflow_call:/m);
+  assert.match(workflow, /ref: \$\{\{ inputs.tag && format\('refs\/tags\/\{0\}', inputs.tag\) \|\| github.ref \}\}/);
+  assert.match(workflow, /Tag and desktop version must match/);
   assert.doesNotMatch(workflow, /^  (push|pull_request|schedule):/m);
   for (const value of ['windows-2025','windows-11-arm','arch: x64','arch: arm64','scripts/build_windows.py','scripts/package_sources.py','actions/upload-artifact']) assert.ok(workflow.includes(value),value);
   assert.doesNotMatch(workflow, /contents: write|gh release|SIGNING_IDENTITY|\.p12|Import-PfxCertificate/);
@@ -23,7 +27,7 @@ test('ordinary source checks cannot package or publish application artifacts', (
   }
 });
 
-test('only version tags or an explicit release dispatch package and publish portable macOS assets', () => {
+test('release tags build both platforms from the same tag and gate publication on every architecture', () => {
   const workflow = readWorkflow('release.yml');
   assert.match(workflow, /^  push:\n    tags: \['v\[0-9\]\*'\]$/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
@@ -34,7 +38,10 @@ test('only version tags or an explicit release dispatch package and publish port
   }
   assert.match(workflow, /runner: macos-15-intel/);
   assert.match(workflow, /runner: macos-15\n/);
-  assert.match(workflow, /needs: macos/);
+  assert.match(workflow, /windows:\n    uses: \.\/\.github\/workflows\/windows.yml\n    with:\n      tag: \$\{\{ inputs.tag \|\| github.ref_name \}\}/);
+  assert.match(workflow, /publish:\n    needs: \[macos, windows\]/);
+  assert.match(workflow, /run: python3 scripts\/verify_release_assets.py dist/);
+  assert.ok(workflow.indexOf('scripts/verify_release_assets.py') < workflow.indexOf('gh release create'));
   assert.match(workflow, /npm run build:desktop -- --release --signing-mode ci/);
   assert.doesNotMatch(workflow, /BUDDY_SIGNING_IDENTITY|security import|create-keychain|\.p12/);
   assert.match(workflow, /--verify-tag/);
@@ -48,6 +55,41 @@ test('only version tags or an explicit release dispatch package and publish port
     assert.ok(line.includes('"$RELEASE_TAG"'));
     assert.ok(!line.includes('${{'));
   }
+});
+
+test('release publication rejects a missing Windows installer or corrupt asset checksum', () => {
+  const result=spawnSync('python3',['-B','-c',String.raw`
+import hashlib,sys,tempfile
+from pathlib import Path
+sys.path.insert(0,'scripts')
+from verify_release_assets import verify
+with tempfile.TemporaryDirectory() as temporary:
+    root=Path(temporary)
+    for arch in ['arm64','x64']:
+        assets=[('SHA256SUMS-'+arch,'MiBand-Agent-Buddy-macos-'+arch+'.zip')]
+        for name in ['MiBand-Agent-Buddy-windows-'+arch+'-setup.exe','MiBand-Agent-Buddy-source-'+arch+'.tar.gz','MiBand-Agent-Buddy-source-windows-'+arch+'.tar.gz']:
+            assets.append((name+'.sha256',name))
+        for checksum,name in assets:
+            content=('synthetic artifact '+name).encode()
+            (root/name).write_bytes(content)
+            (root/checksum).write_text(hashlib.sha256(content).hexdigest()+'  '+name+'\n')
+    verify(root)
+    installer=root/'MiBand-Agent-Buddy-windows-arm64-setup.exe'
+    content=installer.read_bytes();installer.unlink()
+    try:
+        verify(root)
+        raise AssertionError('missing Windows installer accepted')
+    except ValueError:
+        pass
+    installer.write_bytes(content+b'corrupt')
+    try:
+        verify(root)
+        raise AssertionError('corrupt checksum accepted')
+    except ValueError:
+        pass
+    installer.write_bytes(content);verify(root)
+`],{cwd:new URL('../../',import.meta.url),encoding:'utf8'});
+  assert.equal(result.status,0,result.stdout+result.stderr);
 });
 
 test('desktop release versions agree across npm, Tauri and Cargo', () => {

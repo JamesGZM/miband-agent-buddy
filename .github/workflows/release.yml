@@ -14,6 +14,10 @@ concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
+  windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
   macos:
     strategy:
       fail-fast: false
@@ -83,7 +87,7 @@ jobs:
             dist/MiBand-Agent-Buddy-source-${{ matrix.arch }}.tar.gz.sha256
           if-no-files-found: error
   publish:
-    needs: macos
+    needs: [macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,6 +103,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Verify complete release assets and checksums
+        run: python3 scripts/verify_release_assets.py dist
       - name: Create or update GitHub Release
         run: |
           python3 scripts/release_notes.py "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"

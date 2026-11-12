@@ -42,7 +42,7 @@ Current releases are not Apple-notarized. If macOS blocks the first launch, foll
 
 ### Windows preview
 
-Experimental unsigned **x64** and **ARM64** NSIS installers are built by the manually triggered [Windows preview installers workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml). Download the matching `windows-preview-x64` or `windows-preview-arm64` artifact from a completed run; each includes a `setup.exe`, SHA-256 and corresponding sources. Windows Bluetooth, account login, installation and notifications still need physical verification. In-app updates are currently Mac-only. Linux is not supported.
+Experimental unsigned **x64** and **ARM64** NSIS installers are included in [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), with SHA-256 checksums and corresponding sources. Every release requires both Windows and both Mac architectures to build successfully. The [Windows workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml) also remains available for manual diagnostic builds. Windows Bluetooth, account login, installation and notifications still need physical verification. In-app updates are currently Mac-only. Linux is not supported.
 
 ## Band brightness and battery status
 

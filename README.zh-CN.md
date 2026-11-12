@@ -42,7 +42,7 @@
 
 ### Windows 预览版
 
-实验性的无证书 **x64** 和 **ARM64** NSIS 安装包，通过手动触发的 [Windows preview installers 工作流](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)构建。在完成的运行中下载对应的 `windows-preview-x64` 或 `windows-preview-arm64` Artifact，内含 `setup.exe`、SHA-256 与对应源码。Windows 蓝牙、账号登录、安装与通知尚待实机验证；App 内更新目前仅支持 Mac。Linux 暂不支持。
+实验性的无证书 **x64** 和 **ARM64** NSIS 安装包随 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)提供，包含 SHA-256 与对应源码。每次发布要求两种 Windows 与两种 Mac 架构全部构建成功。[Windows 工作流](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)仍保留手动诊断入口。Windows 蓝牙、账号登录、安装与通知尚待实机验证；App 内更新目前仅支持 Mac。Linux 暂不支持。
 
 ## 手环亮度与电量状态
 
