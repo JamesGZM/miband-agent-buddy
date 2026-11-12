@@ -8,11 +8,21 @@
 
 Turn Xiaomi Smart Band 9 into a display beside your keyboard: AI task status, animated companions and computer resource usage at a glance. Desktop apps for **macOS and Windows** connect your computer to the band.
 
+<p align="center">
+  <a href="https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/JamesGZM/miband-agent-buddy/check.yml?branch=main&amp;style=flat-square&amp;label=build" height="24" alt="Build status"></a>
+  <a href="https://github.com/JamesGZM/miband-agent-buddy/releases/latest"><img src="https://img.shields.io/github/v/release/JamesGZM/miband-agent-buddy?style=flat-square&amp;label=release&amp;color=7C6FF6" height="24" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/JamesGZM/miband-agent-buddy?style=flat-square&amp;color=64748B" height="24" alt="License"></a>
+</p>
+
+<p align="center">
+  <a href="#download"><img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-007AFF?style=flat-square" height="24" alt="macOS: Apple Silicon and Intel"></a>
+  <a href="#download"><img src="https://img.shields.io/badge/Windows-x64%20%7C%20ARM64%20preview-D99A24?style=flat-square" height="24" alt="Windows: x64 and ARM64 preview"></a>
+  <a href="#compatibility"><img src="https://img.shields.io/badge/Xiaomi-Smart%20Band%209%20%2F%209%20NFC-FF6900?style=flat-square" height="24" alt="Xiaomi Smart Band 9 and 9 NFC"></a>
+</p>
+
 **[Download](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)** · [Getting started](#getting-started) · [Documentation](docs/en/README.md) · [Changelog](CHANGELOG.md)
 
 **English** · [简体中文](docs/readme/README.zh-CN.md) · [繁體中文](docs/readme/README.zh-TW.md)
-
-macOS · Windows · Xiaomi Smart Band 9 · AGPL-3.0-only
 
 </div>
 

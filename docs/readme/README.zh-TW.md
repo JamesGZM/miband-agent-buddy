@@ -8,11 +8,21 @@
 
 把小米手環 9 放在鍵盤旁，隨時查看 AI 任務、動態 Buddy 與電腦資源用量。透過 **macOS 與 Windows 桌面 App** 連接手環，為你的桌面增加一塊小螢幕。
 
+<p align="center">
+  <a href="https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/JamesGZM/miband-agent-buddy/check.yml?branch=main&amp;style=flat-square&amp;label=build" height="24" alt="建置狀態"></a>
+  <a href="https://github.com/JamesGZM/miband-agent-buddy/releases/latest"><img src="https://img.shields.io/github/v/release/JamesGZM/miband-agent-buddy?style=flat-square&amp;label=release&amp;color=7C6FF6" height="24" alt="最新版本"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/JamesGZM/miband-agent-buddy?style=flat-square&amp;color=64748B" height="24" alt="授權"></a>
+</p>
+
+<p align="center">
+  <a href="#下載"><img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-007AFF?style=flat-square" height="24" alt="macOS：Apple Silicon 與 Intel"></a>
+  <a href="#下載"><img src="https://img.shields.io/badge/Windows-x64%20%7C%20ARM64%20preview-D99A24?style=flat-square" height="24" alt="Windows：x64 與 ARM64 預覽版"></a>
+  <a href="#相容性"><img src="https://img.shields.io/badge/Xiaomi-Smart%20Band%209%20%2F%209%20NFC-FF6900?style=flat-square" height="24" alt="小米手環 9 與 9 NFC"></a>
+</p>
+
 **[下載](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)** · [開始使用](#開始使用) · [文件](../zh-TW/README.md) · [更新紀錄](../zh-TW/CHANGELOG.md)
 
 [English](../../README.md) · [简体中文](README.zh-CN.md) · **繁體中文**
-
-macOS · Windows · Xiaomi Smart Band 9 · AGPL-3.0-only
 
 </div>
 
