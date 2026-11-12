@@ -2,7 +2,7 @@
 
 **English** · [简体中文](../../zh-CN/open-source/RELEASING.md) · [繁體中文](../../zh-TW/open-source/RELEASING.md)
 
-MiBand Agent Buddy is an AGPL-3.0-only project for macOS. The public repository includes source, licenses, notices, contribution and security guidance. Desktop and band versions are independent.
+MiBand Agent Buddy is an AGPL-3.0-only desktop-display project for Xiaomi Smart Band 9, with macOS and Windows desktop apps. The public repository includes source, licenses, notices, contribution and security guidance. Desktop and band versions are independent.
 
 ## Continuous integration
 
@@ -20,7 +20,7 @@ Release assets:
 - `MiBand-Agent-Buddy-source-{arm64,x64}.tar.gz` plus checksums: reviewed Git-tracked project files, actual patched pinned upstream files and resolved linked Rust dependency sources;
 - GitHub's source archives for the exact tag.
 
-Source packaging requires a clean reviewed commit, rejects private paths/symlinks and omits the excluded Vivo MsgPack source. It records the target/revision and exact official Node source URL; no private account files or generated local workspace copies are included. A rerun replaces assets for that tag. Buddy's package is included inside the Mac app and managed through its Band page. Release checksums and GitHub asset SHA-256 digests are available to users; the built-in updater requires the GitHub digest.
+Source packaging requires a clean reviewed commit, rejects private paths/symlinks and omits the excluded Vivo MsgPack source. It records the target/revision and exact official Node source URL; no private account files or generated local workspace copies are included. A rerun replaces assets for that tag. Buddy's package is included inside the desktop app and managed through its Band page. Release checksums and GitHub asset SHA-256 digests are available to users; the built-in updater requires the GitHub digest.
 
 ## Publish a version
 
@@ -37,7 +37,7 @@ The app now carries its Node runtime, shared modules, native transport and Buddy
 
 For first installation, open the DMG and drag the App to its Applications shortcut, or unzip the portable ZIP and move the App to `/Applications` or another user-writable Applications folder. GitHub bundles use certificate-free ad-hoc code signatures and are **not Apple-notarized**. CI never creates/imports certificates or uses local signing identities. Local builds instead require an existing certificate; see [development signing](../development/README.md#macos-signing). macOS may require the standard explicit approval in System Settings → Privacy & Security on first opening. Do not remove quarantine automatically or claim that a checksum provides Apple notarization.
 
-Settings → About → Check for updates queries this project's latest stable GitHub Release. Downloading verifies its architecture asset and digest, then validates the extracted app. **Install and restart** is a separate action that preserves app data and retains the previous app beside it as `MiBand Agent Buddy.previous-*.app`. If the installation folder is not writable, move the app to a user-writable Applications folder. Apps launched through App Translocation and direct development executables cannot update in place.
+Settings → About → Check for updates queries the project Worker first, with direct official GitHub fallback; both serve this project's latest stable GitHub Release. Downloading verifies its architecture asset and digest, then validates the extracted app. **Install and restart** is a separate action that preserves app data and retains the previous app beside it as `MiBand Agent Buddy.previous-*.app`. If the installation folder is not writable, move the app to a user-writable Applications folder. Apps launched through App Translocation and direct development executables cannot update in place.
 
 A local build or absent release is shown honestly; the app does not offer a source archive as an executable update. GitHub Developer ID signing/notarization is not configured; local certificate signing uses an existing keychain identity. Windows preview installers are included in the same release; Linux bundles are not configured.
 

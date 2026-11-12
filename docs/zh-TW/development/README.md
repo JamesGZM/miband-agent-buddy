@@ -4,6 +4,8 @@
 
 本指南面向從原始碼構建 MiBand Agent Buddy 的貢獻者。安裝與日常使用見[項目 README](../../readme/README.zh-TW.md)。修改前閱讀[貢獻指南](../CONTRIBUTING.md)與[架構](../architecture/README.md)。
 
+本專案提供 macOS 與 Windows 桌面 App，將手環用作桌面顯示屏。下方首次建置命令面向 macOS；Windows 預覽建置章節說明原生 x64／ARM64 建置及目前限制。
+
 ## 環境要求
 
 - macOS、Xcode Command Line Tools 與 Git。
@@ -146,3 +148,9 @@ python3 -m http.server 8785 --bind 127.0.0.1
 ```
 
 在瀏覽器開啟 `http://127.0.0.1:8785/scripts/readme-preview.html`，擷取完整頁面（1600 × 1100）。`?page=devices`、`hooks`、`account`、`settings`、`resources`、`display`、`buddy` 提供 1600 × 1240 圖集頁面。等待預覽完成，保留完整背景，並標示 App 預覽與示例資料。錄製 Buddy 頁面作為動畫，不據此宣稱裝置幀率。
+
+README 頭圖使用同一頁面的 `?capture=1` 模式。載入完成後點擊 “Play documentation demo”，以完整 1600×1100 頁面尺寸錄製一個 16 秒循環，將幀路徑與起始毫秒時間儲存為 `frames.json` 的 `{path, at}` 清單。使用下方命令編碼示例幀，PNG 為減少動態效果時的替代圖。這是共用前端演示素材，不是 Windows／macOS 實機驗收或面板幀率錄影。
+
+```sh
+python3 scripts/encode_readme_hero.py /absolute/path/to/captured-frames
+```

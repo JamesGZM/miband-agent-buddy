@@ -1,10 +1,10 @@
 # Desktop app
 
-The macOS desktop app uses Tauri for window, account and system integration, with a JavaScript interface. It provides Buddy previews, band management, AI connection setup, account access and preferences.
+The macOS and Windows desktop app uses Tauri for window, account and system integration, with a JavaScript interface. It provides Buddy previews, band management, AI connection setup, account access and preferences.
 
 For downloads and first-time setup, see the [project README](../../README.md). For a source build, follow the [development guide](../../docs/en/development/README.md).
 
-## Build
+## Build on macOS
 
 After preparing dependencies and generating the band resources from the repository root:
 
@@ -14,6 +14,8 @@ open 'apps/desktop/dist/MiBand Agent Buddy.app'
 ```
 
 Use `npm run build:desktop -- --release` for an optimized build. The app bundles its runtime, transport and Buddy resources, so the built app can be moved independently of the source checkout. See the [release process](../../docs/en/open-source/RELEASING.md) for distribution packages and signing limitations.
+
+For Windows x64/ARM64 builds and their current verification limits, see the [Windows build guide](../../docs/en/development/README.md#windows-preview-builds).
 
 ## Code boundaries
 

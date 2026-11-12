@@ -64,3 +64,5 @@ On 2026-11-12, the local App, bundled Node and transport were signed with an exi
 Local preparation-recovery fix: 328 Node tests pass, including failed-reconnect recovery without a new Hook, bounded prelaunch retries and initial query ordering. The user confirmed sustained physical illumination during a 2–3 minute observation; a five-minute local health observation checks ongoing ACKs. This is not yet a physical confirmation of automatic recovery after a real radio outage or long-duration endurance.
 
 **Windows Bluetooth/SPP has not been tested on real Windows hardware.** Successful Actions compilation, Rust tests and NSIS packaging do not verify pairing, band communication, reconnection or continuous operation.
+
+Buddy 0.5.19 / code 41 has since been installed and acknowledged on the same NFC device. Its burst-paint coalescing is regression-tested; this is an installation/communication result, not a new physical dual-agent endurance result. The intended placement is on the desk beside the host computer.

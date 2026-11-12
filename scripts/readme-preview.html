@@ -18,6 +18,8 @@
   .device { position: absolute; top: 610px; left: 66px; width: 515px; height: 218px; padding: 14px; border-radius: 110px; background: linear-gradient(140deg,#54585b,#080a0b 40%,#292e32); border: 1px solid #717776; box-shadow: 0 25px 60px #0009, inset 0 0 0 5px #1d2225; }
   .device canvas { width: 485px; height: 190px; border-radius: 100px; background: #000; }
   .states { position: absolute; left: 90px; top: 865px; display: flex; gap: 24px; color: #bbc2c2; font-size: 15px; }
+  .states span { opacity: .45; transition: opacity .3s; }
+  .states span.active { opacity: 1; color: #f3eee5; }
   .states span::before { content: ''; display: inline-block; width: 7px; height: 7px; background: #edaa79; border-radius: 50%; margin-right: 8px; }
   .window { position: absolute; left: 650px; top: 286px; width: 864px; height: 612px; border-radius: 18px; overflow: hidden; border: 1px solid #ffffff26; box-shadow: 0 40px 100px #0008; background: #1c1b17; }
   iframe { width: 960px; height: 680px; border: 0; transform: scale(.9); transform-origin: top left; display: block; }
@@ -36,15 +38,16 @@
 </style>
 <div id="stage">
   <div class="brand"><img src="../apps/desktop/artwork/app-icon.png" alt=""><b>MiBand Agent Buddy</b></div>
-  <div id="page-label" class="eyebrow">A SMALL COMPANION. A CLEARER SIGNAL.</div>
-  <h1>Your AI.<br><span>On your wrist.</span></h1>
-  <p class="intro">See when your agent is thinking,<br>working, or waiting for you.</p>
+  <div id="page-label" class="eyebrow">A SMALL DISPLAY. A CLEARER DESK.</div>
+  <h1>Your band.<br><span>On your desk.</span></h1>
+  <p class="intro">AI activity and system resources,<br>on a Xiaomi Smart Band beside your keyboard.</p>
   <div class="device"><canvas id="band" width="490" height="192" aria-label="Code-drawn Buddy preview"></canvas></div>
-  <div class="states"><span>Thinking</span><span>Working</span><span>Needs you</span></div>
-  <div class="window-label eyebrow">THE MAC COMPANION</div>
+  <div class="states"><span data-mode="thinking">Thinking</span><span data-mode="working">Working</span><span data-mode="attention">Needs you</span><span data-mode="resources">Resources</span></div>
+  <div class="window-label eyebrow">THE DESKTOP APP</div>
   <div class="window"><iframe id="app" title="Production App UI with synthetic demonstration data"></iframe></div>
-  <footer><span><b>OPEN SOURCE</b> &nbsp; / &nbsp; macOS + Xiaomi Smart Band 9</span><span>App preview · illustrative data</span></footer>
+  <footer><span><b>OPEN SOURCE</b> &nbsp; / &nbsp; macOS + Windows · Xiaomi Smart Band 9</span><span>Shared App UI · illustrative data</span></footer>
 </div>
+<button id="demo-start" hidden>Play documentation demo</button>
 <script type="module">
   import {startPreview} from '../apps/desktop/ui/preview.js';
   const params = new URLSearchParams(location.search), page = params.get('page') || 'hero';
@@ -59,18 +62,33 @@
   const fixture = {
     loggedIn:true,region:'sg',version:version.version,appVersion:version.version,autostart:false,
     devices:[{index:0,name:'Demo Smart Band 9',address:'Demo device',supported:true}],
-    preferences:{selected:0,language:'zh-Hans',appTheme:'claude',appearance:'dark',buddyTheme:'claude',syncEnabled:true,background:true,
+    preferences:{selected:0,language:page==='hero'?'en':'zh-Hans',appTheme:'claude',appearance:'dark',buddyTheme:'claude',syncEnabled:true,background:true,
       activityKeepAwake:false,keepScreen:false,wakeHoldSeconds:60,powerSaving:false,buddyFps:25,bandBrightness:120,bandAutoBrightness:false,
       completionVibration:false,completionVibrationMode:'short'},
     runtime:{connection:'connected',lastAckAt:Date.now(),agent:{state:'working',activeSessions:3,eventCount:24,lastEventAt:Date.now(),sessionCounts:{working:1,thinking:1,attention:1}},
       buddy:{status:'current',installed:true,installedVersion:manifest.versionName,availableVersion:manifest.versionName},
-      ack:{appVersion:manifest.versionName,page:0,buddyTheme:'claude',mode:'working',settingsApplied:true,keepScreen:'on',wakeDisplay:{active:false,remainingMs:60000},
+      ack:{appVersion:manifest.versionName,page:0,buddyTheme:'claude',mode:'working',drawing:{renderer:'native-border',elapsedMs:0},settingsApplied:true,keepScreen:'on',wakeDisplay:{active:false,remainingMs:60000},
         capabilities:{themes:['chatgpt','claude','deepseek'],maxWakeHoldMs:600000,powerSaving:true,completionVibration:true,bandBrightness:true,bandAutoBrightness:true,buddyFps:true}},
       device:{battery:82,charging:false,firmware:'3.1.132',model:'Demo model',storageTotal:128e6,storageFree:102e6},
       metrics:{sampledAt:Date.now(),cpu:24,memory:{usedBytes:12*2**30,totalBytes:24*2**30,percent:50},disk:{usedBytes:240e9,totalBytes:1e12,percent:24}}},
   };
+  let started=null;
+  function updateDemo() {
+    const elapsed=started===null?0:(performance.now()-started)/1000, phase=elapsed%16;
+    const mode=phase<4?'thinking':phase<8?'working':phase<12?'attention':'idle';
+    const counts=phase<4?{thinking:1,working:0,attention:0}:phase<8?{thinking:1,working:1,attention:0}:phase<12?{thinking:1,working:1,attention:1}:{thinking:0,working:0,attention:0};
+    const r=fixture.runtime;
+    r.lastAckAt=Date.now();r.metrics.sampledAt=Date.now();
+    if(page==='hero'){
+      r.agent.state=mode;r.agent.sessionCounts=counts;r.agent.activeSessions=Object.values(counts).reduce((a,b)=>a+b,0);
+      r.ack.mode=mode;r.ack.page=phase>=12?1:0;r.ack.drawing.elapsedMs=(phase%4)*1000;
+      document.querySelectorAll('[data-mode]').forEach(node=>node.classList.toggle('active',node.dataset.mode===(phase>=12?'resources':mode)));
+    }
+  }
+  window.buddyArtworkState=fixture;
+  updateDemo();setInterval(updateDemo,80);
   const html = await fetch('../apps/desktop/ui/index.html').then(r=>r.text());
-  const bootstrap = `<script>const demo=${JSON.stringify(fixture)};window.__TAURI__={core:{invoke:async command=>{if(command!=='get_state')return null;demo.runtime.lastAckAt=Date.now();demo.runtime.metrics.sampledAt=Date.now();return structuredClone(demo)}}};<`+'/script>';
+  const bootstrap = `<script>window.__TAURI__={core:{invoke:async command=>{if(command!=='get_state')return null;return structuredClone(window.parent.buddyArtworkState)}}};<`+'/script>';
   const frame = document.querySelector('#app');
   frame.srcdoc = html.replace('<head>', '<head><base href="/apps/desktop/ui/">'+bootstrap);
   frame.addEventListener('load',()=>{
@@ -86,8 +104,12 @@
         if (heading) doc.scrollingElement.scrollTop = heading.getBoundingClientRect().top - 65;
       }
       document.documentElement.dataset.ready = 'true';
+      if(page==='hero'&&params.has('capture')){
+        const play=document.querySelector('#demo-start');play.hidden=false;
+        play.onclick=()=>{started=performance.now();play.remove();document.documentElement.dataset.playing='true';};
+      }else started=performance.now();
     },50);
   });
-  startPreview(()=>({runtime:fixture.runtime,theme:'claude',online:true,bandPage:0,buddyFps:25}));
+  startPreview(()=>({runtime:fixture.runtime,theme:'claude',online:true,bandPage:page==='hero'?fixture.runtime.ack.page:0,buddyFps:25}));
 </script>
 </html>

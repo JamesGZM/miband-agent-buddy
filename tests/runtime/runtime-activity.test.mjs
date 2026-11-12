@@ -298,9 +298,13 @@ test('Mac compiles multi-AI status into display colors only after capability dis
  assert.equal(latest.mode,'working');assert.deepEqual(latest.activityRing,['#728BFF','#65D9BC']);
  assert.equal(latest.sessionCounts,undefined,'new bands do not receive aggregation inputs');
  h.hook('PermissionRequest','b');await h.clock.advance(4000);
- latest=h.snapshots().at(-1);assert.equal(latest.mode,'attention');assert.deepEqual(latest.activityRing,['#FFBD64','#65D9BC']);
+ latest=h.snapshots().at(-1);assert.equal(latest.mode,'attention');assert.deepEqual(latest.activityRing,['#FFBD64']);
  await h.runtime.dispatch({op:'configure',settings:{buddyTheme:'claude',revision:1}});await h.clock.advance(4000);
- assert.deepEqual(h.snapshots().at(-1).activityRing,['#FFBD64','#79CFC3']);
+ assert.deepEqual(h.snapshots().at(-1).activityRing,['#FFBD64']);
+ h.hook('PostToolUse','b');await h.clock.advance(4000);
+ assert.equal(h.snapshots().at(-1).mode,'working');
+ assert.deepEqual(h.snapshots().at(-1).activityRing,['#EBA270','#79CFC3']);
+ h.hook('PermissionRequest','b');await h.clock.advance(4000);
  h.hook('Stop','a');await h.clock.advance(4000);assert.deepEqual(h.snapshots().at(-1).activityRing,['#FFBD64']);
  await h.runtime.dispatch({op:'reset_activity'});await h.clock.advance(4000);
  assert.equal(h.snapshots().at(-1).activityRing.length,1);

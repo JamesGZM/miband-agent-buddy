@@ -4,76 +4,73 @@
 
 # MiBand Agent Buddy
 
-### Your AI, on your wrist.
+### A small desktop display for your AI.
 
-An open-source Mac companion for Xiaomi Smart Band 9. Know when your AI is thinking, working, or waiting for you.
+Turn Xiaomi Smart Band 9 into a display beside your keyboard: AI task status, animated companions and computer resource usage at a glance. Desktop apps for **macOS and Windows** connect your computer to the band.
 
 **[Download](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)** · [Getting started](#getting-started) · [Documentation](docs/en/README.md) · [Changelog](CHANGELOG.md)
 
 **English** · [简体中文](docs/readme/README.zh-CN.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
-macOS · Xiaomi Smart Band 9 · AGPL-3.0-only
+macOS · Windows · Xiaomi Smart Band 9 · AGPL-3.0-only
 
 </div>
 
-![MiBand Agent Buddy — Your AI, on your wrist.](docs/images/hero.png)
+<p align="center">
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/hero.png">
+  <img src="docs/images/hero.gif" width="100%" alt="MiBand Agent Buddy desktop display demo — AI activity and system resources">
+</picture>
+</p>
 
 <p align="center"><sub>Production App UI with illustrative data. Code-drawn band previews are not device photographs.</sub></p>
 
 ## At a glance
 
-| Follow your AI | See every task | Keep your Mac in view |
+| Follow your AI | See every task | Keep your computer in view |
 | --- | --- | --- |
-| Animated ChatGPT, Claude and DeepSeek companions. | A shared multicolor ring keeps independent tasks visible. | CPU, memory and disk usage, right on your wrist. |
+| Animated ChatGPT, Claude and DeepSeek companions. | A shared multicolor ring keeps independent tasks visible. | CPU, memory and disk usage on a dedicated display beside your keyboard. |
 
-Optional task keep-awake and completion vibration · Band management · Menu-bar controls
+Optional task keep-awake and completion vibration · Band management · Desktop tray controls
 
 Brightness, power saving, keep-awake and per-task vibration are optional. See the [display guide](docs/en/display.md) for controls and notification behavior.
 
 ## Download
 
-Download the DMG for your Mac from [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), open it, and drag **MiBand Agent Buddy.app** to the **Applications** shortcut. ZIP packages remain available for portable use and the built-in updater.
+Download the installer for your computer from [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest).
 
-| Mac | DMG installer | ZIP (portable / updater) |
-| --- | --- | --- |
-| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
-| Intel | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
+| Platform | Architecture | Installer | Portable / in-app updater |
+| --- | --- | --- | --- |
+| macOS | Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
+| macOS | Intel x64 | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
+| Windows | x64 | `MiBand-Agent-Buddy-windows-x64-setup.exe` | — |
+| Windows | ARM64 | `MiBand-Agent-Buddy-windows-arm64-setup.exe` | — |
 
-Current releases are not Apple-notarized. If macOS blocks the first launch, follow the [installation instructions](docs/en/open-source/RELEASING.md) after checking the download source.
+On macOS, open the DMG and drag **MiBand Agent Buddy.app** to **Applications**. On Windows, run the matching NSIS installer. Checksums and corresponding sources accompany every release.
 
-<details>
-<summary>Windows preview · Bluetooth has not been tested on Windows hardware</summary>
-
-### Windows preview
-
-**Windows Bluetooth/SPP has not been tested on real Windows hardware.** Successful Actions compilation, Rust tests and NSIS packaging do not verify pairing, band communication, reconnection or continuous operation.
-
-Experimental unsigned **x64** and **ARM64** NSIS installers are included in [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), with SHA-256 checksums and corresponding sources. Every release requires both Windows and both Mac architectures to build successfully. The [Windows workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml) also remains available for manual diagnostic builds. Windows Bluetooth, account login, installation and notifications still need physical verification. In-app updates are currently Mac-only. Linux is not supported.
-
-
-</details>
+**Windows builds are available as experimental previews. Bluetooth/SPP has not been tested on real Windows hardware;** build success does not establish pairing, band communication or reconnection. In-app updates currently support macOS; Windows users download the next installer. Linux is not supported. macOS packages are not Apple-notarized and Windows installers are unsigned. See the [installation and verification guide](docs/en/open-source/RELEASING.md).
 
 ## Getting started
 
 1. Open the app and follow the setup guide. Sign in with the Xiaomi account and service region you use in Mi Fitness.
-2. Select your band and follow the pairing prompts. Keep it near your Mac and disconnect other apps that are using it during setup.
-3. Install Buddy when prompted, then open **Buddy** to choose a theme and view your Mac's activity.
-4. Optionally open **AI connections** to connect your coding tools. Mac resource monitoring works without an AI connection.
+2. Select your band and follow the pairing prompts. Keep it near your computer and disconnect other apps that are using it during setup.
+3. Install Buddy when prompted, then open **Buddy** to choose a theme and view your computer's activity.
+4. Optionally open **AI connections** to connect your coding tools. Computer resource monitoring works without an AI connection.
 
-Tap the band screen to switch between Buddy and resource usage. Long-press to exit Buddy. Click the Mac preview to wake it.
+Tap the band screen to switch between Buddy and resource usage. Long-press to exit Buddy. Click the desktop preview to wake it.
 
 In **Settings**, **Keep awake during tasks** is off by default. When enabled, the idle countdown starts after all tasks finish. **Power saving** is also off by default. Manage Buddy installation and updates in **Band**; check app updates using the version control in **Settings → About**.
 
 In **Settings → Task notifications**, **Task completion vibration** is off by default. Enable it for one vibration per completed AI task, including concurrent tasks that finish separately. Choose **Short** (default) or **Long**; the band system controls duration. It requires Buddy with vibration support and a host that sends real completion Hooks; tool completion, cancellation and approval requests do not trigger it. Settings separate appearance, startup/sync, band display, task notifications and about information.
 
-## The Mac companion
+## The desktop app
 
 | Band management | AI connections |
 | --- | --- |
 | ![Band management](docs/images/app-band.png) | ![AI connections](docs/images/app-integrations.png) |
 
 <details>
-<summary>More screenshots and animation</summary>
+<summary>More screenshots</summary>
 
 | Account | Settings |
 | --- | --- |
@@ -81,7 +78,6 @@ In **Settings → Task notifications**, **Task completion vibration** is off by 
 | **Resource monitoring** | **Display and notifications** |
 | ![Resource monitoring](docs/images/app-resources.png) | ![Display and notifications](docs/images/app-settings-display.png) |
 
-![Buddy in motion](docs/images/app-buddy.gif)
 
 </details>
 

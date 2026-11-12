@@ -5,12 +5,13 @@ description: Connect an existing local AI project to MiBand Agent Buddy activity
 
 # Buddy Hooks
 
-Set up local activity reporting for the user's selected project. The macOS Buddy app and band connection must already be running. This skill adds observational hooks; it does not set up model credentials or change agent permissions.
+Set up local activity reporting for the user's selected project. The Buddy desktop app and band connection must already be running. This skill adds observational hooks; it does not set up model credentials or change agent permissions.
 
 ## Choose the actual host
 
 - **Codex / local ChatGPT coding:** use `codex` when the host supports Codex lifecycle hooks. Ordinary ChatGPT chat does not become observable by installing this file.
-- **Claude Code / Claude desktop Code tab:** use `claude-code` for a local project that loads Claude Code settings. Do not claim the desktop Chat tab or remote sessions can reach this Mac's loopback receiver.
+- **Claude Code / Claude desktop Code tab:** use `claude-code` for a local project that loads Claude Code settings. Do not claim the desktop Chat tab or remote sessions can reach this computer's loopback receiver.
+- **Cursor:** inspect its actual Hooks configuration and the existing `services/runtime/bin/cursor-hook.mjs` adapter. Preserve its conversation identity and valid non-veto responses. The installer below does not manage Cursor. Do not invent a `PermissionRequest` event or copy Codex async settings into Cursor.
 - **DeepSeek or another harness:** use its real lifecycle callbacks and the generic sender below. The model name alone does not imply a hook configuration format. Inspect the harness before changing it.
 
 Read [the integration guide](../../docs/en/development/hooks.md) for event semantics, removal and limitations. Official configuration references: [Codex Hooks](https://learn.chatgpt.com/docs/hooks), [Claude Code Hooks](https://code.claude.com/docs/en/hooks).
@@ -31,6 +32,20 @@ Replace `codex` with `claude-code` for Claude Code. Codex writes `<project>/.cod
 Keep one effective Buddy Hook scope. If the installer reports `blocked: true`, inspect its `conflictingPaths` without printing unrelated configuration. Existing global, ancestor or project-shared hooks can load alongside the requested local hooks; choose the user's intended scope and remove only the previous Buddy definitions before installing another. `installed` describes the requested file, not whether a different scope is trusted or active. The detector recognizes Buddy's standard command paths and Codex inline hook sections; manually review custom wrappers and other plugin sources in `/hooks`.
 
 Review the resulting **Buddy entries only** without printing the rest of the settings file. Never display credentials or environment values. In Codex, ask the user to review and trust the new definitions through `/hooks`; do not bypass trust or change managed policies. For Claude Code, inspect `/hooks` and the active settings source. Start a new local chat/session after setup to load the definitions reliably.
+
+## Select needs-user reminders
+
+Buddy normalizes `PermissionRequest` to **needs user**, displayed as an entirely yellow outer ring. The character and task counts stay unchanged; no question icon or question text is added. Native approval hooks are observational: never approve, deny, answer, inject a follow-up prompt, or change another permission hook.
+
+The **setup agent** selects integrations from the actual host's documented and verified callbacks. Do not ask the working model to remember manual notifications on every turn. Report a capability table after setup: native approval, blocking question, nonblocking question, and how each reminder clears. Mark unsupported or unverified capabilities explicitly.
+
+- Keep native Codex/Claude `PermissionRequest` reporting. It covers host approval prompts, not every AI question. Existing native configurations need no extra question hook merely to show approvals.
+- Question reporting is optional. Enable it only for a real request for user input with a verified start **and** answer/cancel/invalidation lifecycle. Do not infer questions from prose, tool arguments, transcripts, a generic tool name, silence or model identity. Never invent a hook event or tool matcher.
+- A blocking request can use the existing same-session `PermissionRequest` → resumption (`PreToolUse` / `PostToolUse` / `UserPromptSubmit`) lifecycle only if the host guarantees no other activity in that session while waiting. Preserve the adapter's original provider/session identity; a second custom namespace would create a phantom task. Confirm the native ordering and absence of duplicate handlers before enabling it.
+- An async question tool returning means the question was submitted, **not answered**. The current event-only adapter replaces attention on later same-session activity. Therefore it cannot reliably hold an independent nonblocking question reminder. Leave that optional mapping disabled unless the harness itself tracks pending requests and emits the aggregate needs-user/resumption lifecycle from real resolution signals, serializing other callbacks while a reminder is pending. Never clear on an unrelated tool return, another conversation's completion, or a timeout. End/cancel invalidates pending requests; multiple pending requests clear only after the last one resolves.
+- Current native Codex setup provides approval reminders. The existing Cursor adapter provides activity only; no dedicated approval/question callback is established by its installed configuration. Do not claim universal question coverage for either. A host without a reliable optional route remains activity-only for questions.
+
+Verify open, duplicate open, actual resolution, cancellation and concurrent conversations using synthetic callbacks in an isolated test receiver. No raw question, answer, options or tool input may be delivered or logged. A configuration check is not evidence that the host emitted the callback or that the physical ring changed.
 
 ## Verify the real connection
 

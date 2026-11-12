@@ -2,13 +2,13 @@
 
 **English** · [简体中文](../../zh-CN/architecture/README.md) · [繁體中文](../../zh-TW/architecture/README.md)
 
-This is the canonical current architecture. Historical architecture URLs redirect here. Stable releases target macOS and Xiaomi Smart Band 9; physical verification currently covers the NFC model. Windows x64/ARM64 installers are experimental. Their platform boundaries and verification limits are recorded in [ADR-012](ADR-012-windows-preview.md).
+This is the canonical current architecture. Historical architecture URLs redirect here. The project turns Xiaomi Smart Band 9 into a desktop display beside a computer. Releases include macOS and experimental Windows x64/ARM64 desktop apps; physical verification currently covers macOS with the NFC band model. Their platform boundaries and verification limits are recorded in [ADR-012](ADR-012-windows-preview.md).
 
 ```text
 Desktop UI → bridge → Tauri commands → application services → private files
                                                ↓ JSON Lines
 AI Hooks → loopback HTTP → Node runtime core → transport adapter
-Mac sampling ────────────────────┘                    ↓ JSON Lines
+System sampling ────────────────────┘                    ↓ JSON Lines
                                    Rust SPP/Core transport → Buddy controller
                                                          ← v1 application ACK
 ```
@@ -24,13 +24,13 @@ Mac sampling ────────────────────┘    
 | Band controller | Snapshot consumption, settings receipts, foreground lifetime and rendering state | Injected Vela APIs and timers |
 | Shared modules | v1 validation/ACK matching and existing display/animation calculations | Pure ES5 CommonJS; no platform imports |
 
-Multi-AI aggregation, priority, display mode and task-color plans are computed on the Mac. After `activityRing` capability discovery, the runtime sends an ordered color list instead of task counts; the band validates/applies that result and owns local animation and safety. Legacy counts are converted once per snapshot, never aggregated each animation tick ([ADR-009](ADR-009-host-activity-display.md)).
+Multi-AI aggregation, priority, display mode and task-color plans are computed on the desktop host. After `activityRing` capability discovery, the runtime sends an ordered color list instead of task counts; the band validates/applies that result and owns local animation and safety. Legacy counts are converted once per snapshot, never aggregated each animation tick ([ADR-009](ADR-009-host-activity-display.md)).
 
-Task completion notifications are opt-in and come from per-session host events, independent of aggregate mode. The Mac sends bounded ID/count deliveries; Buddy persists deduplication before requesting the selected system short/long vibration. Mode changes are capability gated and durably acknowledged ([ADR-010](ADR-010-completion-vibration.md)).
+Task completion notifications are opt-in and come from per-session host events, independent of aggregate mode. The desktop host sends bounded ID/count deliveries; Buddy persists deduplication before requesting the selected system short/long vibration. Mode changes are capability gated and durably acknowledged ([ADR-010](ADR-010-completion-vibration.md)).
 
 Entrypoints compose these parts. Desktop domain/wire models have no platform effects; application operations are shared by tray/window adapters. The credential model retains the vendored account token data type to preserve its persisted format. Vendor and pinned upstream internals remain isolated.
 
-Desktop frontend modules use only `bridge.js` for Tauri calls. Preview rendering consumes the same canonical presentation functions as the band; it reconstructs artwork, not a device screen capture. Mac appearance, band theme and activity state remain independent. Interface text is localized in the desktop frontend (`i18n.js`, `locales.js`: Simplified Chinese, Traditional Chinese, English). Catalog keys are the Traditional Chinese source strings, so runtime and Rust messages are translated at display time without changing the wire contracts. The tray menu and login window title use the same saved `language` preference (`system` by default).
+Desktop frontend modules use only `bridge.js` for Tauri calls. Preview rendering consumes the same canonical presentation functions as the band; it reconstructs artwork, not a device screen capture. Desktop appearance, band theme and activity state remain independent. Interface text is localized in the desktop frontend (`i18n.js`, `locales.js`: Simplified Chinese, Traditional Chinese, English). Catalog keys are the Traditional Chinese source strings, so runtime and Rust messages are translated at display time without changing the wire contracts. The tray menu and login window title use the same saved `language` preference (`system` by default).
 
 ## Contracts and delivery
 

@@ -119,6 +119,8 @@ test('preview uses bounded smooth frames, reduced cadence on opt-in, and no hidd
 test('preview applies task colors on the original ring and never draws task text',t=>{
  const h=harness(t);
  h.state.runtime.agent.state='attention';h.state.runtime.agent.sessionCounts={thinking:1,working:1,attention:1};h.preview.draw();
+ const attention=[...h.layers];h.state.runtime.agent.sessionCounts={thinking:1,working:0,attention:0};h.preview.draw();assert.deepEqual(h.layers,attention);
+ h.state.runtime.agent.state='working';h.state.runtime.agent.sessionCounts={thinking:1,working:1,attention:0};h.preview.draw();
  const multi=[...h.layers];h.state.runtime.agent.sessionCounts={thinking:1,working:0,attention:0};h.preview.draw();assert.notDeepEqual(h.layers,multi);
  for(const theme of ['chatgpt','claude','deepseek'])for(const mode of ['idle','thinking','working','attention']){
   h.state.theme=theme;h.state.runtime.agent.state=mode;

@@ -4,76 +4,73 @@
 
 # MiBand Agent Buddy
 
-### 把 AI 的工作狀態，戴在手腕上。
+### 把小米手環，變成桌面的 AI 狀態屏。
 
-為小米手環 9 打造的開源 Mac 伴侶。思考、執行、等待你確認，抬腕就能知道。
+把小米手環 9 放在鍵盤旁，隨時查看 AI 任務、動態 Buddy 與電腦資源用量。透過 **macOS 與 Windows 桌面 App** 連接手環，為你的桌面增加一塊小螢幕。
 
 **[下載](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)** · [開始使用](#開始使用) · [文件](../zh-TW/README.md) · [更新紀錄](../zh-TW/CHANGELOG.md)
 
 [English](../../README.md) · [简体中文](README.zh-CN.md) · **繁體中文**
 
-macOS · Xiaomi Smart Band 9 · AGPL-3.0-only
+macOS · Windows · Xiaomi Smart Band 9 · AGPL-3.0-only
 
 </div>
 
-![MiBand Agent Buddy — 把 AI 的工作狀態，戴在手腕上。](../images/hero.png)
+<p align="center">
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="../images/hero.png">
+  <img src="../images/hero.gif" width="100%" alt="MiBand Agent Buddy 桌面展示 — AI 任務與電腦資源">
+</picture>
+</p>
 
 <p align="center"><sub>實際 App 前端搭配示例資料；程式繪製的手環預覽並非裝置實拍。</sub></p>
 
-## 抬腕，看看進展
+## 桌面多一塊螢幕，進展一眼可見
 
-| AI 有了小夥伴 | 多個任務，一眼看清 | Mac 狀態，隨手可見 |
+| AI 有了小夥伴 | 多個任務，一眼看清 | 電腦狀態，就在桌面 |
 | --- | --- | --- |
 | ChatGPT、Claude、DeepSeek 動態 Buddy 主題。 | 多色圓環呈現獨立任務，一個完成不遮住其他任務。 | 隨時查看 CPU、記憶體和磁碟用量。 |
 
-可選任務亮屏與完成震動 · 手環管理 · 選單列控制
+可選任務亮屏與完成震動 · 手環管理 · 桌面系統匣控制
 
 亮度、省電、任務亮屏和完成震動均可按需設定。控制方式與通知行為見[顯示指南](../zh-TW/display.md)。
 
 ## 下載
 
-從 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) 下載適合你的 Mac 的 DMG，打開後將 **MiBand Agent Buddy.app** 拖到 **Applications（應用程式）** 快捷入口。ZIP 繼續提供可攜解壓縮和 App 內更新用途。
+從 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) 下載適合你電腦的安裝包。
 
-| Mac | DMG 安裝包 | ZIP（可攜／更新器） |
-| --- | --- | --- |
-| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
-| Intel | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
+| 平台 | 架構 | 安裝包 | 可攜／App 內更新 |
+| --- | --- | --- | --- |
+| macOS | Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
+| macOS | Intel x64 | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
+| Windows | x64 | `MiBand-Agent-Buddy-windows-x64-setup.exe` | — |
+| Windows | ARM64 | `MiBand-Agent-Buddy-windows-arm64-setup.exe` | — |
 
-目前版本尚未經過 Apple 公證。如果 macOS 阻止首次開啟，請確認下載來源後按照[安裝說明](../zh-TW/open-source/RELEASING.md)操作。
+macOS 開啟 DMG 後，將 **MiBand Agent Buddy.app** 拖入 **Applications**；Windows 執行對應的 NSIS 安裝包。每次發布均提供校驗和與對應原始碼。
 
-<details>
-<summary>Windows 預覽版 · 藍牙尚未經過 Windows 實機測試</summary>
-
-### Windows 預覽版
-
-**Windows 藍牙／SPP 尚未在 Windows 真機實測。** Actions 編譯、Rust 測試和 NSIS 打包成功不代表配對、手環通信、重連或持續執行已驗證。
-
-實驗性的無證書 **x64** 和 **ARM64** NSIS 安裝包隨 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)提供，包含 SHA-256 與對應原始碼。每次發布要求兩種 Windows 與兩種 Mac 架構全部建置成功。[Windows 工作流程](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)仍保留手動診斷入口。Windows 藍牙、帳號登入、安裝與通知尚待實機驗證；App 內更新目前僅支援 Mac。Linux 暫不支援。
-
-
-</details>
+**Windows 已提供實驗性預覽版，藍牙／SPP 尚未在 Windows 實機測試。** 建置成功不代表配對、手環通訊或重連已驗證。App 內更新目前支援 macOS，Windows 使用者下載新版安裝包更新。Linux 暫不支援。macOS 包尚未經 Apple 公證，Windows 安裝包無簽名。詳見[安裝與驗證說明](../zh-TW/open-source/RELEASING.md)。
 
 ## 開始使用
 
 1. 開啟 App 並按照設定引導操作，登入與小米運動健康相同的小米帳號和服務地區。
-2. 選擇手環並完成配對提示。設定時請讓手環靠近 Mac，並中斷其他正在連線手環的 App。
-3. 根據提示安裝 Buddy，然後開啟 **Buddy** 頁面選擇主題、查看 Mac 的狀態。
-4. 可選：開啟 **AI 接入**，連線你的程式開發工具。尚未接入 AI 時也可以查看 Mac 資源用量。
+2. 選擇手環並完成配對提示。設定時請讓手環靠近電腦，並中斷其他正在連線手環的 App。
+3. 根據提示安裝 Buddy，然後開啟 **Buddy** 頁面選擇主題、查看電腦的狀態。
+4. 可選：開啟 **AI 接入**，連線你的程式開發工具。尚未接入 AI 時也可以查看 電腦資源用量。
 
-輕點手環螢幕可切換 Buddy 和資源頁面，長按可退出 Buddy。點擊 Mac 上的預覽可以喚醒手環。
+輕點手環螢幕可切換 Buddy 和資源頁面，長按可退出 Buddy。點擊 桌面 App 的預覽可以喚醒手環。
 
 **設定**中的**任務期間保持亮屏**預設關閉；開啟後，所有任務結束才開始待機息屏倒數。**省電模式**同樣預設關閉。Buddy 的安裝與更新在**手環**頁面管理；App 更新可透過**設定 → 關於**中的版本按鈕檢查。
 
 **設定 → 任務通知**中的**任務完成震動**預設關閉。開啟後，每個 AI 任務完成時震動一次，多個任務分別完成時分別通知；可選**短震**（預設）或**長震**，時長由手環系統控制。需要支援震動的 Buddy 及宿主真實的完成 Hooks；工具結束、取消和等待確認不會觸發。設定頁按外觀、執行與同步、手環顯示、任務通知、關於分組。
 
-## Mac 上的控制中心
+## 桌面控制中心
 
 | 手環管理 | AI 接入 |
 | --- | --- |
 | ![手環管理](../images/app-band.png) | ![AI 接入](../images/app-integrations.png) |
 
 <details>
-<summary>更多截圖與動畫</summary>
+<summary>更多截圖</summary>
 
 | 帳號 | 設定 |
 | --- | --- |
@@ -81,7 +78,6 @@ macOS · Xiaomi Smart Band 9 · AGPL-3.0-only
 | **資源監控** | **顯示與任務通知** |
 | ![資源監控](../images/app-resources.png) | ![顯示與任務通知](../images/app-settings-display.png) |
 
-![Buddy 動態預覽](../images/app-buddy.gif)
 
 </details>
 

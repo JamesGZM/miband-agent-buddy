@@ -6,11 +6,11 @@ Start with the [getting-started guide](README.md#getting-started), [latest relea
 
 ## Installation
 
-Choose the Apple Silicon or Intel download that matches your Mac, unzip it and move the app to Applications. Current builds are not Apple-notarized; see the [installation instructions](docs/en/open-source/RELEASING.md) if macOS blocks the first launch. Windows and Linux are not supported.
+Choose a macOS DMG/ZIP for Apple Silicon or Intel, or a Windows NSIS installer for x64 or ARM64, from [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest). The band serves as a desktop display beside your computer. Windows builds are experimental and Windows Bluetooth/SPP still needs physical verification. Linux is not supported. See the [installation instructions](docs/en/open-source/RELEASING.md) for signing and platform limits.
 
 ## Account and connection
 
-Use the same Xiaomi account and service region as Mi Fitness. Follow the app's first-connection instructions and confirm any pairing prompt on the band and Mac. During setup, keep the band nearby and disconnect other apps using it.
+Use the same Xiaomi account and service region as Mi Fitness. Follow the app's first-connection instructions and confirm any pairing prompt on the band and computer. During setup, keep the band nearby and disconnect other apps using it.
 
 For an interrupted connection, check the status shown in **Band**, then reconnect. If the band remains unresponsive, restart it normally and try again. Routine recovery does not require factory-resetting the band or removing its Xiaomi account binding.
 
@@ -22,13 +22,13 @@ Open **AI connections** and follow the setup request for the host you actually u
 
 If a finished task remains active because the host did not send its completion event, use **Settings → Reset task display**. This clears the locally observed task state without cancelling work in the AI host. Integration details are in the [Hooks guide](docs/en/development/hooks.md).
 
-Task keep-awake requires activity sync and actual task events. For unexpected sleep, record the elapsed time, current task/connection state, last sync and whether Buddy was exited. Clicking the Mac preview requests a manual wake. The local fix restores one wake after transport reconnect only while task keep-awake, synchronization and an active task are all present; API acceptance still does not prove physical illumination.
+Task keep-awake requires activity sync and actual task events. For unexpected sleep, record the elapsed time, current task/connection state, last sync and whether Buddy was exited. Clicking the desktop preview requests a manual wake. The local fix restores one wake after transport reconnect only while task keep-awake, synchronization and an active task are all present; API acceptance still does not prove physical illumination.
 
 ## Reporting a problem
 
 Include:
 
-- App version, macOS version and Mac architecture.
+- App version, operating-system version and computer architecture (macOS/Windows, x64/ARM64).
 - Band model and firmware version, if the problem involves a band.
 - Steps to reproduce, expected behavior and actual behavior.
 - Whether this is first-time setup, an update or a reconnect.

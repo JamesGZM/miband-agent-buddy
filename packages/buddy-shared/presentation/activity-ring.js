@@ -17,9 +17,11 @@ function count(counts, stale) {
 }
 // Host-side display compilation. The band consumes these colors, not AI sessions.
 function colors(theme,mode,counts) {
+  // Attention overrides task segmentation; counts remain available on the host.
+  if(mode==='attention')return ['#FFBD64'];
   theme=theme==='claude'||theme==='deepseek'?theme:'chatgpt';
   var palette=palettes[theme]||palettes.chatgpt,color=palette[0];
-  if(mode==='attention')color='#FFBD64';else if(mode==='complete')color='#77EDBD';else if(mode==='error')color='#FF7766';
+  if(mode==='complete')color='#77EDBD';else if(mode==='error')color='#FF7766';
   else if(mode==='offline')color=theme==='claude'?'#947F74':theme==='deepseek'?'#6C7A9C':'#7187B0';
   else if(mode==='sleep')color=theme==='claude'?'#C58768':theme==='deepseek'?'#3A52C4':color;
   var active=mode==='thinking'||mode==='working'||mode==='attention';

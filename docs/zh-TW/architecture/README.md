@@ -2,13 +2,13 @@
 
 [English](../../en/architecture/README.md) · [简体中文](../../zh-CN/architecture/README.md) · **繁體中文**
 
-這裡是當前架構的權威說明，歷史架構地址跳轉到此。穩定版面向 macOS 和小米手環 9，實機驗證目前覆蓋 NFC 版。Windows x64/ARM64 安裝包屬於實驗性預覽，其平台邊界與驗證限制見 [ADR-012](ADR-012-windows-preview.md)。
+這裡是當前架構的權威說明，歷史架構地址跳轉到此。本專案把小米手環 9 作為電腦旁的桌面顯示屏，提供 macOS 與 Windows x64/ARM64 桌面 App。實機驗證目前覆蓋 macOS 搭配 NFC 版手環；Windows 仍屬實驗性預覽，其平台邊界與驗證限制見 [ADR-012](ADR-012-windows-preview.md)。
 
 ```text
 桌面 UI → bridge → Tauri 命令 → 應用服務 → 私密文件
                                   ↓ JSON Lines
 AI Hooks → 回環 HTTP → Node 執行時核心 → 傳輸適配器
-Mac 採樣 ─────────────────────┘           ↓ JSON Lines
+系統採樣 ─────────────────────┘           ↓ JSON Lines
                           Rust SPP/Core → Buddy 控制器
                                         ← v1 應用 ACK
 ```
@@ -26,7 +26,7 @@ Mac 採樣 ─────────────────────┘   
 
 入口只組裝依賴。桌面領域／協議模型無平台副作用，選單列與視窗共享應用操作。帳號模型保留 vendored token 類型，維持保存格式；vendor 與鎖定的上游代碼獨立隔離。
 
-前端只有 `bridge.js` 訪問 Tauri。預覽使用與手環相同的顯示函數重建圖像，不是設備截圖。Mac 外觀、手環主題與活動狀態相互獨立。`i18n.js`／`locales.js` 提供英文、簡體、繁體；繁體源字符串作為 key，執行時與 Rust 消息在展示時翻譯，不改變協議。選單列與登錄標題使用保存的 `language`（預設 `system`）。
+前端只有 `bridge.js` 訪問 Tauri。預覽使用與手環相同的顯示函數重建圖像，不是設備截圖。桌面外觀、手環主題與活動狀態相互獨立。`i18n.js`／`locales.js` 提供英文、簡體、繁體；繁體源字符串作為 key，執行時與 Rust 消息在展示時翻譯，不改變協議。選單列與登錄標題使用保存的 `language`（預設 `system`）。
 
 ## 契約與傳輸
 

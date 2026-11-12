@@ -6,9 +6,9 @@ const require=createRequire(import.meta.url),ring=require('../../packages/buddy-
 const counts=thinking=>({thinking,working:0,attention:0});
 test('concurrent colors divide precisely the original capsule circumference',()=>{
  for(const theme of ['chatgpt','claude','deepseek'])for(let total=2;total<=6;total++){
-  const f=g.frame({theme,mode:'attention',counts:counts(total),seconds:0});
+  const f=g.frame({theme,mode:'working',counts:counts(total),seconds:0});
   for(let slot=0;slot<total;slot++){
-   const color=g.shade(slot?ring.palettes[theme][slot]:'#FFBD64',.32);
+   const color=g.shade(ring.palettes[theme][slot],.32);
    const length=f.rects.filter(r=>r.color===color).reduce((n,r)=>n+r.width-r.height,0)+f.arcs.filter(a=>a.color===color).reduce((n,a)=>n+a.radius*a.total*Math.PI/180,0);
    assert.ok(Math.abs(length-(596+2*Math.PI*88)/total)<.00001);
   }
@@ -89,7 +89,7 @@ test('production template contains geometry without bitmap animation or diagnost
 test('host compilation selects task colors and native rendering consumes the prepared result',()=>{
  for(const theme of ['chatgpt','claude','deepseek'])for(let total=1;total<=6;total++)for(const mode of ['thinking','working','attention','idle','complete']){
   const colors=ring.colors(theme,mode,counts(total));
-  assert.equal(colors.length,['thinking','working','attention'].includes(mode)?total:1);
+  assert.equal(colors.length,['thinking','working'].includes(mode)?total:1);
   assert.equal(colors[0],mode==='attention'?'#FFBD64':mode==='complete'?'#77EDBD':ring.palettes[theme][0]);
   const input={native:true,theme,mode,seconds:1};
   assert.deepEqual(g.frame({...input,colors}),g.frame({...input,counts:counts(total)}));
@@ -97,6 +97,18 @@ test('host compilation selects task colors and native rendering consumes the pre
  const state={native:true,mode:'working',colors:['#123456','#ABCDEF'],seconds:1};
  Object.defineProperty(state,'counts',{get(){assert.fail('renderer aggregated AI sessions');}});
  assert.ok(g.createRenderer()(state).arcs.length);
+});
+test('needs-user reminder overrides the whole ring and restores task colors without changing counts',()=>{
+ for(const theme of ['chatgpt','claude','deepseek']){
+  const tasks={thinking:2,working:2,attention:1},before=JSON.stringify(tasks);
+  assert.deepEqual(ring.colors(theme,'attention',tasks),['#FFBD64']);
+  for(const native of [true,false]){
+   const input={theme,mode:'attention',native,seconds:1};
+   assert.deepEqual(g.frame({...input,counts:tasks}),g.frame({...input,colors:['#FFBD64']}));
+  }
+  assert.deepEqual(ring.colors(theme,'working',tasks),ring.palettes[theme].slice(0,5));
+  assert.equal(JSON.stringify(tasks),before);
+ }
 });
 test('band and browser execute identical canonical geometry',async()=>{
  const consumers=[require('../../apps/band/src/common/generated/geometry.js'),(await import('../../apps/desktop/ui/assets/geometry.mjs')).default];

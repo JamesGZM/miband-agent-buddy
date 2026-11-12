@@ -6,7 +6,22 @@ Give an AI working in your project the [Buddy Hooks skill](../../../skills/buddy
 
 `https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md`
 
-Ask it to connect **this project** to the running macOS Buddy app. This repository contains the reusable instructions; installing a skill by itself does not install or activate lifecycle hooks.
+Ask it to connect **this project** to the running Buddy desktop app. This repository contains the reusable instructions; installing a skill by itself does not install or activate lifecycle hooks.
+
+## Needs-user reminder selection
+
+`PermissionRequest` is Buddy's normalized **needs user** reminder: the whole outer ring turns yellow, even with multiple tasks. It does not answer or authorize anything. Resumption restores the ordinary task palette and retains host task counts. No extra icon or question text is shown.
+
+The setup agent chooses optional question integration from the host's real capabilities; installing the skill alone does not make all AI questions observable. Native Codex/Claude `PermissionRequest` is for approvals. Cursor's existing adapter reports activity but establishes no dedicated permission/question callback. Do not invent event names or tool matchers, inspect transcripts, or require the model to remember manual notifications each turn.
+
+| Route | Requirement and clearing rule |
+| --- | --- |
+| Native approval | Keep the actual `PermissionRequest` hook; normal same-session resumption or terminal events replace attention. Buddy emits no permission decision. |
+| Optional blocking question | Verify a real start and answer/cancel lifecycle, and that the session cannot emit unrelated activity while waiting. Reuse the same provider/session identity and existing reminder/resumption events. |
+| Optional nonblocking question | A tool returning is submission, not an answer. The current event-only adapter cannot hold a separate pending question through later activity. Leave mapping disabled unless the harness owns pending-request aggregation, real resolution/cancel/invalidation callbacks, and serialized normalized reporting until the last request closes. |
+| No reliable lifecycle | Keep activity reporting and explicitly report question reminders as unsupported/unverified. |
+
+After installation report native approval, blocking question and nonblocking question capabilities separately, including how each clears. Validate duplicates, resolution, cancellation and concurrent sessions against an isolated receiver; configuration alone is not host-callback or physical-screen verification. See the [installation skill](../../../skills/buddy-hooks/SKILL.md#select-needs-user-reminders) for the setup contract.
 
 ## Supported routes
 

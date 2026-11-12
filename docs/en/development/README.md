@@ -4,6 +4,8 @@
 
 This guide is for contributors building MiBand Agent Buddy from source. For installation and everyday use, see the [project README](../../../README.md). Read [CONTRIBUTING.md](../../../CONTRIBUTING.md) and the [architecture](../architecture/README.md) before making a change.
 
+The project provides macOS and Windows desktop apps for a band used as a desk display. The first-build commands below target macOS; the Windows preview-build section covers native x64 and ARM64 builds and current limits.
+
 ## Requirements
 
 - macOS with Xcode Command Line Tools and Git.
@@ -150,3 +152,9 @@ python3 -m http.server 8785 --bind 127.0.0.1
 ```
 
 Open `http://127.0.0.1:8785/scripts/readme-preview.html` in a browser. Capture the full page (1600 × 1100); `?page=devices`, `hooks`, `account`, `settings`, `resources`, `display` and `buddy` produce the 1600 × 1240 gallery views. Wait for the preview to render, keep the complete background, and label images as App previews with illustrative data. Record the Buddy view for animation; do not claim physical-device FPS from it.
+
+The README hero uses the same source with `?capture=1`. Start “Play documentation demo” after loading, capture one 16-second cycle at the full 1600×1100 page size, and save a `frames.json` list of `{path, at}` records (milliseconds from recording start). Encode the captured synthetic frames with the command below; the PNG is the reduced-motion alternative. This is shared frontend artwork, not a Windows/macOS device verification or panel-FPS recording.
+
+```sh
+python3 scripts/encode_readme_hero.py /absolute/path/to/captured-frames
+```

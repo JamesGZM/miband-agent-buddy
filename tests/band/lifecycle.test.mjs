@@ -219,7 +219,7 @@ test('pet geometry responds to counts, stale snapshots and idle without extra UI
  setTime(1900);page.tick();assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),multi,'base colors update only with state');
  const breathing=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});page.tick();
- assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),breathing);
+ assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),breathing,'attention stays entirely yellow regardless of task count');
  channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});page.tick();const working=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  setTime(11900);page.tick();assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),working);
  channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});page.tick();

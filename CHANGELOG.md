@@ -4,6 +4,27 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.7] - 2026-11-12
+
+### Fixed
+
+- Show a full yellow outer ring for needs-user reminders, restoring task colors on resumption. Let the installation agent select optional question callbacks from verified host lifecycles; do not infer asynchronous answers from tool returns.
+- Coalesce simultaneous AI Hooks into one bounded display transaction. Fresh foreground/held Buddy receipts use snapshots instead of redundant native launches; hidden-page races retain one bounded fallback.
+- Buddy **0.5.20 / code 42** paints only the latest host-prepared plan on the next animation tick during snapshot bursts. ACKs, display leases, completion notifications and page switches remain immediate.
+- Preserve verified downloads until the installation helper starts successfully. Clean partial sibling stages on failure and permit validated install retries without downloading again.
+- Deliver observational Codex/Claude Hooks in bounded background workers, upgrade owned async handlers, preserve event ordering guards and add a nonblocking Cursor adapter. Synchronous-only lifecycle hooks retain bounded ingress.
+
+### Improved
+
+- Check versions and stream Mac installers through `buddy-updates.ailaogong.men`, with direct official GitHub fallback on service, transfer, size or checksum failure. Keep archive, architecture, bundle identity and code-signature validation.
+- Reorganize documentation by language, keep one root README, move translated homepages to `docs/readme`, and add framed opaque preview artwork and clearer navigation.
+
+### Verification limits
+
+- Regression suites, signed local builds, local Buddy installation, live Worker package validation and CI have passed. Physical dual-agent endurance, firmware memory use and panel FPS remain unverified; this release does not claim the reported device reboot cause is established.
+- Mac arm64/x64 DMG and ZIP packages remain ad-hoc signed and not Apple-notarized. Windows x64/ARM64 installers remain unsigned and experimental; Windows Bluetooth/SPP has not been tested on real Windows hardware.
+- Update metadata may be cached for ten minutes. GitHub remains the release source; the project Worker is an additional trusted metadata intermediary. See [update delivery](docs/en/development/updates.md).
+
 ## [0.7.6] - 2026-11-12
 
 ### Improved

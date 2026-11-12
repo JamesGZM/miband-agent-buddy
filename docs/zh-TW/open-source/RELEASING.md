@@ -20,7 +20,7 @@ MiBand Agent Buddy 使用 AGPL-3.0-only。公開儲存庫提供原始碼、許�
 - `MiBand-Agent-Buddy-source-{arm64,x64}.tar.gz` 及校驗和，包含審閱後的 Git 跟蹤文件、實際修改的鎖定上游原始碼，以及連結的 Rust 依賴原始碼。
 - GitHub 對應準確標籤的原始碼歸檔。
 
-原始碼打包要求乾淨且經過審閱的提交，拒絕私密路徑、符號連結，並排除 Vivo MsgPack。歸檔記錄目標、提交與官方 Node 原始碼 URL，不包含私密帳號或本地生成副本。重跑會替換該標籤資產。Buddy 隨 Mac App 打包，在手環頁面管理。內置更新器要求 GitHub 資產的 SHA-256 摘要。
+原始碼打包要求乾淨且經過審閱的提交，拒絕私密路徑、符號連結，並排除 Vivo MsgPack。歸檔記錄目標、提交與官方 Node 原始碼 URL，不包含私密帳號或本地生成副本。重跑會替換該標籤資產。Buddy 隨桌面 App 打包，在手環頁面管理。內置更新器要求 GitHub 資產的 SHA-256 摘要。
 
 ## 發佈版本
 
@@ -37,7 +37,7 @@ App 內含 Node、執行時、共享模塊、原生傳輸與 Buddy 包，可脫�
 
 首次安裝時打開 DMG，將 App 拖到 Applications 快捷入口；也可解壓縮可攜 ZIP 並移到 `/Applications` 或使用者可寫的應用目錄。GitHub 包使用不帶證書的 ad-hoc 簽章，**未經 Apple 公證**；CI 不建立／匯入證書，也不使用本地簽名身分。本地建置要求已有證書，見[開發簽名](../development/README.md#macos-簽名)。首次打開可能需要在系統設定 → 隱私與安全性中明確批准。不要自動清除 quarantine，也不要將校驗和當作 Apple 公證。
 
-設定 → 關於 → 檢查更新讀取本項目最新穩定 GitHub Release，下載時驗證架構、摘要與解壓後的 App。**安裝並重啟**是獨立動作，會保留 App 數據，並在旁邊留下 `MiBand Agent Buddy.previous-*.app`。目錄不可寫時先移到用戶可寫位置。App Translocation 路徑和開發可執行文件不能原地更新。
+設定 → 關於 → 檢查更新優先存取專案 Worker，失敗時直連 GitHub 官方來源，兩者均讀取本項目最新穩定 GitHub Release，下載時驗證架構、摘要與解壓後的 App。**安裝並重啟**是獨立動作，會保留 App 數據，並在旁邊留下 `MiBand Agent Buddy.previous-*.app`。目錄不可寫時先移到用戶可寫位置。App Translocation 路徑和開發可執行文件不能原地更新。
 
 本地構建或沒有發佈版本時會如實顯示，不會把原始碼歸檔當成可執行更新。Windows 預覽安裝包包含在同一 Release 中。Linux 包與 GitHub Developer ID 簽名、公證尚未配置；本地簽名使用鑰匙圈中的已有身分。
 
