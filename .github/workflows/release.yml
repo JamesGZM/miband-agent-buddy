@@ -82,6 +82,8 @@ jobs:
           name: desktop-${{ matrix.arch }}
           path: |
             dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.zip
+            dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.dmg
+            dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.dmg.sha256
             dist/SHA256SUMS-${{ matrix.arch }}
             dist/MiBand-Agent-Buddy-source-${{ matrix.arch }}.tar.gz
             dist/MiBand-Agent-Buddy-source-${{ matrix.arch }}.tar.gz.sha256

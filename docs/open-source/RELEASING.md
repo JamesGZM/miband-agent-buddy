@@ -8,10 +8,11 @@ MiBand Agent Buddy is an AGPL-3.0-only project for macOS. The public repository 
 
 Branch pushes and pull requests run `Source checks`: generated test resources, Node tests, architecture checks and both Rust suites. They do not build an App or RPK.
 
-`Release packages` runs only for a pushed stable `vX.Y.Z` tag or an explicit workflow dispatch with an existing stable version tag. It builds and tests Apple Silicon (`macos-15`), Intel (`macos-15-intel`), Windows x64 (`windows-2025`) and Windows ARM64 (`windows-11-arm`). The publish job requires both platform matrices and validates all 16 installer, source and checksum files before creating or updating the GitHub Release. Tag, package.json and Cargo package versions must agree. Ordinary checks have read-only repository access; only the final publish job receives `contents: write`.
+`Release packages` runs only for a pushed stable `vX.Y.Z` tag or an explicit workflow dispatch with an existing stable version tag. It builds and tests Apple Silicon (`macos-15`), Intel (`macos-15-intel`), Windows x64 (`windows-2025`) and Windows ARM64 (`windows-11-arm`). The publish job requires both platform matrices and validates all 20 installer, source and checksum files before creating or updating the GitHub Release. Tag, package.json and Cargo package versions must agree. Ordinary checks have read-only repository access; only the final publish job receives `contents: write`.
 
 Release assets:
 
+- `MiBand-Agent-Buddy-macos-{arm64,x64}.dmg` installers and individual `.sha256` files;
 - `MiBand-Agent-Buddy-macos-arm64.zip` and `MiBand-Agent-Buddy-macos-x64.zip`;
 - architecture-specific `SHA256SUMS-*` files;
 - `MiBand-Agent-Buddy-windows-{x64,arm64}-setup.exe` and individual `.sha256` files;
@@ -32,9 +33,9 @@ Creating a draft release or ordinary branch push does not package. This workflow
 
 ## App installation and updates
 
-The app now carries its Node runtime, shared modules, native transport and Buddy package, and can be moved without a source checkout. Build with `npm run build` then `npm run build:desktop`; add `-- --release` for optimized binaries. `python3 scripts/package_release.py` creates the ZIP and fails if the excluded Vivo MsgPack dependency reappears.
+The app now carries its Node runtime, shared modules, native transport and Buddy package, and can be moved without a source checkout. Build with `npm run build` then `npm run build:desktop`; add `-- --release` for optimized binaries. `python3 scripts/package_release.py` creates DMG installers with an Applications shortcut plus portable ZIPs, verifies the disk image and fails if the excluded Vivo MsgPack dependency reappears.
 
-For first installation, unzip and move the App to `/Applications` or another user-writable Applications folder. GitHub bundles use certificate-free ad-hoc code signatures and are **not Apple-notarized**. CI never creates/imports certificates or uses local signing identities. Local builds instead require an existing certificate; see [development signing](../development/README.md#macos-signing). macOS may require the standard explicit approval in System Settings → Privacy & Security on first opening. Do not remove quarantine automatically or claim that a checksum provides Apple notarization.
+For first installation, open the DMG and drag the App to its Applications shortcut, or unzip the portable ZIP and move the App to `/Applications` or another user-writable Applications folder. GitHub bundles use certificate-free ad-hoc code signatures and are **not Apple-notarized**. CI never creates/imports certificates or uses local signing identities. Local builds instead require an existing certificate; see [development signing](../development/README.md#macos-signing). macOS may require the standard explicit approval in System Settings → Privacy & Security on first opening. Do not remove quarantine automatically or claim that a checksum provides Apple notarization.
 
 Settings → About → Check for updates queries this project's latest stable GitHub Release. Downloading verifies its architecture asset and digest, then validates the extracted app. **Install and restart** is a separate action that preserves app data and retains the previous app beside it as `MiBand Agent Buddy.previous-*.app`. If the installation folder is not writable, move the app to a user-writable Applications folder. Apps launched through App Translocation and direct development executables cannot update in place.
 
@@ -43,3 +44,5 @@ A local build or absent release is shown honestly; the app does not offer a sour
 ## Windows preview builds
 
 The reusable [Windows workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml) runs on native x64 and ARM64 runners. Stable release tags call it automatically alongside both Mac builds; all four architecture jobs must succeed before publication. The release includes unsigned NSIS installers, checksums and corresponding sources. Manual workflow dispatch remains available for diagnostics and uploads Actions artifacts without publishing. Use `npm ci --prefix scripts/windows` and `python scripts/build_windows.py --arch x64` (or `arm64`) on the matching Windows Rust/Node host after bootstrap and the band build. Set `BUDDY_NODE_LICENSE` to the official Node LICENSE and use Python UTF-8 mode. Windows credentials and preferences use user-scoped DPAPI; copying those files to a different account/machine does not migrate login. In-app updates are unavailable in the preview. Pairing, login, installation, notifications and hardware behavior need Windows verification. See [ADR-012](../architecture/ADR-012-windows-preview.md).
+
+**Windows Bluetooth/SPP has not been tested on real Windows hardware.** Successful Actions compilation, Rust tests and NSIS packaging do not verify pairing, band communication, reconnection or continuous operation.

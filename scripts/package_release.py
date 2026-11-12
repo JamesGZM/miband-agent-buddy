@@ -4,10 +4,23 @@ import hashlib
 import json
 import platform
 import subprocess
+import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'apps/desktop/dist/MiBand Agent Buddy.app'
+
+
+def create_dmg(app, target):
+    with tempfile.TemporaryDirectory(prefix='buddy-dmg-') as temporary:
+        stage = Path(temporary) / 'contents'
+        stage.mkdir()
+        subprocess.run(['ditto', str(app), str(stage / app.name)], check=True)
+        (stage / 'Applications').symlink_to('/Applications', target_is_directory=True)
+        subprocess.run(['hdiutil', 'create', '-volname', 'MiBand Agent Buddy',
+                        '-srcfolder', str(stage), '-fs', 'HFS+', '-format', 'UDZO',
+                        '-ov', str(target)], check=True)
+    subprocess.run(['hdiutil', 'verify', str(target)], check=True)
 
 
 def main():
@@ -29,9 +42,13 @@ def main():
     if target.stat().st_size > 300 * 1024 * 1024:
         raise SystemExit('Release exceeds the updater download limit')
     (ROOT / 'dist' / f'SHA256SUMS-{arch}').write_text(hashlib.sha256(target.read_bytes()).hexdigest() + '  ' + target.name + '\n')
+    dmg = target.with_suffix('.dmg')
+    create_dmg(APP, dmg)
+    dmg.with_name(dmg.name + '.sha256').write_text(hashlib.sha256(dmg.read_bytes()).hexdigest() + '  ' + dmg.name + '\n')
     files = [ROOT / 'dist/buddy.debug.rpk', ROOT / 'dist/buddy-package.json']
     (ROOT / 'dist/SHA256SUMS-buddy').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in files))
     print(target)
+    print(dmg)
 
 
 if __name__ == '__main__':

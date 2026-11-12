@@ -31,16 +31,18 @@
 
 ## 下载
 
-从 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) 下载适合你的 Mac 的安装包，解压后将 **MiBand Agent Buddy.app** 移到「应用程序」。
+从 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) 下载适合你的 Mac 的 DMG，打开后将 **MiBand Agent Buddy.app** 拖到 **Applications（应用程序）** 快捷入口。ZIP 继续提供便携解压和 App 内更新用途。
 
-| Mac | 安装包 |
-| --- | --- |
-| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.zip` |
-| Intel | `MiBand-Agent-Buddy-macos-x64.zip` |
+| Mac | DMG 安装包 | ZIP（便携／更新器） |
+| --- | --- | --- |
+| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
+| Intel | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
 
 当前版本尚未经过 Apple 公证。如果 macOS 阻止首次打开，请确认下载来源后按照[安装说明](docs/open-source/RELEASING.zh-CN.md)操作。
 
 ### Windows 预览版
+
+**Windows 蓝牙／SPP 尚未在 Windows 真机实测。** Actions 编译、Rust 测试和 NSIS 打包成功不代表配对、手环通信、重连或持续运行已验证。
 
 实验性的无证书 **x64** 和 **ARM64** NSIS 安装包随 [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest)提供，包含 SHA-256 与对应源码。每次发布要求两种 Windows 与两种 Mac 架构全部构建成功。[Windows 工作流](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)仍保留手动诊断入口。Windows 蓝牙、账号登录、安装与通知尚待实机验证；App 内更新目前仅支持 Mac。Linux 暂不支持。
 

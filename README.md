@@ -31,16 +31,18 @@ Actual macOS App pages, captured from the local build. The homepage animation is
 
 ## Download
 
-Download the package for your Mac from [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), unzip it, and move **MiBand Agent Buddy.app** to Applications.
+Download the DMG for your Mac from [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), open it, and drag **MiBand Agent Buddy.app** to the **Applications** shortcut. ZIP packages remain available for portable use and the built-in updater.
 
-| Mac | Package |
-| --- | --- |
-| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.zip` |
-| Intel | `MiBand-Agent-Buddy-macos-x64.zip` |
+| Mac | DMG installer | ZIP (portable / updater) |
+| --- | --- | --- |
+| Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.dmg` | `MiBand-Agent-Buddy-macos-arm64.zip` |
+| Intel | `MiBand-Agent-Buddy-macos-x64.dmg` | `MiBand-Agent-Buddy-macos-x64.zip` |
 
 Current releases are not Apple-notarized. If macOS blocks the first launch, follow the [installation instructions](docs/open-source/RELEASING.md) after checking the download source.
 
 ### Windows preview
+
+**Windows Bluetooth/SPP has not been tested on real Windows hardware.** Successful Actions compilation, Rust tests and NSIS packaging do not verify pairing, band communication, reconnection or continuous operation.
 
 Experimental unsigned **x64** and **ARM64** NSIS installers are included in [GitHub Releases](https://github.com/JamesGZM/miband-agent-buddy/releases/latest), with SHA-256 checksums and corresponding sources. Every release requires both Windows and both Mac architectures to build successfully. The [Windows workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml) also remains available for manual diagnostic builds. Windows Bluetooth, account login, installation and notifications still need physical verification. In-app updates are currently Mac-only. Linux is not supported.
 

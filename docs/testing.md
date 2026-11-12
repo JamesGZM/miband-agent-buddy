@@ -26,6 +26,7 @@ Pull requests run source checks without producing application packages. Release 
 | --- | --- |
 | macOS on Apple Silicon | Local builds, desktop UI and device connection checks |
 | macOS on Intel | Release build and archive validation in CI; physical band testing still needed |
+| Windows x64 / ARM64 | Native Actions builds, Rust tests and NSIS packaging; real Windows Bluetooth/SPP and device behavior untested |
 | Xiaomi Smart Band 9 NFC | Account connection, Buddy installation, activity sync and short wake checks on firmware 3.1.32 |
 | Xiaomi Smart Band 9 | Targeted by the application; physical confirmation still needed |
 
@@ -61,3 +62,5 @@ On Smart Band 9 NFC firmware 3.1.32, the user confirmed visible dimming from man
 On 2026-11-12, the local App, bundled Node and transport were signed with an existing Apple Development certificate and fixed distinct identifiers. Two different test binaries produced the same certificate-based designated requirement. After one authorization for the new identity, the user confirmed that restarting the unchanged App did not prompt again and reconnected. The actual manual wake operation then completed with a matching display receipt; post-restart diagnostics showed no ACK timeout or transport close during this short check. CI signing-mode selection is tested locally; no new GitHub release was published. This does not verify physical automatic recovery after a future missing ACK or cross-build TCC retention on all macOS versions.
 
 Local preparation-recovery fix: 328 Node tests pass, including failed-reconnect recovery without a new Hook, bounded prelaunch retries and initial query ordering. The user confirmed sustained physical illumination during a 2–3 minute observation; a five-minute local health observation checks ongoing ACKs. This is not yet a physical confirmation of automatic recovery after a real radio outage or long-duration endurance.
+
+**Windows Bluetooth/SPP has not been tested on real Windows hardware.** Successful Actions compilation, Rust tests and NSIS packaging do not verify pairing, band communication, reconnection or continuous operation.

@@ -41,6 +41,8 @@ test('release tags build both platforms from the same tag and gate publication o
   assert.match(workflow, /windows:\n    uses: \.\/\.github\/workflows\/windows.yml\n    with:\n      tag: \$\{\{ inputs.tag \|\| github.ref_name \}\}/);
   assert.match(workflow, /publish:\n    needs: \[macos, windows\]/);
   assert.match(workflow, /run: python3 scripts\/verify_release_assets.py dist/);
+  assert.ok(workflow.includes('dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.dmg\n'));
+  assert.ok(workflow.includes('dist/MiBand-Agent-Buddy-macos-${{ matrix.arch }}.dmg.sha256\n'));
   assert.ok(workflow.indexOf('scripts/verify_release_assets.py') < workflow.indexOf('gh release create'));
   assert.match(workflow, /npm run build:desktop -- --release --signing-mode ci/);
   assert.doesNotMatch(workflow, /BUDDY_SIGNING_IDENTITY|security import|create-keychain|\.p12/);
@@ -57,7 +59,7 @@ test('release tags build both platforms from the same tag and gate publication o
   }
 });
 
-test('release publication rejects a missing Windows installer or corrupt asset checksum', () => {
+test('release publication requires Mac DMG and Windows installers with valid checksums', () => {
   const result=spawnSync('python3',['-B','-c',String.raw`
 import hashlib,sys,tempfile
 from pathlib import Path
@@ -67,20 +69,23 @@ with tempfile.TemporaryDirectory() as temporary:
     root=Path(temporary)
     for arch in ['arm64','x64']:
         assets=[('SHA256SUMS-'+arch,'MiBand-Agent-Buddy-macos-'+arch+'.zip')]
-        for name in ['MiBand-Agent-Buddy-windows-'+arch+'-setup.exe','MiBand-Agent-Buddy-source-'+arch+'.tar.gz','MiBand-Agent-Buddy-source-windows-'+arch+'.tar.gz']:
+        for name in ['MiBand-Agent-Buddy-macos-'+arch+'.dmg','MiBand-Agent-Buddy-windows-'+arch+'-setup.exe','MiBand-Agent-Buddy-source-'+arch+'.tar.gz','MiBand-Agent-Buddy-source-windows-'+arch+'.tar.gz']:
             assets.append((name+'.sha256',name))
         for checksum,name in assets:
             content=('synthetic artifact '+name).encode()
             (root/name).write_bytes(content)
             (root/checksum).write_text(hashlib.sha256(content).hexdigest()+'  '+name+'\n')
     verify(root)
+    for name in ['MiBand-Agent-Buddy-windows-arm64-setup.exe','MiBand-Agent-Buddy-macos-x64.dmg']:
+        path=root/name;content=path.read_bytes();path.unlink()
+        try:
+            verify(root)
+            raise AssertionError('missing desktop installer accepted')
+        except ValueError:
+            pass
+        path.write_bytes(content)
     installer=root/'MiBand-Agent-Buddy-windows-arm64-setup.exe'
-    content=installer.read_bytes();installer.unlink()
-    try:
-        verify(root)
-        raise AssertionError('missing Windows installer accepted')
-    except ValueError:
-        pass
+    content=installer.read_bytes()
     installer.write_bytes(content+b'corrupt')
     try:
         verify(root)
