@@ -38,7 +38,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   const timings = {...DEFAULT_TIMINGS, install: installationTimeout(bandPackage?.sizeBytes), ...overrides};
   let timer = null, connectionDeadline = null, closing = false, started = false;
   let sampleFlight = null, sampleValue = null, sampleAt = null;
-  const diagnostics = {starts:0,closes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null};
+  const diagnostics = {starts:0,closes:0,launches:0,snapshotWakes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null};
   const diagnosticCodes = ['auth_rejected','timeout','operation_failed','event_lagged','event_closed','transfer_session_reset','transfer_send_timeout','transfer_ack_timeout','transfer','app_missing','app_query_failed','app_sync_failed','app_launch_failed','bluetooth_open_failed','bluetooth_link_closed'];
   function diagnose(phase, code) {
     diagnostics.phase = phase; diagnostics.at = now();
@@ -54,7 +54,8 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   const completions = createCompletionQueue({now,makeId});
   const agent = createCodexState({now,onEvent(event, previous) {
       if (desired && !paused && state.connection !== "installing") {
-        wakePolicy.observe(event, previous);
+        wakePolicy.observe(event, previous, {coalesce:!!wakeFlight});
+        if(wakeFlight && !wakeFlight.user)wakeFlight.mode=agent.status().state;
         completions.observe(event,previous,settings.completionVibration);
         if(agent.status().activeSessions===0)cancelResponseRecovery();
       }
@@ -231,7 +232,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     if(wake?.reason===RESPONSE_RECOVERY && !responseRecoveryEligible())return;
     if (["activity_reconnect","charging_recovery"].includes(wake?.reason) && (paused || !settings.activityKeepAwake || agent.status().activeSessions === 0)) return;
     if(wake?.reason==='charging_recovery'&&chargingKnown!==true)return;
-    if (wake) launchWake(wake);
+    if (wake) launchWake(wake, !!wake.session && displayedBuddyIsFresh());
+  }
+  function displayedBuddyIsFresh() {
+    const age=now()-state.lastAckAt;
+    return state.connection==='connected' && Number.isFinite(state.lastAckAt) && age>=0 && age<=timings.ack &&
+      state.ack?.pageLifecycle?.visible===1 && state.ack.keepScreen==='on' &&
+      Number.isFinite(state.ack.wakeDisplay?.remainingMs) && state.ack.wakeDisplay.remainingMs>age;
   }
   function wakeForPreference() {
     // Changing an option is a user action, not periodic permission to reopen Buddy.
@@ -277,14 +284,19 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function clearWake() {
     cancel(wakeDeadline); wakeDeadline = null; wakeFlight = null;
   }
-  function launchWake(event) {
+  function sendWakeLaunch(flight) {
+    diagnostics.launches=Math.min(1000000,diagnostics.launches+1);
+    write({op: "launch_buddy", id: flight.id});
+  }
+  function launchWake(event, inPlace = false) {
     clearReconnectWake();
     if(event.reason!==RESPONSE_RECOVERY)clearResponseRecovery();
     if(event.reason!==PREPARE_RECOVERY)clearPrepareRecovery();
     clearPending();
-    wakeFlight = { ...event, id: "wake-" + makeId(), queued: false };
-    state.wake = { reason: event.reason, status: "sending", at: now() };
-    write({op: "launch_buddy", id: wakeFlight.id});
+    wakeFlight = { ...event, id: "wake-" + makeId(), queued: inPlace, inPlace };
+    state.wake = { reason: event.reason, status: inPlace ? "awaiting_ack" : "sending", at: now() };
+    if(inPlace)diagnostics.snapshotWakes=Math.min(1000000,diagnostics.snapshotWakes+1);
+    else sendWakeLaunch(wakeFlight);
     wakeDeadline = schedule(() => {
       if(wakeFlight?.reason===PREPARE_RECOVERY)clearPrepareRecovery();
       const code = wakeFlight?.acknowledged ? "display_unconfirmed" : "no_response";
@@ -471,6 +483,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       }
       if (event.event === "ack" && pending && acceptAck(event.ack, pending)) {
         const firstReply=state.ack===null;
+        let launchFallback=null;
         clearResponseRecovery();
         clearPrepareRecovery();
         if(event.ack.keepScreen==='on' && event.ack.pageLifecycle?.visible===1)responseRecoveryAttempted=false;
@@ -493,6 +506,10 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
             state.wake = {...state.wake, status: "display_unconfirmed"};
             if (owned) settleOperation("failed", "display_unconfirmed");
             clearWake();
+          } else if(wakeFlight.inPlace && (ack.pageLifecycle?.visible===0 || ack.keepScreen==='off')) {
+            // The page may hide after the receipt used for snapshot-first delivery.
+            wakeFlight.inPlace=false;wakeFlight.queued=false;launchFallback=wakeFlight;
+            state.wake={...state.wake,status:'sending'};
           }
           // A pre-show ACK can have no lease yet. Retry the same wake ID with
           // fresh sequence numbers until the original deadline, without relaunching.
@@ -569,6 +586,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
           installed: true,
           buddy: acknowledgedBuddyState(state.buddy, ack.appVersion),
         };
+        if(launchFallback===wakeFlight && launchFallback)sendWakeLaunch(launchFallback);
         if(!wakeFlight && reconnectWakeTimer===null && (firstReply || deviceAfterWake)){
           deviceAfterWake=false;requestDevice();
         }

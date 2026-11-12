@@ -2,7 +2,7 @@
 export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000 } = {}) {
   let pending = null, lastLaunch = -Infinity;
   return {
-    observe(event, previous) {
+    observe(event, previous, {coalesce = false} = {}) {
       let reason = null, mode = null;
       if (event.event === 'UserPromptSubmit') { reason = 'start'; mode = 'thinking'; }
       if (event.event === 'PermissionRequest' && previous?.event !== 'PermissionRequest') { reason = 'attention'; mode = 'attention'; }
@@ -10,6 +10,8 @@ export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000
       // A terminal/cancel event invalidates an earlier start for this session.
       if (pending?.session === event.session && ['Stop','Interrupt','SessionEnd'].includes(event.event)) pending = null;
       if (pending?.session === event.session && pending.reason === 'attention' && ['PreToolUse','PostToolUse'].includes(event.event)) pending = null;
+      // The current display transaction will carry the latest aggregate state.
+      if (coalesce) return;
       if (reason && !(pending?.user && now()-pending.at <= ttl)) {
         const next = { session: event.session, reason, mode, at: now() };
         // Keep at most one event; attention from another session has priority.

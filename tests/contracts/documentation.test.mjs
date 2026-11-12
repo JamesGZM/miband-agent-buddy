@@ -6,7 +6,8 @@ import {fileURLToPath} from 'node:url';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const groups=[
-  'docs/README.md','docs/display.md',
+  'docs/README.md','docs/display.md','docs/development/updates.md',
+  'docs/architecture/ADR-015-coalesced-event-wake.md',
   'docs/architecture/ADR-013-nonblocking-hooks.md','docs/architecture/ADR-014-language-documentation.md',
   'docs/architecture/ADR-012-windows-preview.md',
   'README.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md',

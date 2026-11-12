@@ -25,3 +25,5 @@
 - [Security and privacy](../../SECURITY.md)
 - [Changelog](../../CHANGELOG.md)
 - [Third-party notices](../../THIRD_PARTY_NOTICES.md)
+
+- [Dedicated update service](development/updates.md)

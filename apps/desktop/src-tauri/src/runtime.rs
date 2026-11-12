@@ -91,7 +91,15 @@ fn health(state: &RuntimeState) -> Value {
     let raw_diagnostics = state.fields.get("diagnostics").unwrap_or(&Value::Null);
     let mut diagnostics = numeric_evidence(
         raw_diagnostics,
-        &["starts", "closes", "ackTimeouts", "pingTimeouts", "at"],
+        &[
+            "starts",
+            "closes",
+            "launches",
+            "snapshotWakes",
+            "ackTimeouts",
+            "pingTimeouts",
+            "at",
+        ],
     );
     diagnostics["phase"] = enum_evidence(
         raw_diagnostics,
@@ -449,7 +457,7 @@ mod tests {
             "settings".into(),
             json!({"powerSaving":true,"unexpected":"synthetic-private-value"}),
         );
-        state.fields.insert("diagnostics".into(), json!({"starts":2,"phase":"connected","lastCode":"synthetic-private-value","signal":"synthetic-private-value","unexpected":"synthetic-private-value"}));
+        state.fields.insert("diagnostics".into(), json!({"starts":2,"launches":3,"snapshotWakes":5,"phase":"connected","lastCode":"synthetic-private-value","signal":"synthetic-private-value","unexpected":"synthetic-private-value"}));
         state.fields.insert("operation".into(), json!({
             "id":"op-fixture","kind":"power_saving","status":"failed","code":"display_unconfirmed",
             "at":10,"settledAt":20,"wakeConfirmed":false,
@@ -460,6 +468,8 @@ mod tests {
         assert_eq!(view["desiredPowerSaving"], true);
         assert_eq!(view["paused"], true);
         assert_eq!(view["diagnostics"]["starts"], 2);
+        assert_eq!(view["diagnostics"]["launches"], 3);
+        assert_eq!(view["diagnostics"]["snapshotWakes"], 5);
         assert_eq!(view["diagnostics"]["phase"], "connected");
         assert!(view["diagnostics"]["lastCode"].is_null());
         assert_eq!(view["pageLifecycle"]["live"], 1);

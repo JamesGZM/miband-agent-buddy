@@ -5,6 +5,17 @@ import {spawnSync} from 'node:child_process';
 
 const readWorkflow = name => readFileSync(new URL('../../.github/workflows/' + name, import.meta.url), 'utf8');
 
+test('update Worker deployment is explicit, main-only and independent of app publication', () => {
+  const workflow=readWorkflow('update-worker.yml');
+  assert.match(workflow,/^  workflow_dispatch:/m);
+  assert.match(workflow,/github.ref == 'refs\/heads\/main'/);
+  assert.doesNotMatch(workflow,/^  (push|pull_request|schedule):/m);
+  assert.match(workflow,/contents: read/);
+  assert.doesNotMatch(workflow,/contents: write|gh release|upload-artifact|xime-index/);
+  assert.ok(workflow.indexOf('node --test tests/contracts/update-worker.test.mjs')<workflow.indexOf('npx --yes wrangler'));
+  for(const value of ['secrets.CLOUDFLARE_API_TOKEN','secrets.CLOUDFLARE_ACCOUNT_ID','services/update-worker/wrangler.toml'])assert.ok(workflow.includes(value));
+});
+
 test('Windows preview builds native x64 and ARM64 installers without publishing or certificates', () => {
   const workflow = readWorkflow('windows.yml');
   assert.match(workflow, /^  workflow_dispatch:/m);

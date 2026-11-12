@@ -1,0 +1,5 @@
+name = "miband-buddy-updates"
+main = "src/index.mjs"
+compatibility_date = "2026-11-01"
+workers_dev = false
+routes = [{ pattern = "buddy-updates.ailaogong.men", custom_domain = true }]

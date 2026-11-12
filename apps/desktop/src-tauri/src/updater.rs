@@ -14,6 +14,11 @@ use tauri::Manager;
 
 const PROJECT: &str = "https://github.com/JamesGZM/miband-agent-buddy";
 const LATEST: &str = "https://api.github.com/repos/JamesGZM/miband-agent-buddy/releases/latest";
+const UPDATE_SERVICE: &str = "https://buddy-updates.ailaogong.men";
+const CHECK_SOURCES: [&str; 2] = [
+    "https://buddy-updates.ailaogong.men/buddy/releases/latest",
+    LATEST,
+];
 const APP_NAME: &str = "MiBand Agent Buddy.app";
 const MAX_DOWNLOAD: u64 = 300 * 1024 * 1024;
 const MAX_EXPANDED: u64 = 1024 * 1024 * 1024;
@@ -112,7 +117,7 @@ fn trusted_url(value: &str) -> bool {
         && url.port_or_known_default() == Some(443)
         && url.username().is_empty()
         && url.password().is_none()
-        && matches!(
+        && (matches!(
             url.host_str(),
             Some(
                 "api.github.com"
@@ -120,7 +125,41 @@ fn trusted_url(value: &str) -> bool {
                     | "release-assets.githubusercontent.com"
                     | "objects.githubusercontent.com"
             )
-        )
+        ) || (url.host_str() == Some("buddy-updates.ailaogong.men")
+            && url.query().is_none()
+            && url.fragment().is_none()
+            && (url.path() == "/buddy/releases/latest"
+                || valid_asset_path(url.path().strip_prefix("/buddy/releases/download/")))))
+}
+fn valid_asset_path(value: Option<&str>) -> bool {
+    let Some(value) = value else {
+        return false;
+    };
+    let fields: Vec<_> = value.split('/').collect();
+    fields.len() == 2
+        && fields[0].starts_with('v')
+        && version(fields[0]).is_some()
+        && ["aarch64", "x86_64"]
+            .iter()
+            .any(|arch| asset_name(arch).as_deref() == Some(fields[1]))
+}
+fn download_sources(asset: &Asset) -> Result<[String; 2]> {
+    let prefix = format!("{PROJECT}/releases/download/");
+    let suffix = asset.browser_download_url.strip_prefix(&prefix);
+    if !valid_asset_path(suffix)
+        || !asset
+            .browser_download_url
+            .ends_with(&format!("/{}", asset.name))
+    {
+        return Err("release_invalid");
+    }
+    Ok([
+        format!(
+            "{UPDATE_SERVICE}/buddy/releases/download/{}",
+            suffix.unwrap()
+        ),
+        asset.browser_download_url.clone(),
+    ])
 }
 fn release_state(release: Release, current: &str, arch: &str) -> Result<UpdateState> {
     let latest = version(&release.tag_name).ok_or("release_invalid")?;
@@ -153,7 +192,7 @@ fn client() -> Result<Client> {
     Client::builder()
         .user_agent(concat!("MiBand-Agent-Buddy/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(180))
+        .timeout(Duration::from_secs(300))
         .redirect(Policy::custom(|attempt| {
             if attempt.previous().len() >= 5 || !trusted_url(attempt.url().as_str()) {
                 attempt.error("untrusted update redirect")
@@ -163,6 +202,132 @@ fn client() -> Result<Client> {
         }))
         .build()
         .map_err(|_| "network_error")
+}
+async fn check_sources(
+    client: &Client,
+    sources: &[&str],
+    current: &str,
+    arch: &str,
+) -> Result<UpdateState> {
+    let mut last = "network_error";
+    for source in sources {
+        let result = async {
+            let mut response = client
+                .get(*source)
+                .timeout(Duration::from_secs(15))
+                .header("Accept", "application/vnd.github+json")
+                .send()
+                .await
+                .map_err(|_| "network_error")?;
+            if response.status() == 404 {
+                return Ok(UpdateState {
+                    view: UpdateView {
+                        status: "unpublished",
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            }
+            if response.status() == 403 || response.status() == 429 {
+                return Err("rate_limited");
+            }
+            if !response.status().is_success() {
+                return Err("network_error");
+            }
+            let mut data = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(|_| "network_error")? {
+                if data.len() + chunk.len() > 2 * 1024 * 1024 {
+                    return Err("release_invalid");
+                }
+                data.extend_from_slice(&chunk);
+            }
+            let release = serde_json::from_slice(&data).map_err(|_| "release_invalid")?;
+            release_state(release, current, arch)
+        }
+        .await;
+        match result {
+            Ok(state)
+                if state.view.status != "unpublished" || source == sources.last().unwrap() =>
+            {
+                return Ok(state);
+            }
+            Ok(_) => {}
+            Err(code) => last = code,
+        }
+    }
+    Err(last)
+}
+async fn download_attempt(
+    client: &Client,
+    source: &str,
+    asset: &Asset,
+    archive: &Path,
+    progress: &(impl Fn(u8) + Sync),
+) -> Result<()> {
+    let mut response = client
+        .get(source)
+        .header("Accept-Encoding", "identity")
+        .send()
+        .await
+        .map_err(|_| "network_error")?;
+    if !response.status().is_success() {
+        return Err("network_error");
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size > asset.size || size > MAX_DOWNLOAD)
+    {
+        return Err("download_invalid");
+    }
+    // Recreate, rather than append to, a partial or corrupt primary download.
+    let mut file = fs::File::create(archive).map_err(|_| "storage_error")?;
+    let mut count = 0u64;
+    let mut hash = Sha256::new();
+    while let Some(chunk) = tokio::time::timeout(Duration::from_secs(30), response.chunk())
+        .await
+        .map_err(|_| "network_error")?
+        .map_err(|_| "network_error")?
+    {
+        count = count
+            .checked_add(chunk.len() as u64)
+            .ok_or("download_invalid")?;
+        if count > asset.size || count > MAX_DOWNLOAD {
+            return Err("download_invalid");
+        }
+        hash.update(&chunk);
+        file.write_all(&chunk).map_err(|_| "storage_error")?;
+        progress(((count * 100) / asset.size).min(99) as u8);
+    }
+    file.sync_all().map_err(|_| "storage_error")?;
+    if count != asset.size {
+        return Err("download_invalid");
+    }
+    if format!("{:x}", hash.finalize()) != digest(asset)?.to_ascii_lowercase() {
+        return Err("checksum_mismatch");
+    }
+    Ok(())
+}
+async fn download_verified(
+    client: &Client,
+    sources: &[String],
+    asset: &Asset,
+    archive: &Path,
+    progress: impl Fn(u8) + Sync,
+) -> Result<()> {
+    digest(asset)?;
+    if asset.size == 0 || asset.size > MAX_DOWNLOAD {
+        return Err("release_invalid");
+    }
+    let mut last = "network_error";
+    for source in sources {
+        progress(0);
+        match download_attempt(client, source, asset, archive, &progress).await {
+            Ok(()) => return Ok(()),
+            Err("storage_error") => return Err("storage_error"),
+            Err(code) => last = code,
+        }
+    }
+    Err(last)
 }
 fn mutate(app: &tauri::AppHandle, f: impl FnOnce(&mut UpdateState)) {
     if let Some(cache) = app.try_state::<UpdateCache>() {
@@ -220,36 +385,13 @@ pub fn check(app: tauri::AppHandle) -> std::result::Result<(), String> {
             }
         }
         let result = async {
-            let mut response = client()?
-                .get(LATEST)
-                .header("Accept", "application/vnd.github+json")
-                .send()
-                .await
-                .map_err(|_| "network_error")?;
-            if response.status() == 404 {
-                return Ok(UpdateState {
-                    view: UpdateView {
-                        status: "unpublished",
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-            }
-            if response.status() == 403 || response.status() == 429 {
-                return Err("rate_limited");
-            }
-            if !response.status().is_success() {
-                return Err("network_error");
-            }
-            let mut data = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(|_| "network_error")? {
-                if data.len() + chunk.len() > 2 * 1024 * 1024 {
-                    return Err("release_invalid");
-                }
-                data.extend_from_slice(&chunk);
-            }
-            let release = serde_json::from_slice(&data).map_err(|_| "release_invalid")?;
-            release_state(release, env!("CARGO_PKG_VERSION"), std::env::consts::ARCH)
+            check_sources(
+                &client()?,
+                &CHECK_SOURCES,
+                env!("CARGO_PKG_VERSION"),
+                std::env::consts::ARCH,
+            )
+            .await
         }
         .await;
         match result {
@@ -283,37 +425,15 @@ pub fn download(app: tauri::AppHandle) -> std::result::Result<(), String> {
             let parent = app.path().app_data_dir().map_err(|_| "storage_error")?;
             let directory = private_dir(&parent)?;
             let result = async {
-                let mut response = client()?
-                    .get(&asset.browser_download_url)
-                    .send()
-                    .await
-                    .map_err(|_| "network_error")?;
-                if !response.status().is_success() {
-                    return Err("network_error");
-                }
                 let archive = directory.join("update.zip");
-                let mut file = fs::File::create(&archive).map_err(|_| "storage_error")?;
-                let mut count = 0u64;
-                let mut hash = Sha256::new();
-                while let Some(chunk) = response.chunk().await.map_err(|_| "network_error")? {
-                    count = count
-                        .checked_add(chunk.len() as u64)
-                        .ok_or("download_invalid")?;
-                    if count > asset.size || count > MAX_DOWNLOAD {
-                        return Err("download_invalid");
-                    }
-                    hash.update(&chunk);
-                    file.write_all(&chunk).map_err(|_| "storage_error")?;
-                    mutate(&app, |s| {
-                        s.view.progress = ((count * 100) / asset.size).min(99) as u8
-                    });
-                }
-                file.sync_all().map_err(|_| "storage_error")?;
-                if count != asset.size
-                    || format!("{:x}", hash.finalize()) != digest(&asset)?.to_ascii_lowercase()
-                {
-                    return Err("checksum_mismatch");
-                }
+                download_verified(
+                    &client()?,
+                    &download_sources(&asset)?,
+                    &asset,
+                    &archive,
+                    |progress| mutate(&app, |s| s.view.progress = progress),
+                )
+                .await?;
                 let expected = app
                     .state::<UpdateCache>()
                     .0
@@ -676,15 +796,256 @@ mod tests {
         assert!(trusted_url(
             "https://release-assets.githubusercontent.com/a"
         ));
+        assert!(trusted_url(CHECK_SOURCES[0]));
+        assert!(trusted_url(
+            "https://buddy-updates.ailaogong.men/buddy/releases/download/v0.8.0/MiBand-Agent-Buddy-macos-arm64.zip"
+        ));
         for url in [
             "http://github.com/a",
             "https://github.com.evil.test/a",
             "https://user@github.com/a",
             "https://127.0.0.1/a",
             "https://github.com:8443/a",
+            "https://buddy-updates.ailaogong.men/other",
+            "https://buddy-updates.ailaogong.men/buddy/releases/latest?url=https://evil.invalid",
+            "https://buddy-updates.ailaogong.men/buddy/releases/download/v0.8.0/not-allowed.zip",
         ] {
             assert!(!trusted_url(url));
         }
+    }
+    #[test]
+    fn worker_download_sources_preserve_the_exact_official_asset() {
+        let asset = release(true).assets.remove(0);
+        let sources = download_sources(&asset).unwrap();
+        assert_eq!(
+            sources[0],
+            "https://buddy-updates.ailaogong.men/buddy/releases/download/v0.6.0/MiBand-Agent-Buddy-macos-arm64.zip"
+        );
+        assert_eq!(sources[1], asset.browser_download_url);
+        assert!(sources.iter().all(|source| trusted_url(source)));
+        let mut bad = asset.clone();
+        bad.browser_download_url =
+            "https://github.com/Other/repo/releases/download/v0.6.0/file.zip".into();
+        assert_eq!(download_sources(&bad), Err("release_invalid"));
+    }
+    fn fixture_server(
+        responses: Vec<(u16, String)>,
+    ) -> (String, std::thread::JoinHandle<Vec<String>>) {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let thread = std::thread::spawn(move || {
+            let until = std::time::Instant::now() + Duration::from_secs(3);
+            let mut requests = Vec::new();
+            for (status, body) in responses {
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error)
+                            if error.kind() == std::io::ErrorKind::WouldBlock
+                                && std::time::Instant::now() < until =>
+                        {
+                            std::thread::sleep(Duration::from_millis(2))
+                        }
+                        _ => return requests,
+                    }
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut data = Vec::new();
+                let mut buffer = [0; 1024];
+                while !data.windows(4).any(|value| value == b"\r\n\r\n") {
+                    let count = stream.read(&mut buffer).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    data.extend_from_slice(&buffer[..count]);
+                }
+                requests.push(
+                    String::from_utf8_lossy(&data)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .to_string(),
+                );
+                write!(stream,"HTTP/1.1 {status} Fixture\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+            }
+            requests
+        });
+        (url, thread)
+    }
+    fn fixture_metadata() -> String {
+        serde_json::json!({"tag_name":"v0.6.0","draft":false,"prerelease":false,"assets":[{
+            "name":"MiBand-Agent-Buddy-macos-arm64.zip","size":7,"digest":format!("sha256:{}","a".repeat(64)),
+            "browser_download_url":format!("{PROJECT}/releases/download/v0.6.0/MiBand-Agent-Buddy-macos-arm64.zip")
+        }]}).to_string()
+    }
+    #[test]
+    fn check_falls_back_to_official_for_missing_broken_and_unreachable_worker_metadata() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (status, body) in [
+            (404, String::new()),
+            (502, String::new()),
+            (429, String::new()),
+            (200, "invalid".into()),
+        ] {
+            let (base, server) = fixture_server(vec![(status, body), (200, fixture_metadata())]);
+            let sources = [format!("{base}/worker"), format!("{base}/official")];
+            let state = runtime
+                .block_on(check_sources(
+                    &Client::new(),
+                    &sources.iter().map(String::as_str).collect::<Vec<_>>(),
+                    "0.5.0",
+                    "aarch64",
+                ))
+                .unwrap();
+            assert_eq!(state.view.status, "available");
+            let requests = server.join().unwrap();
+            assert_eq!(requests.len(), 2);
+            assert!(requests[1].contains("/official"));
+        }
+        let (base, server) = fixture_server(vec![(200, fixture_metadata())]);
+        let sources = [format!("{base}/worker"), format!("{base}/unused")];
+        assert_eq!(
+            runtime
+                .block_on(check_sources(
+                    &Client::new(),
+                    &sources.iter().map(String::as_str).collect::<Vec<_>>(),
+                    "0.5.0",
+                    "aarch64"
+                ))
+                .unwrap()
+                .view
+                .status,
+            "available"
+        );
+        assert_eq!(server.join().unwrap().len(), 1);
+        let (base, server) = fixture_server(vec![(200, fixture_metadata())]);
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let unreachable = format!("http://{}/worker", closed.local_addr().unwrap());
+        drop(closed);
+        let sources = [unreachable, format!("{base}/official")];
+        assert_eq!(
+            runtime
+                .block_on(check_sources(
+                    &Client::new(),
+                    &sources.iter().map(String::as_str).collect::<Vec<_>>(),
+                    "0.5.0",
+                    "aarch64",
+                ))
+                .unwrap()
+                .view
+                .status,
+            "available"
+        );
+        assert_eq!(server.join().unwrap().len(), 1);
+    }
+    #[test]
+    #[ignore = "requires the deployed public update Worker and downloads a real release"]
+    fn live_worker_package_passes_the_application_installation_checks() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let client = client().unwrap();
+        let state = runtime
+            .block_on(check_sources(
+                &client,
+                &CHECK_SOURCES[..1],
+                "0.0.0",
+                std::env::consts::ARCH,
+            ))
+            .unwrap();
+        assert_eq!(state.view.status, "available");
+        let asset = state.asset.unwrap();
+        let sources = download_sources(&asset).unwrap();
+        let directory = private_dir(&std::env::temp_dir()).unwrap();
+        let archive = directory.join("update.zip");
+        runtime
+            .block_on(download_verified(
+                &client,
+                &sources[..1],
+                &asset,
+                &archive,
+                |_| {},
+            ))
+            .unwrap();
+        let bundle = extract(&archive, &directory).unwrap();
+        validate_bundle(&bundle, state.view.latest_version.as_deref().unwrap()).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn corrupt_or_partial_worker_download_restarts_from_official_and_verifies_digest() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (status, body) in [
+            (502, String::new()),
+            (200, "corrupt".into()),
+            (200, "part".into()),
+        ] {
+            let (base, server) = fixture_server(vec![(status, body), (200, "fixture".into())]);
+            let mut asset = release(true).assets.remove(0);
+            asset.size = 7;
+            asset.digest = Some(format!("sha256:{:x}", Sha256::digest(b"fixture")));
+            let directory = private_dir(&std::env::temp_dir()).unwrap();
+            let archive = directory.join("update.zip");
+            runtime
+                .block_on(download_verified(
+                    &Client::new(),
+                    &[format!("{base}/worker"), format!("{base}/official")],
+                    &asset,
+                    &archive,
+                    |_| {},
+                ))
+                .unwrap();
+            assert_eq!(fs::read(&archive).unwrap(), b"fixture");
+            assert_eq!(server.join().unwrap().len(), 2);
+            fs::remove_dir_all(directory).unwrap();
+        }
+    }
+    #[test]
+    fn both_corrupt_downloads_are_rejected_and_storage_errors_do_not_retry() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (base, server) = fixture_server(vec![(200, "corrupt".into()), (200, "corrupt".into())]);
+        let mut asset = release(true).assets.remove(0);
+        asset.size = 7;
+        asset.digest = Some(format!("sha256:{:x}", Sha256::digest(b"fixture")));
+        let directory = private_dir(&std::env::temp_dir()).unwrap();
+        assert_eq!(
+            runtime.block_on(download_verified(
+                &Client::new(),
+                &[format!("{base}/one"), format!("{base}/two")],
+                &asset,
+                &directory.join("update.zip"),
+                |_| {}
+            )),
+            Err("checksum_mismatch")
+        );
+        assert_eq!(server.join().unwrap().len(), 2);
+        let (base, server) = fixture_server(vec![(200, "fixture".into())]);
+        assert_eq!(
+            runtime.block_on(download_verified(
+                &Client::new(),
+                &[format!("{base}/one"), format!("{base}/two")],
+                &asset,
+                &directory.join("missing/update.zip"),
+                |_| {}
+            )),
+            Err("storage_error")
+        );
+        assert_eq!(server.join().unwrap().len(), 1);
+        fs::remove_dir_all(directory).unwrap();
     }
     #[test]
     fn macho_architecture_check_handles_thin_universal_and_truncated_headers() {

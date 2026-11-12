@@ -27,3 +27,11 @@ No private data path, bundle identifier, loopback endpoint or v1 device protocol
 Rust tests cover stable version/platform selection, URL trust, unsafe and valid archives, executable modes, and successful replacement/rollback. Workflow tests enforce the release boundary. Full builds and a future real GitHub release remain separate from physical band validation.
 
 References: [GitHub releases](https://docs.github.com/en/rest/releases/releases), [asset digests](https://docs.github.com/en/rest/releases/assets), [Mac runner architectures](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+## Dedicated update service
+
+The desktop checks `https://buddy-updates.ailaogong.men/buddy/releases/latest` first, then the official GitHub API on timeout, HTTP failure or invalid metadata. Valid cached releases may arrive up to ten minutes late. The service is an additional trusted metadata intermediary; it is not a release-signing authority. It can serve the metadata/digest together, so compromise of this service is within the documented trust boundary.
+
+The updater derives the Worker download URL from the exact official tag and architecture asset. It streams to a private temporary archive and requires the selected size and SHA-256 before extraction. A failed, partial or corrupt Worker download restarts from byte zero at the fixed GitHub URL. Storage failures stop immediately. Both sources retain archive, bundle identity/version, architecture and signature checks before installation; replacement and rollback are unchanged.
+
+Operational details: [update service](../development/updates.md).

@@ -25,3 +25,5 @@
 - [安全与隐私](SECURITY.md)
 - [更新记录](CHANGELOG.md)
 - [第三方声明](THIRD_PARTY_NOTICES.md)
+
+- [独立更新服务](development/updates.md)

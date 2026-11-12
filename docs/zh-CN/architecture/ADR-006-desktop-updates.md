@@ -27,3 +27,11 @@ Tauri 密钥签名更新需要尚未配置的长期密钥与公钥注册。当�
 Rust 覆盖稳定版本／架构选择、URL 信任、合法和危险归档、执行权限、替换及回滚；工作流测试维护发布边界。完整构建、真实 GitHub 发布与手环物理验证分别报告。
 
 参考：[GitHub Releases](https://docs.github.com/en/rest/releases/releases)、[资产摘要](https://docs.github.com/en/rest/releases/assets)、[Mac runner 架构](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
+
+## 独立更新服务
+
+桌面先检查 `https://buddy-updates.ailaogong.men/buddy/releases/latest`，超时、HTTP 失败或元数据无效时直连 GitHub 官方 API。有效缓存允许延迟十分钟。服务是新增的可信元数据中间层，并非发布签名机构；它同时提供元数据与摘要，服务被入侵属于信任边界内的风险。
+
+更新器从准确的官方版本和架构资产推导 Worker 下载地址，流式写入私有临时归档，大小和 SHA-256 全部匹配才解压。Worker 下载失败、不完整或损坏时，从零开始直连固定 GitHub URL 下载。存储失败立即停止。两条路径均保留归档、包标识与版本、架构和签名检查；替换及回滚不变。
+
+运维说明：[更新服务](../development/updates.md)。

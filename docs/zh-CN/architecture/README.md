@@ -46,6 +46,8 @@ Hooks 仅包含事件、会话哈希和时间戳；接收器绑定 `127.0.0.1:10
 
 提交任务、新权限请求和完成可请求唤醒，普通指标和工具流量不能。只保留一个事件，TTL 60 秒，全局冷却 10 秒，等待确认优先；取消和恢复工具执行会使旧请求失效。
 
+新鲜可见且亮屏中的回执及未过期租约允许优先发快照；唤起期间 Hook 合入同一事务。隐藏或关闭亮屏的竞争允许在原期限内后备启动一次（[ADR-015](ADR-015-coalesced-event-wake.md)）。
+
 桌面主题、页面、唤醒、时长、任务亮屏、省电、重置、版本检查都是用户操作（[ADR-002](ADR-002-user-operation-wake.md)），在 connected／waiting／standby 可执行，替换待处理事件、绕过冷却、抢占旧事件唤醒并建立新租约。唯一 `operation` 在匹配亮屏租约及操作专属设置／页面／清单回执后结束为 done／failed／cancelled。启动排队只进入 applying，不代表完成；启动失败、25 秒期限、失联、断线、安装也会终结操作。同步暂停时仍允许手动交易，完成后停止快照，期间不续期任务保持。只有页面操作发送 `page`，UI 在操作控件显示进度并固定提示结果。
 
 页面处理租约前可能先 ACK。早到 ACK 无租约时，使用新序号继续发送相同 wake ID，直到原始 15 秒期限；不额外启动或延长期限。后来的有效租约完成操作，明确亮度错误立即失败，取消／过期后迟到回执不能恢复操作。
@@ -72,7 +74,7 @@ Buddy 安装只在手环页面管理。`state.buddy` 区分未知、检查、缺
 
 `scripts/prepare_shared.py` 将共享源码复制给 Vela，并包装原 CommonJS 为浏览器 ESM，不改 export 字符串。App 副本与图像都是生成产物。手环几何源为 `packages/buddy-shared/presentation/geometry.js`，`scripts/render_band_ui.py` 只生成桌面缩略图并清除旧帧；桌面品牌源为 `apps/desktop/artwork/app-icon.png`，由 `prepare_desktop.py` 生成图标及单色托盘模板。
 
-桌面包在 `Contents/Resources/runtime` 携带 Node、运行时、共享源码、原生传输、RPK 和元数据，直接 Cargo 开发运行保留源码路径后备。GitHub 更新检查、下载和验证安装属于桌面更新器（[ADR-006](ADR-006-desktop-updates.md)），独立于设备状态。`mac/codex-hook.mjs` 与 `mac/buddy-runtime.mjs` 保留旧入口；数据位置、设置、Hooks 地址、包标识和公开 npm 命令不变。Rust 与 Quick App 独立锁定依赖，不引入工作区管理器或运行时重写。
+桌面包在 `Contents/Resources/runtime` 携带 Node、运行时、共享源码、原生传输、RPK 和元数据，直接 Cargo 开发运行保留源码路径后备。Worker 优先、GitHub 直连兜底的更新检查、下载和验证安装属于桌面更新器（[ADR-006](ADR-006-desktop-updates.md)），独立于设备状态。`mac/codex-hook.mjs` 与 `mac/buddy-runtime.mjs` 保留旧入口；数据位置、设置、Hooks 地址、包标识和公开 npm 命令不变。Rust 与 Quick App 独立锁定依赖，不引入工作区管理器或运行时重写。
 
 
 正式手环页面与桌面预览使用共享代码几何（ADR-008）；RPK 图片仅保留入口图标，本地构建器暂存同一 UI 的测试版本。后续手环界面优先使用代码绘制并保留已确认设计；图片例外、性能及实机检查遵循[快应用界面指南](../development/quickapp-ui.md)。
@@ -85,3 +87,6 @@ Buddy 安装只在手环页面管理。`state.buddy` 区分未知、检查、缺
 
 - [ADR-013](ADR-013-nonblocking-hooks.md): 有界后台 Hooks、已有配置升级与顺序限制。
 - [ADR-014](ADR-014-language-documentation.md): 语言目录、根目录唯一 README 与文件搬移。
+
+- [ADR-015](ADR-015-coalesced-event-wake.md): 合并事件唤起.
+- [独立更新服务](../development/updates.md).

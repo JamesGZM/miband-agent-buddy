@@ -46,6 +46,8 @@ Hooks 僅包含事件、會話哈希和時間戳；接收器綁定 `127.0.0.1:10
 
 提交任務、新權限請求和完成可請求喚醒，普通指標和工具流量不能。只保留一個事件，TTL 60 秒，全局冷卻 10 秒，等待確認優先；取消和恢復工具執行會使舊請求失效。
 
+新鮮可見且亮屏中的回執及未過期租約允許優先發快照；喚起期間 Hook 合入同一交易。隱藏或關閉亮屏的競爭允許在原期限內後備啟動一次（[ADR-015](ADR-015-coalesced-event-wake.md)）。
+
 桌面主題、頁面、喚醒、時長、任務亮屏、省電、重置、版本檢查都是用戶操作（[ADR-002](ADR-002-user-operation-wake.md)），在 connected／waiting／standby 可執行，替換待處理事件、繞過冷卻、搶佔舊事件喚醒並建立新租約。唯一 `operation` 在匹配亮屏租約及操作專屬設定／頁面／清單回執後結束為 done／failed／cancelled。啟動排隊只進入 applying，不代表完成；啟動失敗、25 秒期限、失聯、斷線、安裝也會終結操作。同步暫停時仍允許手動交易，完成後停止快照，期間不續期任務保持。只有頁面操作發送 `page`，UI 在操作控件顯示進度並固定提示結果。
 
 頁面處理租約前可能先 ACK。早到 ACK 無租約時，使用新序號繼續發送相同 wake ID，直到原始 15 秒期限；不額外啟動或延長期限。後來的有效租約完成操作，明確亮度錯誤立即失敗，取消／過期後遲到回執不能恢復操作。
@@ -72,7 +74,7 @@ Buddy 安裝只在手環頁面管理。`state.buddy` 區分未知、檢查、缺
 
 `scripts/prepare_shared.py` 將共享原始碼複製給 Vela，並包裝原 CommonJS 為瀏覽器 ESM，不改 export 字符串。App 副本與圖像都是生成產物。手環幾何源為 `packages/buddy-shared/presentation/geometry.js`，`scripts/render_band_ui.py` 只產生桌面縮圖並清除舊幀；桌面品牌源為 `apps/desktop/artwork/app-icon.png`，由 `prepare_desktop.py` 生成圖標及單色選單列模板。
 
-桌麵包在 `Contents/Resources/runtime` 攜帶 Node、執行時、共享原始碼、原生傳輸、RPK 和元數據，直接 Cargo 開發執行保留原始碼路徑後備。GitHub 更新檢查、下載和驗證安裝屬於桌面更新器（[ADR-006](ADR-006-desktop-updates.md)），獨立於設備狀態。`mac/codex-hook.mjs` 與 `mac/buddy-runtime.mjs` 保留舊入口；數據位置、設定、Hooks 地址、包標識和公開 npm 命令不變。Rust 與 Quick App 獨立鎖定依賴，不引入工作區管理器或執行時重寫。
+桌麵包在 `Contents/Resources/runtime` 攜帶 Node、執行時、共享原始碼、原生傳輸、RPK 和元數據，直接 Cargo 開發執行保留原始碼路徑後備。Worker 優先、GitHub 直連兜底的更新檢查、下載和驗證安裝屬於桌面更新器（[ADR-006](ADR-006-desktop-updates.md)），獨立於設備狀態。`mac/codex-hook.mjs` 與 `mac/buddy-runtime.mjs` 保留舊入口；數據位置、設定、Hooks 地址、包標識和公開 npm 命令不變。Rust 與 Quick App 獨立鎖定依賴，不引入工作區管理器或執行時重寫。
 
 
 正式手環頁面與桌面預覽使用共用程式幾何（ADR-008）；RPK 圖片僅保留入口圖示，本地建置器暫存同一 UI 的測試版本。後續手環介面優先使用程式繪製並保留已確認設計；圖片例外、效能及實機檢查遵循[快應用介面指南](../development/quickapp-ui.md)。
@@ -85,3 +87,6 @@ Buddy 安裝只在手環頁面管理。`state.buddy` 區分未知、檢查、缺
 
 - [ADR-013](ADR-013-nonblocking-hooks.md): 有界背景 Hooks、既有設定升級與順序限制。
 - [ADR-014](ADR-014-language-documentation.md): 語言目錄、根目錄唯一 README 與文件搬移。
+
+- [ADR-015](ADR-015-coalesced-event-wake.md): 合併事件喚起.
+- [獨立更新服務](../development/updates.md).
