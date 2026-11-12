@@ -29,7 +29,7 @@ Pull requests run source checks without producing application packages. Release 
 | Xiaomi Smart Band 9 NFC | Account connection, Buddy installation, activity sync and short wake checks on firmware 3.1.32 |
 | Xiaomi Smart Band 9 | Targeted by the application; physical confirmation still needed |
 
-Buddy 0.5.5 installation and software communication have been verified on the NFC model. Physical frame rate, battery consumption and continuous screen-on reliability remain unverified.
+Buddy 0.5.18 installation and software communication have been verified on the NFC model with firmware 3.1.32, including explicit reinstallation of the same-version review-fix package. The user accepted the restored breathing/loading effects during an earlier short check with two real tasks; a 115-second diagnostic observation recorded no new page recreations, transport closes, ACK timeouts or page errors. These observations do not establish physical panel FPS, battery consumption, six-task stability, continuous illumination or restart avoidance. The latest reinstall receipt is not a new physical visual or endurance result.
 
 Local keep-awake regression tests cover failed/hung sampling with continuing task snapshots, stale metrics becoming unknown, one in-flight sampler, late results after stop, negative brightness success payloads, bounded retries, and one active-task recovery wake after transport reconnect. These are software checks; they do not establish extended physical endurance.
 

@@ -164,7 +164,15 @@ fn health(state: &RuntimeState) -> Value {
     let raw_drawing = field("drawing");
     let mut drawing = numeric_evidence(&raw_drawing, &["frames", "effectiveFps", "elapsedMs"]);
     let caps = raw_drawing.get("capabilities").unwrap_or(&Value::Null);
-    drawing["renderer"] = enum_evidence(caps, "renderer", &["native-geometry"]);
+    drawing["renderer"] = enum_evidence(
+        caps,
+        "renderer",
+        &["native-geometry", "native-border-probe", "native-border"],
+    );
+    drawing["animationEnabled"] = raw_drawing
+        .get("animationEnabled")
+        .and_then(Value::as_bool)
+        .map_or(Value::Null, |v| json!(v));
     for key in [
         "queryAvailable",
         "div",
@@ -179,6 +187,33 @@ fn health(state: &RuntimeState) -> Value {
             .and_then(Value::as_bool)
             .map_or(Value::Null, |v| json!(v));
     }
+    let bounds: Vec<Value> = raw_drawing
+        .get("bounds")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(3)
+        .map(|row| {
+            let mut safe = json!({
+                "kind": enum_evidence(row, "kind", &["stage", "rects", "arcs", "capsules"]),
+                "status": enum_evidence(row, "status", &["pending", "ok", "unavailable", "error", "invalid", "timeout"])
+            });
+            for name in ["expected", "actual"] {
+                if let Some(rect) = row.get(name) {
+                    let mut dimensions = json!({});
+                    for key in ["left", "top", "width", "height"] {
+                        dimensions[key] = rect.get(key).and_then(Value::as_f64)
+                            .filter(|n| n.is_finite() && n.abs() <= 2000.0
+                                && (matches!(key, "left" | "top") || *n >= 0.0))
+                            .map_or(Value::Null, |n| json!(n));
+                    }
+                    safe[name] = dimensions;
+                }
+            }
+            safe
+        })
+        .collect();
+    drawing["bounds"] = json!(bounds);
     json!({"connection":state.connection,"wake":state.fields.get("wake"),"installation":state.installation,
         "operation":operation,"paused":state.paused,
         "powerSaving":field("powerSaving"),"buddyFps":field("buddyFps"),"wakeDisplay":field("wakeDisplay"),
@@ -346,6 +381,51 @@ mod tests {
     use super::health;
     use crate::protocol::{BandAck, RuntimeState};
     use serde_json::json;
+
+    #[test]
+    fn whole_border_renderer_and_animation_receipt_are_allowlisted() {
+        let state = RuntimeState {
+            ack: Some(BandAck {
+                fields: serde_json::from_value(json!({"drawing":{"animationEnabled":true,"capabilities":{"renderer":"native-border","private":"synthetic-private-value"}}})).unwrap(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let view = health(&state);
+        assert_eq!(view["drawing"]["renderer"], "native-border");
+        assert_eq!(view["drawing"]["animationEnabled"], true);
+        assert!(!view.to_string().contains("synthetic-private-value"));
+    }
+
+    #[test]
+    fn native_bounds_evidence_is_bounded_and_does_not_copy_arbitrary_device_fields() {
+        let state = RuntimeState {
+            ack: Some(BandAck {
+                fields: serde_json::from_value(json!({"drawing":{"animationEnabled":false,"capabilities":{"renderer":"native-border-probe"},"bounds":[
+                    {"kind":"rects","status":"ok","expected":{"left":4,"top":241,"width":8,"height":157,"private":"synthetic-private-value"},"actual":{"left":-1,"top":241,"width":7,"height":157,"private":"synthetic-private-value"},"id":"synthetic-private-value"},
+                    {"kind":"synthetic-private-value","status":"synthetic-private-value","actual":{"left":9999,"top":"synthetic-private-value","width":-1,"height":8}},
+                    {"kind":"arcs","status":"timeout"},
+                    {"kind":"stage","status":"ok","private":"synthetic-private-value"}
+                ]}})).unwrap(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let view = health(&state);
+        let rows = view["drawing"]["bounds"].as_array().unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(view["drawing"]["animationEnabled"], false);
+        assert_eq!(view["drawing"]["renderer"], "native-border-probe");
+        assert_eq!(rows[0]["actual"]["width"], 7.0);
+        assert_eq!(rows[0]["expected"]["width"], 8.0);
+        assert_eq!(rows[0]["actual"]["left"], -1.0);
+        assert!(rows[1]["kind"].is_null());
+        assert!(rows[1]["status"].is_null());
+        assert!(rows[1]["actual"]["left"].is_null());
+        assert!(rows[1]["actual"]["top"].is_null());
+        assert!(rows[1]["actual"]["width"].is_null());
+        assert!(!view.to_string().contains("synthetic-private-value"));
+    }
 
     #[test]
     fn health_reports_safe_power_and_operation_evidence_without_extra_fields() {

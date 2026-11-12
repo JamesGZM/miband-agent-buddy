@@ -40,7 +40,7 @@ test('native full capsules use one border and immutable glyphs instead of arc/re
  for(const theme of ['chatgpt','claude','deepseek']){
   const a=geometry.frame({native:true,theme,mode:'idle',seconds:0}),b=geometry.frame({native:true,theme,mode:'idle',seconds:1});
   assert.equal(a.capsules.length,2);assert.equal(a.arcs.length,0);assert.equal(a.rects.length,0);assert.equal(a.glyphs,b.glyphs);
-  assert.equal(a.capsules[0].height,182);assert.equal(a.capsules[0].radius,91);assert.equal(a.capsules[0].stroke,7);
+  assert.equal(a.capsules[0].height,184);assert.equal(a.capsules[0].radius,92);assert.equal(a.capsules[0].stroke,8);
   assert.notEqual(a.glyphLeft,b.glyphLeft);
  }
  const resource=geometry.frame({native:true,page:1,values:{disk:100,memory:50,cpu:42}});
@@ -52,13 +52,14 @@ test('native arc outer and inner edges meet both straight strokes and full borde
   const full={rects:[],arcs:[],capsules:[],rings:0};geometry.ring(full,inset,width,'#ffffff');
   const arc=partial.arcs[0],top=partial.rects[0],bottom=partial.rects[1],border=full.capsules[0];
   const cy=arc.top+arc.center;
+  assert.equal(arc.width%2,0,'keep native stroke cap radii on integer pixels');
+  assert.ok(Number.isInteger(arc.radius-arc.width/2),'align the arc centerline to a pixel');
   // LVGL strokes inwards from the supplied outer radius.
   assert.equal(cy-arc.radius,top.top);assert.equal(cy-arc.radius+arc.width,top.top+top.height);
   assert.equal(cy+arc.radius,bottom.top+bottom.height);assert.equal(cy+arc.radius-arc.width,bottom.top);
   assert.equal(border.top,top.top);assert.equal(border.radius,arc.radius);assert.equal(border.stroke,arc.width);
   assert.equal(border.left+border.radius,96);assert.equal(border.left+border.width-border.radius,394);
   for(const shape of [...partial.rects,...partial.arcs])for(const key of ['left','top','width','height','size','center','radius']){
-   if(key==='radius'&&shape.height!=null)continue;
    if(shape[key]!=null)assert.ok(Number.isInteger(shape[key]),key+' must align to physical pixels');
   }
  }

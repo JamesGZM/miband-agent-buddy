@@ -47,3 +47,42 @@ metadata={'packages':[{'id':i} for i in ['root','normal','build','dev']], 'resol
 assert normal_packages(metadata)==[{'id':'normal'}]
 `], {cwd: new URL('../../', import.meta.url), stdio: 'pipe'});
 });
+
+test('Windows WebView2 crates ship pinned upstream notices and corresponding source', () => {
+  execFileSync('python3', ['-B', '-c', String.raw`
+import hashlib,json,sys,tempfile,zipfile
+from pathlib import Path
+sys.path.insert(0, 'scripts')
+from collect_licenses import collect, DATA
+
+receipts=json.loads((DATA/'receipts.json').read_text())
+sources=json.loads((DATA/'sources.json').read_text())
+packages=[
+    ('webview2-com','0.39.1','edc2caf886175ccaebe86078c9cfe1ae2a187328'),
+    ('webview2-com-macros','0.8.1','dffa41a8a46d3f5565eefbff2de57d38d399f158'),
+    ('webview2-com-sys','0.39.1','edc2caf886175ccaebe86078c9cfe1ae2a187328'),
+]
+with tempfile.TemporaryDirectory(prefix='buddy-webview2-licenses-') as temporary:
+    root=Path(temporary)
+    for name,version,revision in packages:
+        key=name+'-'+version
+        receipt=receipts[key]
+        assert receipt['license']=='MIT' and receipt['revision']==revision
+        for item in receipt['files']:
+            assert any(source['file']==item['path'] and source['url']==item['source'] and source['gitBlob']==item['gitBlob'] for source in sources)
+            assert item['source'].startswith('https://github.com/wravery/webview2-rs/blob/'+revision+'/')
+            content=(DATA/item['path']).read_bytes()
+            assert hashlib.sha1(b'blob '+str(len(content)).encode()+b'\0'+content).hexdigest()==item['gitBlob']
+        package=root/key;package.mkdir()
+        (package/'Cargo.toml').write_text('Synthetic WebView2 package fixture')
+        (package/'.cargo_vcs_info.json').write_text(json.dumps({'git':{'sha1':revision}}))
+        p={'name':name,'version':version,'license':'MIT','source':'registry','manifest_path':str(package/'Cargo.toml')}
+        record=collect([p],root/(key+'-notices'),receipts)[0]
+        target=root/(key+'-notices')/key
+        assert record['supplement']==receipt
+        for item in receipt['files']:
+            assert (target/Path(item['path']).name).read_bytes()==(DATA/item['path']).read_bytes()
+        with zipfile.ZipFile(target/record['sourceArchive']) as archive:
+            assert archive.read(key+'/Cargo.toml')==b'Synthetic WebView2 package fixture'
+`], {cwd: new URL('../../', import.meta.url), stdio: 'pipe'});
+});

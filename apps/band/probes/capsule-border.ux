@@ -1,0 +1,112 @@
+<template>
+  <stack class="page" onclick="togglePage" onlongpress="exitApp">
+    <stack id="buddy-stage" class="stage">
+      <stack class="outlines" show="{{ pageIndex === 1 }}">
+        <div for="{{ baseCapsules }}" tid="id" id="{{ $item.elementId }}" class="shape" style.static="{{ $item.style }}"></div>
+        <div for="{{ drawCapsules }}" tid="id" class="shape" style="{{ $item.style }}"></div>
+        <div for="{{ baseRects }}" tid="id" id="{{ $item.elementId }}" class="shape" style.static="{{ $item.style }}"></div>
+        <progress for="{{ baseArcs }}" tid="id" id="{{ $item.elementId }}" class="shape" percent="100" type="arc" style.static="{{ $item.style }}"></progress>
+      </stack>
+      <stack class="paint-layer" show="{{ pageIndex === 1 }}">
+        <div for="{{ drawRects }}" tid="id" id="{{ $item.elementId }}" show="{{ $item.visible }}" class="shape" style="{{ $item.style }}"></div>
+        <progress for="{{ drawArcs }}" tid="id" id="{{ $item.elementId }}" class="shape" percent="{{ $item.percent }}" type="arc" show="{{ $item.visible }}" style="{{ $item.style }}"></progress>
+      </stack>
+      <stack class="paint-layer" show="{{ pageIndex === 1 }}">
+        <div for="{{ tipRects }}" tid="id" show="{{ $item.visible }}" class="shape" style="{{ $item.style }}"></div>
+        <progress for="{{ tipArcs }}" tid="id" class="shape" percent="{{ $item.percent }}" type="arc" show="{{ $item.visible }}" style="{{ $item.style }}"></progress>
+      </stack>
+      <scroll id="border-first-window" class="border-window first-window" scroll-x="false" scroll-y="false" bounces="false" show="{{ pageIndex === 0 }}">
+        <div id="border-first-outline" class="whole-border first-outline" style="border-color: {{ clipColorA }};"></div>
+      </scroll>
+      <scroll id="border-second-window" class="border-window second-window" scroll-x="false" scroll-y="false" bounces="false" show="{{ pageIndex === 0 }}">
+        <div class="whole-border second-outline" style="border-color: {{ clipColorB }};"></div>
+      </scroll>
+      <stack class="glyph" style="{{ glyphStyle }}" show="{{ pageIndex === 0 }}">
+        <div for="{{ glyphRects }}" tid="id" class="shape" style="left: {{ $item.left }}px; top: {{ $item.top }}px; width: {{ $item.width }}px; height: {{ $item.height }}px; background-color: {{ glyphColor }};"></div>
+      </stack>
+      <div class="numbers" if="{{ pageIndex === 1 }}">
+        <div class="column"><text class="label disk" static>DISK</text><text class="value">{{ diskText }}</text><text class="detail">{{ diskDetail }} GB</text></div>
+        <div class="column"><text class="label memory" static>MEM</text><text class="value">{{ memoryText }}</text><text class="detail">{{ memoryDetail }} GiB</text></div>
+        <div class="column"><text class="label cpu" static>CPU</text><text class="value">{{ cpuText }}</text><text class="detail" static>TOTAL LOAD</text></div>
+      </div>
+    </stack>
+  </stack>
+</template>
+<script>
+// Local capability control: both colors share one full-border shape; clipping is unverified.
+import brightness from '@system.brightness';
+import interconnect from '@system.interconnect';
+import application from '@system.app';
+import storage from '@system.storage';
+import vibrator from '@system.vibrator';
+var createPageController=require('../src/controllers/page-controller').createPageController;
+var drawingSupport=require('../src/common/drawing-support');
+var probeDrawing=drawingSupport.probeDrawing;
+var geometry=require('../src/common/generated/geometry');
+export default {
+  private: {
+    pageIndex: 0, clipColorA: '#728BFF', clipColorB: '#728BFF',
+    drawRects: [], drawArcs: [], drawCapsules: [], tipRects: [], tipArcs: [], baseRects: [], baseArcs: [], baseCapsules: [], glyphRects: [], glyphColor: "#000000", glyphStyle: "left:0px;top:0px;width:1px;height:1px;",
+    cpuText: '—', memoryText: '—', diskText: '—', memoryDetail: '—', diskDetail: '—'
+  },
+  onInit(){
+    var self=this;
+    var renderer=geometry.createRenderer();
+    var nativeBounds=drawingSupport.createBoundsProbe(function(id){return self.$element(id);},setTimeout,clearTimeout);
+    var boundsProbe={show:nativeBounds.show,close:nativeBounds.close,snapshot:nativeBounds.snapshot,update:function(targets){
+      nativeBounds.update(self.pageIndex===0?[
+        {id:'border-first-window',kind:'rects',expected:{left:0,top:245,width:192,height:245}},
+        {id:'border-first-outline',kind:'capsules',expected:{left:4,top:4,width:184,height:482}},
+        {id:'border-second-window',kind:'rects',expected:{left:0,top:0,width:192,height:245}}
+      ]:targets);
+    }};
+    var capabilities=probeDrawing(application);capabilities.renderer='native-border-probe';
+    function render(input){
+      var frame=renderer(input);
+      if(input.page===0){
+        var colors=input.colors||[frame.capsules[frame.capsules.length-1].color];
+        var a=colors[0],b=colors[1]||a;
+        if(self.clipColorA!==a)self.clipColorA=a;
+        if(self.clipColorB!==b)self.clipColorB=b;
+        frame.rects=[];frame.arcs=[];frame.capsules=[];
+      }
+      return frame;
+    }
+    this._buddyController=createPageController({brightness:brightness,interconnect:interconnect,application:application,storage:storage,vibrator:vibrator,
+      lifecycle:this.$app.$def.buddyLifecycle,boundsProbe:boundsProbe,render:render,animatePet:false,drawingCapabilities:capabilities,appVersion:application.getInfo().versionName});
+    this._buddyController.onInit.call(this);
+  },
+  onShow(){if(this._buddyController)this._buddyController.onShow.call(this);},
+  onRefresh(){if(this._buddyController)this._buddyController.onRefresh.call(this);},
+  onHide(){if(this._buddyController)this._buddyController.onHide.call(this);},
+  onBackPress(){return this._buddyController?this._buddyController.onBackPress.call(this):false;},
+  onDestroy(){if(this._buddyController)this._buddyController.onDestroy.call(this);this._buddyController=null;},
+  exitApp(){if(this._buddyController)this._buddyController.exitApp.call(this);},
+  togglePage(){if(this._buddyController)this._buddyController.togglePage.call(this);},
+  act(action){if(this._buddyController)this._buddyController.act.call(this,action);},
+  releaseKeep(){if(this._buddyController)this._buddyController.releaseKeep.call(this);},
+  tick(){if(this._buddyController)this._buddyController.tick.call(this);}
+};
+</script>
+<style>
+.page { width: 192px; height: 490px; background-color: #000000; }
+.stage { position: absolute; left: 0px; top: 0px; width: 192px; height: 490px; }
+.glyph { position: absolute; }
+.border-window { position: absolute; left: 0px; width: 192px; height: 245px; }
+.first-window { top: 245px; }
+.second-window { top: 0px; }
+.whole-border { position: absolute; left: 4px; width: 184px; height: 482px; border-width: 8px; border-radius: 92px; }
+.first-outline { top: -241px; }
+.second-outline { top: 4px; }
+.shape { position: absolute; }
+.outlines { position: absolute; left: 0px; top: 0px; width: 192px; height: 490px; }
+.paint-layer { position: absolute; left: 0px; top: 0px; width: 192px; height: 490px; }
+.numbers { position: absolute; left: 192px; top: 0px; width: 490px; height: 192px; transform-origin: 0px 0px; transform: rotate(90deg); padding-left: 86px; padding-top: 49px; }
+.column { width: 106px; height: 94px; flex-direction: column; align-items: center; }
+.label { font-size: 16px; width: 106px; height: 24px; text-align: center; }
+.disk { color: #647FFF; }
+.memory { color: #A192FF; }
+.cpu { color: #78EDFF; }
+.value { font-size: 38px; color: #F0F4F0; width: 106px; height: 46px; text-align: center; }
+.detail { font-size: 14px; color: #B9C5C0; width: 106px; height: 24px; text-align: center; }
+</style>

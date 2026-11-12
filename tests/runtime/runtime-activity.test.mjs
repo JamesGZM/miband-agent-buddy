@@ -5,7 +5,7 @@ import {runtimeHarness, ack} from '../helpers/runtime.mjs';
 
 const {createKeepScreen} = createRequire(import.meta.url)('../../apps/band/src/common/keep-screen.js');
 
-function harness({supported = true, ringSupported = false, activityKeepAwake = true, sample} = {}) {
+function harness({supported = true, ringSupported = false, activityKeepAwake = true, activityHoldMax, sample} = {}) {
   let display;
   const brightness = [];
   const h = runtimeHarness({sample, onWrite(command, child) {
@@ -15,7 +15,7 @@ function harness({supported = true, ringSupported = false, activityKeepAwake = t
     if (p.wakeId) display.hold(p.wakeId, p.wakeHoldMs);
     if (p.activityHoldMs != null) display.activity(p.activityHoldMs, p.idleHoldMs);
     child.later(ack(p, {keepScreen: display.snapshot().state, wakeDisplay: display.display(),
-      capabilities: {maxWakeHoldMs: 1800000, ...(supported ? {activityHold: true} : {}), ...(ringSupported?{activityRing:true}:{})}}));
+      capabilities: {maxWakeHoldMs: 1800000, ...(supported ? {activityHold: true} : {}), ...(activityHoldMax===undefined?{}:{maxActivityHoldMs:activityHoldMax}), ...(ringSupported?{activityRing:true}:{})}}));
   }});
   display = createKeepScreen(options => {brightness.push(options.keepScreenOn); options.success();},
     h.clock.now, h.clock.schedule, h.clock.cancel, () => {});
@@ -27,6 +27,12 @@ function harness({supported = true, ringSupported = false, activityKeepAwake = t
     hook(event, session = 'a') {h.runtime.acceptHook({event, session: session.repeat(64), at: h.clock.now()});},
     snapshots: () => h.calls.filter(c => c.op === 'snapshot').map(c => c.payload)};
 }
+
+for(const [maximum,expected] of [[120000,120000],[60000,60000],[600000,120000],[undefined,15000],[999,15000]])test(`active lease negotiates ${maximum} without breaking older Buddy`,async t=>{
+ const h=harness({activityHoldMax:maximum});t.after(()=>h.runtime.stop());
+ await h.connect();await h.clock.advance(7000);h.hook('UserPromptSubmit');await h.clock.advance(4000);
+ assert.equal(h.snapshots().at(-1).activityHoldMs,expected);
+});
 
 test('failed resource sampling cannot stop task display renewal or terminal events', async t => {
   let failing = false;

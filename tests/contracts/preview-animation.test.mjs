@@ -2,11 +2,50 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {startPreview} from '../../apps/desktop/ui/preview.js';
 
+function roundedContains(box,x,y) {
+ const [left,top,width,height,radius]=box,r=Math.min(radius,width/2,height/2);
+ if(x<left||x>left+width||y<top||y>top+height)return false;
+ const cx=Math.max(left+r,Math.min(x,left+width-r)),cy=Math.max(top+r,Math.min(y,top+height-r));
+ return (x-cx)**2+(y-cy)**2<=r*r;
+}
+// Sample opaque interiors of recorded canvas commands; no image files or GPU.
+function rasterPixel(operations,x,y) {
+ let color;
+ for(const op of operations){
+  if(op.clip&&(x<op.clip[0]||y<op.clip[1]||x>=op.clip[0]+op.clip[2]||y>=op.clip[1]+op.clip[3]))continue;
+  let hit=false;
+  if(op.kind==='fill')hit=roundedContains(op.box,x,y);
+  else if(op.kind==='border'){
+   const [left,top,width,height,r]=op.box,w=op.width/2;
+   hit=roundedContains([left-w,top-w,width+2*w,height+2*w,r+w],x,y)&&!roundedContains([left+w,top+w,width-2*w,height-2*w,r-w],x,y);
+  }else{
+   const [cx,cy,r,start,end]=op.arc,w=op.width/2,tau=2*Math.PI;
+   const theta=(Math.atan2(y-cy,x-cx)-start+2*tau)%tau;
+   hit=theta<=end-start&&Math.abs(Math.hypot(x-cx,y-cy)-r)<=w;
+   for(const angle of [start,end])hit||=(x-cx-r*Math.cos(angle))**2+(y-cy-r*Math.sin(angle))**2<=w*w;
+  }
+  if(hit){
+   const alpha=/^rgba\(0,0,0,([\d.]+)\)$/.exec(op.color);
+   if(alpha&&color){let next='#';for(let i=1;i<7;i+=2)next+=Math.round(parseInt(color.slice(i,i+2),16)*(1-Number(alpha[1]))).toString(16).padStart(2,'0');color=next;}
+   else color=op.color;
+  }
+ }
+ return color;
+}
 function harness(t, {imagesReady = true} = {}) {
   let time=0, paints=0, present=true, next=1;
   const timers=new Map(), frames=new Map(), listeners=new Map(), images=[], texts=[], layers=[],rectangles=[],arcs=[];
   const state={theme:'chatgpt',online:true,bandPage:0,powerSaving:false,buddyFps:30,runtime:{agent:{state:'thinking',sessionCounts:{thinking:2,working:0,attention:0}}}};
-  const context={clearRect(){paints++;layers.length=0;texts.length=0;rectangles.length=0;arcs.length=0;},fillRect(...args){layers.push(this.fillStyle);rectangles.push(args);},beginPath(){},moveTo(){},lineTo(){},arcTo(){},closePath(){},arc(...args){arcs.push(args);},stroke(){layers.push(this.strokeStyle);},fill(){layers.push(this.fillStyle);},fillText(text){texts.push(text);}};
+  const operations=[];let path=[],pathArc=null,radius=0,clip=null,clipPath=null;const saves=[];
+  function box(){const xs=path.map(p=>p[0]),ys=path.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys),radius];}
+  const context={clearRect(){paints++;layers.length=0;texts.length=0;rectangles.length=0;arcs.length=0;operations.length=0;},
+   fillRect(...args){layers.push(this.fillStyle);rectangles.push(args);operations.push({kind:'fill',box:[...args,0],color:this.fillStyle});},
+   save(){saves.push(clip);},restore(){clip=saves.pop();},rect(...args){clipPath=args;},clip(){clip=clipPath;},
+   beginPath(){path=[];pathArc=null;radius=0;clipPath=null;},moveTo(x,y){path.push([x,y]);},lineTo(x,y){path.push([x,y]);},
+   arcTo(x1,y1,x2,y2,r){path.push([x1,y1],[x2,y2]);radius=r;},closePath(){},
+   arc(...args){arcs.push(args);pathArc=args;},
+   stroke(){layers.push(this.strokeStyle);operations.push({kind:pathArc?'arc':'border',arc:pathArc,box:pathArc?null:box(),width:this.lineWidth,color:this.strokeStyle,clip});},
+   fill(){layers.push(this.fillStyle);operations.push({kind:'fill',box:box(),color:this.fillStyle});},fillText(text){texts.push(text);}};
   const canvas={dataset:{},getContext:()=>context};
   const loading={hidden:false}, error={hidden:true};
   const doc={hidden:false,querySelector:selector=>!present?null:selector==='#band'?canvas:selector==='#preview-loading'?loading:selector==='#preview-error'?error:null,
@@ -22,8 +61,22 @@ function harness(t, {imagesReady = true} = {}) {
   function timersAt(at){time=at;for(const [id,timer] of [...timers])if(timer.at<=time){timers.delete(id);timer.fn();}}
   const load=image=>{image.complete=true;image.naturalWidth=192;image.onload?.();};
   return {preview,state,doc,listeners,frames,timers,images,texts,layers,rectangles,arcs,frameAt,timersAt,canvas,loading,error,load,
-    get paints(){return paints;},setTime(value){time=value;},setPresent(value){present=value;}};
+    pixel:(x,y)=>rasterPixel(operations,x,y),get paints(){return paints;},setTime(value){time=value;},setPresent(value){present=value;}};
 }
+
+test('bright loading tips remain visible at the top and bottom straight/curve junctions',t=>{
+ const h=harness(t);h.setTime(1);h.state.runtime.lastAckAt=1;
+ h.state.runtime.agent.state='working';
+ h.state.runtime.ack={mode:'working',settingsApplied:true,drawing:{effectiveFps:10,elapsedMs:958.375}};
+ for(let count=1;count<=6;count++){
+  h.state.runtime.agent.sessionCounts={thinking:0,working:count,attention:0};h.preview.draw();
+  assert.equal(h.pixel(97.5,6.5),'#E8F9FF','top tip was repainted by an arc at '+count+' colors');
+  assert.equal(h.pixel(390.5,182.5),'#E8F9FF','bottom tip was repainted by an arc at '+count+' colors');
+  h.state.runtime.agent.state='thinking';h.state.runtime.ack={mode:'thinking',settingsApplied:true,drawing:{effectiveFps:10,elapsedMs:5250.083333333333}};h.preview.draw();
+  assert.equal(h.pixel(93.5,6.5),'#E8F9FF','thinking tip was repainted by an arc at '+count+' colors');
+  h.state.runtime.agent.state='working';h.state.runtime.ack={mode:'working',settingsApplied:true,drawing:{effectiveFps:10,elapsedMs:958.375}};
+ }
+});
 
 test('cold preview paints complete geometry immediately without image decoding',t=>{
  const h=harness(t,{imagesReady:false});assert.equal(h.images.length,0);assert.equal(h.paints,1);
@@ -92,4 +145,59 @@ test('preview waits for applied FPS receipt and anchors animation to the band el
  h.state.runtime.lastAckAt=1;h.preview.draw();assert.ok(h.rectangles.some(r=>r[0]===122&&r[1]===50),"glyph uses band elapsed pose");assert.equal([...h.timers.values()][0].delay,100);
  h.state.runtime.ack.drawing.effectiveFps=30;h.preview.draw();assert.equal(h.frames.size,1);
  h.state.runtime.ack.drawing.effectiveFps=1000;h.preview.draw();assert.equal(h.frames.size,1);
+});
+
+
+test('preview follows a static pet control receipt while preserving complete-to-idle semantics',t=>{
+ const h=harness(t);h.setTime(1);h.state.runtime.lastAckAt=1;h.state.runtime.agent.state='working';
+ h.state.runtime.ack={mode:'working',settingsApplied:true,drawing:{effectiveFps:10,animationEnabled:false,elapsedMs:1500}};
+ h.preview.draw();
+ assert.ok(!h.layers.includes('#94B5FF'));assert.ok(!h.layers.includes('#E8F9FF'));
+ assert.ok(h.rectangles.some(r=>r[0]===118&&r[1]===50));
+ const before=[...h.layers];h.setTime(5001);h.preview.draw();assert.deepEqual(h.layers,before);
+ h.state.runtime.agent.state='complete';h.state.runtime.lastAckAt=5001;
+ h.state.runtime.ack={mode:'complete',settingsApplied:true,drawing:{effectiveFps:10,animationEnabled:false,elapsedMs:4500}};
+ h.preview.draw();assert.ok(!h.layers.map(c=>c.toLowerCase()).includes('#77edbd'));assert.ok(h.layers.map(c=>c.toLowerCase()).includes('#728bff'));
+});
+
+test('preview restores whole-border breathing and moving loading from the native renderer receipt',t=>{
+ const h=harness(t);h.setTime(1);h.state.runtime.lastAckAt=1;h.state.runtime.agent.state='idle';
+ h.state.runtime.ack={mode:'idle',settingsApplied:true,drawing:{renderer:'native-border',effectiveFps:10,animationEnabled:true,elapsedMs:0}};
+ h.preview.draw();const dim=h.pixel(245.5,8.5);assert.equal(h.arcs.length,0);
+ h.state.runtime.ack.drawing.elapsedMs=2000;h.preview.draw();const bright=h.pixel(245.5,8.5);assert.notEqual(bright,dim);
+ assert.ok(parseInt(bright.slice(1,3),16)>parseInt(dim.slice(1,3),16));
+ h.state.runtime.agent.state='working';h.state.runtime.ack.mode='working';h.state.runtime.agent.sessionCounts={working:2,thinking:0,attention:0};
+ const positions=[];
+ for(const elapsedMs of [0,400,800,1200]){
+  h.state.runtime.ack.drawing.elapsedMs=elapsedMs;h.preview.draw();
+  assert.equal(h.arcs.length,0);assert.ok(h.layers.includes('#94B5FF'));assert.ok(h.layers.includes('#E8F9FF'));
+  positions.push([h.pixel(300.5,8.5),h.pixel(470.5,96.5),h.pixel(180.5,184.5),h.pixel(30.5,96.5)]);
+ }
+ assert.ok(positions.some(p=>JSON.stringify(p)!==JSON.stringify(positions[0])));
+ assert.equal([...h.timers.values()][0].delay,100);
+});
+
+test('static border probe preview uses only the first two task colors on complete half borders',t=>{
+ const h=harness(t);h.setTime(1);h.state.runtime.lastAckAt=1;h.state.runtime.agent.state='working';
+ h.state.runtime.agent.sessionCounts={working:6,thinking:0,attention:0};
+ h.state.runtime.ack={mode:'working',drawing:{capabilities:{renderer:'native-border-probe'},animationEnabled:false,elapsedMs:1500}};
+ h.preview.draw();assert.equal(h.arcs.length,0);
+ assert.equal(h.pixel(300.5,8.5).toUpperCase(),'#728BFF');assert.equal(h.pixel(482.5,96.5).toUpperCase(),'#728BFF');
+ assert.equal(h.pixel(180.5,184.5).toUpperCase(),'#65D9BC');assert.equal(h.pixel(8.5,96.5).toUpperCase(),'#65D9BC');
+ assert.ok(!h.layers.includes('#EFB86C'));assert.ok(!h.layers.includes('#94B5FF'));assert.ok(!h.layers.includes('#E8F9FF'));
+ const before=[...h.layers];h.setTime(5001);h.preview.draw();assert.deepEqual(h.layers,before);
+ h.state.bandPage=1;h.state.runtime.metrics={sampledAt:5001,cpu:42};h.state.runtime.lastAckAt=5001;
+ h.preview.draw();assert.ok(h.arcs.length>0);assert.ok(h.texts.includes('42%'));
+});
+
+test('legacy native preview breathes without mutating its cached task palette',t=>{
+ const h=harness(t);h.setTime(1);h.state.runtime.lastAckAt=1;h.state.runtime.agent.state='idle';
+ h.state.runtime.ack={mode:'idle',drawing:{capabilities:{renderer:'native-geometry'},elapsedMs:0}};
+ h.preview.draw();const dim=h.pixel(245.5,8.5);
+ h.state.runtime.ack.drawing.elapsedMs=2000;h.preview.draw();const bright=h.pixel(245.5,8.5);
+ assert.notEqual(bright,dim);assert.ok(parseInt(bright.slice(1,3),16)>parseInt(dim.slice(1,3),16));
+ h.state.runtime.ack.drawing.elapsedMs=0;h.preview.draw();assert.equal(h.pixel(245.5,8.5),dim);
+ h.state.runtime.ack.drawing.animationEnabled=false;h.preview.draw();const still=h.pixel(245.5,8.5);
+ h.state.runtime.ack.drawing.elapsedMs=2000;h.preview.draw();assert.equal(h.pixel(245.5,8.5),still);
+ assert.equal(still.toUpperCase(),'#728BFF');
 });

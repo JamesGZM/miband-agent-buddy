@@ -1,5 +1,6 @@
 // setKeepScreenOn reports request acceptance, not physical display state.
 // Refresh conservatively while visible; never wake the app after hide/exit.
+var MAX_ACTIVITY_HOLD_MS=require('./generated/protocol').MAX_ACTIVITY_HOLD_MS;
 function createKeepScreen(api, clock, schedule, cancel, report) {
   var visible=false, generation=0, timer=null;
   var holdTimer=null, holdUntil=0, wakeId=null, seen=[], activeHold=false;
@@ -38,7 +39,7 @@ function createKeepScreen(api, clock, schedule, cancel, report) {
       return true;
     },
     activity:function(ms,idleMs){
-      if(typeof ms!=='number'||ms%1!==0||(ms!==0&&(ms<1000||ms>15000))||typeof idleMs!=='number'||idleMs%1!==0||idleMs<5000||idleMs>1800000)return false;
+      if(typeof ms!=='number'||ms%1!==0||(ms!==0&&(ms<1000||ms>MAX_ACTIVITY_HOLD_MS))||typeof idleMs!=='number'||idleMs%1!==0||idleMs<5000||idleMs>1800000)return false;
       if(ms>0){
         activeHold=true;expireAfter(ms);
         // Renew the deadline without requesting the brightness API for every sample.

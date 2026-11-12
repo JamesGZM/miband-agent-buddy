@@ -116,7 +116,7 @@ def collect(packages, output, overrides, data_root=DATA):
         records.append(record)
     (output / 'index.json').write_text(json.dumps(records, ensure_ascii=False, indent=2) + '\n')
     (output / 'README.txt').write_text(
-        'Resolved Rust dependencies for this macOS build. Each directory contains original notices,\n'
+        'Resolved Rust dependencies for this target build. Each directory contains original notices,\n'
         'publisher metadata and attribution. Reviewed supplemental texts have pinned sources and hashes.\n'
         'Packages with omitted license files, MPL terms, or local upstream adaptations also include\n'
         'their corresponding package source. Original notices remain unchanged. Build-only tools are\n'

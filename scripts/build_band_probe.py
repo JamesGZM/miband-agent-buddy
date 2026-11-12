@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--activate', action='store_true')
     parser.add_argument('--revision', type=int, default=1)
+    parser.add_argument('--capsule-border', action='store_true', help='Static two-color full-border clipping capability probe')
     args = parser.parse_args()
     if not 1 <= args.revision <= 10000:
         parser.error('--revision must be between 1 and 10000')
@@ -26,10 +27,24 @@ def main():
     with tempfile.TemporaryDirectory(prefix='buddy-code-probe-') as directory:
         project = Path(directory)
         shutil.copytree(ROOT / 'apps/band/src', project / 'src', ignore=shutil.ignore_patterns('capsule', 'pets', '*.png'))
+        if args.capsule_border:
+            prototype = (ROOT / 'apps/band/probes/capsule-border.ux').read_text()
+            # The checked-in prototype imports its real source dependencies;
+            # relocate only that explicit prefix into the temporary page entry.
+            prototype = prototype.replace("../src/", "../../")
+            (project / 'src/pages/index/index.ux').write_text(prototype)
         shutil.copy2(ROOT / 'apps/band/package.json', project / 'package.json')
         (project / 'node_modules').symlink_to(ROOT / 'apps/band/node_modules', target_is_directory=True)
         manifest = json.loads((project / 'src/manifest.json').read_text())
-        manifest['versionName'] += f'-code.{args.revision}'
+        if args.capsule_border:
+            manifest['minAPILevel'] = max(2, manifest.get('minAPILevel', 1))
+            parts = manifest['versionName'].split('.')
+            if len(parts) != 3 or not all(part.isdigit() for part in parts):
+                raise SystemExit('Capsule border probe requires a numeric base version')
+            parts[2] = str(int(parts[2]) + args.revision)
+            manifest['versionName'] = '.'.join(parts)
+        else:
+            manifest['versionName'] += f'-code.{args.revision}'
         manifest['versionCode'] += args.revision
         (project / 'src/manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         prepare_icon(project / 'src/common/icon.png')

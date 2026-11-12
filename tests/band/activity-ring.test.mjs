@@ -79,8 +79,9 @@ test('fixed native highlights preserve the original stroke at every loading posi
 });
 test('production template contains geometry without bitmap animation or diagnostic labels',()=>{
  const s=readFileSync(new URL('../../apps/band/src/pages/index/index.ux',import.meta.url),'utf8');
- assert.match(s,/<stack class="outlines">\s*<div for="\{\{ drawCapsules \}\}"/);
- assert.match(s,/drawCapsules[^>]*>[\s\S]*?<\/stack>\s*<div for="\{\{ drawRects \}\}"/);
+ assert.match(s,/<stack class="outlines" show="\{\{ pageIndex === 1 \}\}">\s*<div for="\{\{ baseCapsules \}\}"/);
+ for(const name of ['baseCapsules','baseRects','baseArcs'])assert.match(s,new RegExp('for="\\{\\{ '+name+' \\}\\}"[^>]*style\\.static="\\{\\{ \\$item.style \\}\\}"'));
+ for(const name of ['drawRects','drawArcs'])assert.match(s,new RegExp('for="\\{\\{ '+name+' \\}\\}"[^>]*style="\\{\\{ \\$item.style \\}\\}"'));
  assert.doesNotMatch(s.match(/\.stage \{[^}]+\}/)[0],/transform/);
  assert.match(s,/drawRects/);assert.match(s,/drawArcs/);assert.match(s,/<progress[^>]+type="arc"/);
  assert.doesNotMatch(s,/<image|activity-count|activity-label|CODE|probePercent|dotLeft/);
@@ -102,5 +103,40 @@ test('band and browser execute identical canonical geometry',async()=>{
  for(const consumer of consumers)for(const theme of ['chatgpt','claude','deepseek'])for(const mode of ['thinking','working','attention','offline'])for(const page of [0,1]){
   const input={theme,mode,page,seconds:1.5,counts:counts(4),values:{disk:77,memory:50,cpu:30}};
   assert.deepEqual(consumer.frame(input),g.frame(input));
+ }
+});
+test('native palette geometry stays immutable and shares projected objects across animation frames',()=>{
+ const colors=['#647FFF','#78EDFF','#A192FF','#EBA270','#FFBD64','#76CDB8'];
+ for(let count=1;count<=6;count++){
+  const render=g.createRenderer(),palette=colors.slice(0,count),state={native:true,theme:'chatgpt',mode:'working',colors:palette};
+  assert.equal(typeof render.portrait,'function');
+  const a=render.portrait({...state,seconds:0.1});
+  for(let n=2;n<50;n++){
+   const b=render.portrait({...state,seconds:n/10});
+   for(const list of ['rects','arcs','capsules']){
+    const staticShapes=a[list].filter(s=>!String(s.id).startsWith('highlight:'));
+    for(const shape of staticShapes)assert.equal(b[list].find(s=>s.id===shape.id),shape,'reuse static '+list+' at '+count+' colors');
+   }
+   assert.deepEqual(b,g.portrait(g.frame({...state,seconds:n/10})),'fast and reference geometry must match');
+  }
+ }
+});
+
+
+test('band paint order keeps every base below loading bodies and every tip above bodies',()=>{
+ const source=readFileSync(new URL('../../apps/band/src/pages/index/index.ux',import.meta.url),'utf8');
+ const groups=[...source.matchAll(/<stack class="(outlines|paint-layer)" show="\{\{ pageIndex === 1 \}\}">([\s\S]*?)<\/stack>/g)];
+ assert.equal(groups.length,3);
+ for(const [index,pair] of [['baseRects','baseArcs'],['drawRects','drawArcs'],['tipRects','tipArcs']].entries())for(const name of pair)assert.ok(groups[index][2].includes('for="{{ '+name+' }}"'));
+ const layers=['baseRects','baseArcs','drawRects','drawArcs','tipRects','tipArcs'];
+ const positions=layers.map(name=>source.indexOf('for="{{ '+name+' }}"'));
+ assert.ok(positions.every(n=>n>=0));assert.deepEqual([...positions].sort((a,b)=>a-b),positions);
+ for(const mode of ['thinking','working']){
+  const frame=g.frame({native:true,mode,seconds:.958375,counts:counts(6)});
+  for(const shape of frame.rects.concat(frame.arcs)){
+   if(String(shape.id).endsWith(':tip'))assert.equal(shape.layer,2);
+   else if(String(shape.id).endsWith(':body'))assert.equal(shape.layer,1);
+   else assert.equal(shape.layer,undefined);
+  }
  }
 });

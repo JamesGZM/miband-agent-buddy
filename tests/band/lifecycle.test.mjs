@@ -8,12 +8,12 @@ const protocol = require('../../packages/buddy-shared/protocol/snapshot.js');
 const ux = fs.readFileSync(new URL('../../apps/band/src/pages/index/index.ux', import.meta.url), 'utf8');
 const {createPageController}=require('../../apps/band/src/controllers/page-controller.js');
 
-function harness({keepScreen=true,render,drawingCapabilities}={}) {
+function harness({keepScreen=true,render,drawingCapabilities,animatePet}={}) {
   const requests = [], sent = [], timers = new Set(), exits = [], delays = new Map(), keepTimers = new Set();
   let now = 1000;
   const channel = { getReadyState: ({ success }) => success({ status: 1 }), send: args => sent.push(args) };
   const deps = {
-    render,drawingCapabilities,
+    render,drawingCapabilities,animatePet,
     storage:{get:args=>args.success(JSON.stringify({buddyTheme:'chatgpt',settingsRevision:0,keepScreen})),set:args=>args.success()},
     brightness: { setKeepScreenOn: args => requests.push(args) },
     interconnect: { instance: () => channel },
@@ -54,7 +54,7 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   assert.equal(page.diagnostics().received, 1);
   assert.equal(page.cpuText, '0%');
   assert.equal(sent[0].data.appVersion, '0.5.5');
-  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, activityRing: true, powerSaving: true, buddyFps: true});
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, maxActivityHoldMs: 120000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, activityRing: true, powerSaving: true, buddyFps: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();
@@ -177,20 +177,55 @@ test('activity renewal is capability advertised, replay safe and cannot relight 
  page.onShow();assert.equal(requests.length,2);
  page.exitApp();channel.onmessage({data:JSON.stringify({...base,seq:4})});assert.equal(requests.at(-1).keepScreenOn,false);
 });
+test('native dynamic update cost stays constant from one through six task colors',t=>{
+ const colors=['#647FFF','#78EDFF','#A192FF','#EBA270','#FFBD64','#76CDB8'],budgets=[];
+ for(let count=1;count<=6;count++){
+  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+  const msg={v:1,type:'snapshot',session:'render-budget',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:colors.slice(0,count)};
+  channel.onmessage({data:JSON.stringify(msg)});
+  let staticWrites=0,dynamicWrites=0,churn=0;
+  for(const name of ['drawRects','drawArcs','drawCapsules','tipRects','tipArcs','baseRects','baseArcs','baseCapsules']){
+   const list=page[name];
+   for(let i=0;i<list.length;i++)list[i]=new Proxy(list[i],{set(target,key,value){
+    if(name.startsWith('base'))staticWrites++;else dynamicWrites++;
+    target[key]=value;return true;
+   }});
+   const splice=list.splice;
+   list.splice=function(...args){churn++;return splice.apply(this,args);};
+  }
+  for(let n=1;n<=80;n++){setTime(1000+n*100);page.tick();}
+  assert.equal(staticWrites,0,'no base-ring binding writes at '+count+' colors');
+  assert.equal(churn,0,'no native component replacement during animation');
+  assert.ok(dynamicWrites>0,'keep the existing loading animation');budgets.push(dynamicWrites);
+  page.onDestroy();
+ }
+ assert.ok(budgets.every(n=>n===budgets[0]),'adding a color must not add per-frame UI mutations: '+budgets);
+ t.diagnostic('UI writes over 80 frames at 1–6 colors: '+budgets.join(', ')+'; static writes and component churn: 0');
+});
+
+test('page observers never receive the globally cached glyph objects',()=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ const shared=geometry.portrait(geometry.frame({native:true,theme:'chatgpt',mode:'idle'})).glyphs;
+ const {page}=harness({keepScreen:false});page.onShow();
+ assert.notEqual(page.glyphRects,shared);assert.notEqual(page.glyphRects[0],shared[0]);
+ const before=shared[0].left;page.glyphRects[0].left++;
+ assert.equal(shared[0].left,before);page.onDestroy();
+});
+
 test('pet geometry responds to counts, stale snapshots and idle without extra UI',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'counts',seq:1,text:'',value:0,cpu:42,mode:'attention',sessionCounts:{thinking:1,working:1,attention:1}};
- channel.onmessage({data:JSON.stringify(base)});const multi=JSON.stringify([page.drawArcs,page.drawCapsules]);
- setTime(1900);page.tick();assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),multi);
- const breathing=JSON.stringify([page.drawArcs,page.drawCapsules]);
+ channel.onmessage({data:JSON.stringify(base)});const multi=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
+ setTime(1900);page.tick();assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),multi,'base colors update only with state');
+ const breathing=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});
- assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),breathing);
- channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});const working=JSON.stringify([page.drawArcs,page.drawCapsules]);
- setTime(11900);page.tick();assert.notEqual(JSON.stringify([page.drawArcs,page.drawCapsules]),working);
+ assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),breathing);
+ channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});const working=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
+ setTime(11900);page.tick();assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),working);
  channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});
- const idle=JSON.stringify([page.drawArcs,page.drawCapsules]);
+ const idle=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:5,sessionCounts:{thinking:128,working:1,attention:0}})});
- assert.equal(JSON.stringify([page.drawArcs,page.drawCapsules]),idle);assert.equal(page.diagnostics().errorText,'Invalid message');
+ assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),idle);assert.equal(page.diagnostics().errorText,'Invalid message');
  assert.doesNotMatch(ux,/<image|activity-count|activity-label|activitySource/);
 });
 
@@ -200,7 +235,7 @@ test('power saving applies live, is acknowledged, and hidden animation has no ti
  const base={v:1,type:'snapshot',session:'power',seq:1,text:'',value:0,cpu:42,mode:'thinking',powerSaving:true};
  channel.onmessage({data:JSON.stringify(base)});
  assert.equal(sent.at(-1).data.powerSaving,true);assert.equal(delays.get([...timers][0]),100);
- const symbol=page.glyphLeft;setTime(1400);page.tick();assert.notEqual(page.glyphLeft,symbol);
+ const symbol=page.glyphStyle;setTime(1400);page.tick();assert.notEqual(page.glyphStyle,symbol);
  channel.onmessage({data:JSON.stringify({...base,seq:2,powerSaving:false})});
  assert.equal(sent.at(-1).data.powerSaving,false);assert.equal(delays.get([...timers][0]),100);
  const oldTick=[...timers][0];page.onHide();assert.equal(timers.size,0);oldTick();assert.equal(timers.size,0);
@@ -224,23 +259,23 @@ test('fifteen minutes of native animation keep observed arrays and glyph geometr
  const base={v:1,type:'snapshot',session:'endurance',seq:1,text:'',value:0,cpu:42,mode:'working'};
  channel.onmessage({data:JSON.stringify(base)});
  const glyphs=page.glyphRects;
- for(const name of ['drawRects','drawArcs','drawCapsules']){
+ for(const name of ['drawRects','drawArcs','drawCapsules','tipRects','tipArcs']){
   const value=page[name];Object.defineProperty(page,name,{get:()=>value,set:()=>assert.fail(name+' replaced')});
  }
  for(let tick=1;tick<=9000;tick++){
   setTime(1000+tick*100);
   if(tick%20===0)channel.onmessage({data:JSON.stringify({...base,seq:tick})});else page.tick();
   assert.equal(page.glyphRects,glyphs);assert.ok(page.drawArcs.length<=4);assert.equal(timers.size,1);
-  for(const list of [page.drawRects,page.drawArcs,page.drawCapsules])assert.equal(new Set(list.map(x=>x.id)).size,list.length);
+  for(const list of [page.drawRects,page.drawArcs,page.drawCapsules,page.tipRects,page.tipArcs])assert.equal(new Set(list.map(x=>x.id)).size,list.length);
  }
  page.onHide();assert.equal(timers.size,0);
 });
 test('switching resource and pet pages reuses observed lists with bounded arc components',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
- const lists=[page.drawRects,page.drawArcs,page.drawCapsules];
+ const lists=[page.drawRects,page.drawArcs,page.drawCapsules,page.tipRects,page.tipArcs];
  for(let i=1;i<=100;i++){
   setTime(1000+i*2000);channel.onmessage(metric(i,42));page.act(i%2?'monitor':'pet');
-  for(const [index,name] of ["drawRects","drawArcs","drawCapsules"].entries())assert.equal(page[name],lists[index]);
+  for(const [index,name] of ["drawRects","drawArcs","drawCapsules","tipRects","tipArcs"].entries())assert.equal(page[name],lists[index]);
   assert.ok(page.drawArcs.length<=6);
  }
 });
@@ -269,7 +304,7 @@ test('multi-session animation reuses every bound shape without observer list mut
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'multi-animation',seq:1,text:'',value:0,cpu:0,mode:'working',sessionCounts:{thinking:0,working:6,attention:0}};
  channel.onmessage({data:JSON.stringify(base)});
- const lists=[page.drawRects,page.drawArcs,page.drawCapsules],items=lists.map(list=>[...list]);
+ const lists=[page.drawRects,page.drawArcs,page.drawCapsules,page.tipRects,page.tipArcs],items=lists.map(list=>[...list]);
  for(const list of lists)list.splice=()=>assert.fail('animation changed an observed shape list');
  for(let tick=1;tick<=480;tick++){
   setTime(1000+tick*100);
@@ -312,4 +347,127 @@ test('band applies host-prepared colors and never passes AI counts into animatio
  setTime(11000);page.tick();assert.equal(rendered.mode,'offline');assert.equal(rendered.colors,null);
  channel.onmessage({data:JSON.stringify({...base,seq:2,activityRing:['#77EDBD'],mode:'complete'})});
  setTime(15000);page.tick();assert.equal(rendered.mode,'idle');assert.equal(rendered.colors,null);
+});
+
+
+test('static native ring bindings are recreated only for palette or page changes',()=>{
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'static-native',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456','#ABCDEF']};
+ channel.onmessage({data:JSON.stringify(base)});
+ const names=['baseRects','baseArcs','baseCapsules'],lists=names.map(name=>page[name]),items=lists.map(list=>[...list]);
+ const original=JSON.stringify(items);
+ for(let i=1;i<=80;i++){
+  setTime(1000+i*100);page.tick();
+  for(let n=0;n<names.length;n++)assert.deepEqual([...lists[n]],items[n]);
+ }
+ channel.onmessage({data:JSON.stringify({...base,seq:2})});
+ assert.equal(JSON.stringify(lists),original,'identical fresh snapshots retain static bindings');
+ channel.onmessage({data:JSON.stringify({...base,seq:3,activityRing:['#123456','#76CDB8']})});
+ assert.notEqual(JSON.stringify(lists),original);
+ for(let n=0;n<lists.length;n++)for(const item of lists[n]){const old=items[n].find(old=>old.id===item.id);if(old)assert.equal(item.style,old.style,'a reused tid cannot change static style');}
+ assert.equal(JSON.stringify(items),original,'do not mutate detached static items');
+ const palette=JSON.stringify(lists);page.act('monitor');
+ assert.ok(lists.every(list=>list.length===0),'no stale pet base over resource rings');
+ page.act('pet');assert.notEqual(JSON.stringify(lists),palette,'returning page recreates static nodes');
+ assert.ok(lists.some(list=>list.length));page.onDestroy();
+});
+
+test('native animation submits one complete style per widget, with no geometry-field bindings',()=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ const base={v:1,type:'snapshot',session:'style-transaction',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456','#ABCDEF']};
+ channel.onmessage({data:JSON.stringify(base)});
+ for(let tick=0;tick<80;tick++){
+  setTime(1000+tick*100);page.tick();
+  const frame=geometry.portrait(geometry.frame({native:true,mode:'working',seconds:tick/10,colors:base.activityRing}));
+  for(const kind of ['rects','arcs','capsules']){
+   const suffix=kind[0].toUpperCase()+kind.slice(1),bound=page['base'+suffix].concat(page['draw'+suffix],kind==='capsules'?[]:page['tip'+suffix]);
+   assert.equal(bound.length,frame[kind].length);
+   for(const shape of frame[kind]){
+    const actual=bound.find(item=>item.id===shape.id||item.id.endsWith(':'+shape.id));
+    assert.ok(actual,'missing '+shape.id);
+    const styles=Object.fromEntries(actual.style.split(';').filter(Boolean).map(field=>field.split(':')));
+    const expected={left:shape.left+'px',top:shape.top+'px',width:(kind==='arcs'?shape.size:shape.width)+'px',height:(kind==='arcs'?shape.size:shape.height)+'px'};
+    if(kind==='arcs')Object.assign(expected,{'center-x':shape.center+'px','center-y':shape.center+'px',radius:shape.radius+'px','start-angle':shape.start+'deg','total-angle':shape.total+'deg','stroke-width':shape.width+'px',color:shape.color,'layer-color':shape.layerColor||shape.color});
+    else Object.assign(expected,{'border-radius':shape.radius+'px'},kind==='capsules'?{'border-width':shape.stroke+'px','border-color':shape.color}:{'background-color':shape.color});
+    assert.deepEqual(styles,expected,'every submitted style must preserve the original native paint');
+    for(const key of ['left','top','width','height','start','total','color'])assert.equal(Object.hasOwn(actual,key),false);
+   }
+  }
+ }
+ page.onDestroy();
+});
+
+
+test('moving glyph bounds exclude the outer ring without changing any pixel positions',()=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
+ let seq=0;
+ for(const theme of ['chatgpt','claude','deepseek']){
+  channel.onmessage({data:JSON.stringify({v:1,type:'snapshot',session:'glyph-bounds',seq:++seq,text:'',value:0,cpu:42,mode:'working',buddyTheme:theme,settingsRevision:seq,keepScreen:false})});
+  for(let tick=0;tick<=10;tick++){
+   setTime(1000+tick*100);page.tick();
+   const frame=geometry.portrait(geometry.frame({native:true,theme,mode:'working',seconds:tick/10}));
+   const style=Object.fromEntries(page.glyphStyle.split(';').filter(Boolean).map(s=>s.split(':').map((v,i)=>i?parseFloat(v):v)));
+   assert.ok(style.width*style.height<192*490*.3,'the moving group must be much smaller than the screen');
+   assert.ok(style.left>15&&style.left+style.width<177,'moving damage cannot touch the capsule sides');
+   assert.ok(style.top>15&&style.top+style.height<475);
+   for(let i=0;i<frame.glyphs.length;i++){
+    const expected=frame.glyphs[i],actual=page.glyphRects[i];
+    assert.equal(actual.left+style.left,expected.left);
+    assert.equal(actual.top+style.top,expected.top+frame.glyphLeft);
+    assert.equal(actual.width,expected.width);assert.equal(actual.height,expected.height);
+    assert.ok(actual.left>=0&&actual.top>=0&&actual.left+actual.width<=style.width&&actual.top+actual.height<=style.height);
+   }
+  }
+  setTime(1000);
+ }
+ page.onDestroy();
+});
+
+
+test('static pet control has no animation timer but retains snapshot and stale-state handling',()=>{
+ const {page,channel,setTime,sent,timers,delays}=harness({keepScreen:false,animatePet:false,drawingCapabilities:{renderer:'native-border-probe'}});
+ page.onShow();assert.equal(timers.size,0);
+ const message={v:1,type:'snapshot',session:'static-pet-control',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456','#ABCDEF'],activityHoldMs:120000,idleHoldMs:60000};
+ channel.onmessage({data:JSON.stringify(message)});
+ assert.equal(sent.at(-1).data.drawing.animationEnabled,false);assert.equal(sent.at(-1).data.wakeDisplay.active,true);
+ assert.equal(delays.get([...timers][0]),10000);assert.equal(Object.hasOwn(page,'glyphLeft'),false);
+ const shapes=JSON.stringify([page.baseRects,page.baseArcs,page.drawRects,page.drawArcs,page.tipRects,page.tipArcs,page.glyphStyle]);
+ setTime(5000);channel.onmessage({data:JSON.stringify({...message,seq:2})});
+ assert.equal(JSON.stringify([page.baseRects,page.baseArcs,page.drawRects,page.drawArcs,page.tipRects,page.tipArcs,page.glyphStyle]),shapes);
+ assert.equal(delays.get([...timers][0]),10000);
+ setTime(15000);[...timers][0]();assert.equal(timers.size,0);assert.equal(page.glyphColor,'#8298B4');
+ page.onDestroy();assert.equal(timers.size,0);
+});
+
+test('static pet control preserves the completion-to-idle deadline',()=>{
+ const {page,channel,setTime,timers,delays}=harness({keepScreen:false,animatePet:false});page.onShow();
+ channel.onmessage({data:JSON.stringify({v:1,type:'snapshot',session:'static-complete',seq:1,text:'',value:0,cpu:42,mode:'complete'})});
+ assert.equal(delays.get([...timers][0]),4000);
+ assert.ok(page.baseCapsules.some(s=>s.style.toLowerCase().includes('#77edbd')));
+ setTime(5000);[...timers][0]();assert.ok(page.baseCapsules.some(s=>s.style.toLowerCase().includes('#728bff')));
+ assert.equal(delays.get([...timers][0]),6000);page.onDestroy();assert.equal(timers.size,0);
+});
+
+test('whole-border loading updates have constant cost at one through six colors and cancel on hide',t=>{
+ const geometry=require('../../packages/buddy-shared/presentation/geometry.js');
+ const colors=['#647FFF','#78EDFF','#A192FF','#EBA270','#FFBD64','#76CDB8'],budgets=[];
+ for(let count=1;count<=6;count++){
+  const {page,channel,setTime,timers,sent}=harness({keepScreen:false,render:geometry.createBorderRenderer(),drawingCapabilities:{renderer:'native-border'}});
+  page.onShow();channel.onmessage({data:JSON.stringify({v:1,type:'snapshot',session:'border-animation',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:colors.slice(0,count)})});
+  assert.equal(sent.at(-1).data.drawing.animationEnabled,true);
+  let staticWrites=0,dynamicWrites=0,churn=0;
+  for(const name of ['borderBase','borderBodies','borderTips']){
+   const list=page[name];
+   for(let i=0;i<list.length;i++)list[i]=new Proxy(list[i],{set(item,key,value){if(name==='borderBase')staticWrites++;else dynamicWrites++;item[key]=value;return true;}});
+   const splice=list.splice;list.splice=function(...args){churn++;return splice.apply(this,args);};
+  }
+  const initial=page.breathColor,pose=page.glyphStyle;
+  for(let n=1;n<=80;n++){setTime(1000+n*100);page.tick();}
+  assert.equal(staticWrites,0);assert.equal(churn,0);assert.ok(dynamicWrites>0);assert.notEqual(page.breathColor,initial);assert.notEqual(page.glyphStyle,pose);
+  assert.equal(page.drawArcs.length+page.tipArcs.length+page.baseArcs.length,0);
+  budgets.push(dynamicWrites);page.onHide();assert.equal(timers.size,0);page.onDestroy();
+ }
+ assert.ok(budgets.every(n=>n===budgets[0]),String(budgets));t.diagnostic('Border animation writes across 1–6 colors: '+budgets.join(', '));
 });

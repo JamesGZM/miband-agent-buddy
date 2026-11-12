@@ -1,5 +1,6 @@
 // Small ES5-compatible protocol shared with the host-side tests.
 var MAX_WAKE_HOLD_MS = 1800000;
+var MAX_ACTIVITY_HOLD_MS = 120000;
 var THEMES = ['chatgpt', 'claude', 'deepseek'];
 function validMetric(m) {
   return m == null || (typeof m === 'object' && typeof m.usedBytes === 'number' && isFinite(m.usedBytes) && m.usedBytes >= 0 && typeof m.totalBytes === 'number' && isFinite(m.totalBytes) && m.totalBytes > 0 && m.usedBytes <= m.totalBytes && typeof m.percent === 'number' && isFinite(m.percent) && m.percent >= 0 && m.percent <= 100 && Math.abs(m.percent-m.usedBytes/m.totalBytes*100)<0.1);
@@ -7,7 +8,7 @@ function validMetric(m) {
 function validActivityHold(msg) {
   if(msg.activityHoldMs==null&&msg.idleHoldMs==null)return true;
   return typeof msg.activityHoldMs==='number' && msg.activityHoldMs%1===0 &&
-    (msg.activityHoldMs===0 || (msg.activityHoldMs>=1000&&msg.activityHoldMs<=15000)) &&
+    (msg.activityHoldMs===0 || (msg.activityHoldMs>=1000&&msg.activityHoldMs<=MAX_ACTIVITY_HOLD_MS)) &&
     typeof msg.idleHoldMs==='number' && msg.idleHoldMs%1===0 && msg.idleHoldMs>=5000 && msg.idleHoldMs<=MAX_WAKE_HOLD_MS;
 }
 function validSessionCounts(counts) {
@@ -79,3 +80,4 @@ function matchesAck(ack, snapshot) {
 }
 
 module.exports.matchesAck = matchesAck;
+module.exports.MAX_ACTIVITY_HOLD_MS = MAX_ACTIVITY_HOLD_MS;

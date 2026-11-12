@@ -4,6 +4,25 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.4] - 2026-11-12
+
+### Improved
+
+- Buddy 0.5.18 draws the character-page contour with whole native borders, cached task-color windows, one breathing overlay and fixed loading slots. Tight glyph bounds and in-place style updates limit model writes without scaling animation work with task count.
+- Negotiate activity holds up to 120 seconds while retaining the legacy 15-second fallback. Previously confirmed active displays advertising the full 120-second capability receive a snapshot first on reconnect; missing replies trigger a bounded recovery wake, while hidden-page receipts cancel it.
+
+### Fixed
+
+- Preserve the first pending snapshot when the new connection reports its initial app inventory, while still invalidating receipts after a known installation change.
+- Match the static two-color border probe in the desktop preview, restore breathing for legacy renderer previews and remove an unused observed glyph offset.
+- Include pinned upstream WebView2 license notices and corresponding sources for experimental Windows builds.
+
+### Verification limits
+
+- Includes normal Buddy **0.5.18 / code 40**; use the Band page to update an older installation. The local same-version review-fix package was explicitly reinstalled before this release.
+- Short visual feedback accepted the restored effects with two real tasks. Firmware memory use, physical panel FPS, six-task stability, long-duration illumination and restart avoidance remain unverified. Compilation, unit tests, layout bounds and ACKs do not establish those results; see [verification and compatibility](docs/testing.md).
+- GitHub macOS packages remain certificate-free ad-hoc signed and are not Apple-notarized. Windows installers remain experimental and are not attached to the macOS Release.
+
 ## [0.7.3] - 2026-11-12
 
 ### Fixed

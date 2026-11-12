@@ -46,7 +46,8 @@ function shade(color,alpha) {
 function ring(frame,inset,width,color,start,fraction) {
   start=((start||0)%1+1)%1;fraction=Math.max(0,Math.min(1,fraction==null?1:fraction));
   var native=!!frame.capsules;
-  if(native){width=Math.round(width);inset=Math.round(inset-width/2)+width/2;}
+  // Even strokes keep both the centerline and rounded caps on whole pixels.
+  if(native){width=Math.max(2,2*Math.round(width/2));inset=Math.round(inset-width/2)+width/2;}
   var group=frame.capsules?'ring'+(frame.rings++):null;
   if(!fraction)return;
   // A complete capsule needs one native border, not five independent strokes.
@@ -82,8 +83,13 @@ function ring(frame,inset,width,color,start,fraction) {
 // Each quantized loading pose touches at most one straight and one semicircle.
 // Reuse those widgets across junctions instead of replacing them.
 function highlight(frame,color,start,fraction,key) {
-  if(!frame.capsules){ring(frame,8,7,color,start,fraction);return;}
-  var rectAt=frame.rects.length,arcAt=frame.arcs.length;
+  var rectAt=frame.rects.length,arcAt=frame.arcs.length,layer=key.indexOf(':tip')>=0?2:1;
+  if(!frame.capsules){
+    ring(frame,8,7,color,start,fraction);
+    for(var r=rectAt;r<frame.rects.length;r++)frame.rects[r].layer=layer;
+    for(var a=arcAt;a<frame.arcs.length;a++)frame.arcs[a].layer=layer;
+    return;
+  }
   ring(frame,8,7,color,start,fraction);
   var rect=frame.rects[rectAt],arc=frame.arcs[arcAt];
   if(rect){
@@ -94,13 +100,29 @@ function highlight(frame,color,start,fraction,key) {
     }
     frame.rects.length=rectAt+1;rect.visible=true;
   }else{
-    rect={left:245,top:4,width:1,height:7,radius:3.5,color:color,visible:false};frame.rects.push(rect);
+    rect={left:245,top:4,width:1,height:8,radius:4,color:color,visible:false};frame.rects.push(rect);
   }
   if(arc)arc.visible=true;
-  else{arc={left:302,top:4,size:184,center:92,radius:91,start:0,total:1,width:7,color:color,visible:false};frame.arcs.push(arc);}
-  rect.id=key;arc.id=key;
+  else{arc={left:301,top:3,size:186,center:93,radius:92,start:0,total:1,width:8,color:color,visible:false};frame.arcs.push(arc);}
+  rect.id=key;arc.id=key;rect.layer=layer;arc.layer=layer;
 }
-function petRing(result,palette,color,count,alpha,level,cache) {
+function copyRing(result,base,colors) {
+  var i,shape;
+  for(i=0;i<base.rects.length;i++){
+    shape=base.rects[i];result.rects.push({id:shape.id,left:shape.left,top:shape.top,width:shape.width,height:shape.height,
+      radius:shape.radius,color:shape.tone==null?shape.color:colors[shape.tone]});
+  }
+  for(i=0;i<base.arcs.length;i++){
+    shape=base.arcs[i];result.arcs.push({id:shape.id,left:shape.left,top:shape.top,size:shape.size,center:shape.center,radius:shape.radius,
+      start:shape.start,total:shape.total,width:shape.width,color:shape.tone==null?shape.color:colors[shape.tone]});
+  }
+  if(result.capsules)for(i=0;i<base.capsules.length;i++){
+    shape=base.capsules[i];result.capsules.push({id:shape.id,left:shape.left,top:shape.top,width:shape.width,height:shape.height,
+      radius:shape.radius,stroke:shape.stroke,color:shape.tone==null?shape.color:colors[shape.tone]});
+  }
+  if(result.capsules)result.rings=base.rings;
+}
+function petRing(result,palette,color,count,alpha,level,cache,reuse) {
   if(!cache){
     ring(result,8,7,'#141D38');
     for(var slot=0;slot<count;slot++)ring(result,8,7,shade(slot?palette[slot]:color,alpha),slot/count,1/count);
@@ -111,6 +133,7 @@ function petRing(result,palette,color,count,alpha,level,cache) {
   if(changed){
     // One current ring layout and at most33 small color rows, never frame images.
     cache.palette=palette.slice();cache.capsules=!!result.capsules;cache.colors=[];
+    cache.logicalBase=null;cache.projectedBase=null;
     var base={rects:[],arcs:[]};
     if(result.capsules){base.capsules=[];base.rings=0;}
     ring(base,8,7,'#141D38');
@@ -127,20 +150,23 @@ function petRing(result,palette,color,count,alpha,level,cache) {
   if(!colors){
     colors=[];for(i=0;i<count;i++)colors.push(shade(i?palette[i]:color,alpha));cache.colors[level]=colors;
   }
-  // portrait() projects fresh scene objects; keep the cached logical paths intact.
-  for(i=0;i<cache.base.rects.length;i++){
-    shape=cache.base.rects[i];result.rects.push({id:shape.id,left:shape.left,top:shape.top,width:shape.width,height:shape.height,
-      radius:shape.radius,color:shape.tone==null?shape.color:colors[shape.tone]});
+  if(result.capsules&&reuse){
+    var projected=typeof reuse==='object',key=projected?'projectedBase':'logicalBase';
+    if(!cache[key]){
+      var stable={rects:[],arcs:[],capsules:[]};copyRing(stable,cache.base,colors);
+      cache[key]=projected?portrait(stable):stable;
+    }
+    var lists=['rects','arcs','capsules'],base=cache[key];
+    for(var list=0;list<lists.length;list++){
+      var name=lists[list];
+      for(i=0;i<base[name].length;i++)result[name].push(base[name][i]);
+      if(projected)reuse[name]=base[name].length;
+    }
+    result.rings=base.rings;return;
   }
-  for(i=0;i<cache.base.arcs.length;i++){
-    shape=cache.base.arcs[i];result.arcs.push({id:shape.id,left:shape.left,top:shape.top,size:shape.size,center:shape.center,radius:shape.radius,
-      start:shape.start,total:shape.total,width:shape.width,color:shape.tone==null?shape.color:colors[shape.tone]});
-  }
-  if(result.capsules)for(i=0;i<cache.base.capsules.length;i++){
-    shape=cache.base.capsules[i];result.capsules.push({id:shape.id,left:shape.left,top:shape.top,width:shape.width,height:shape.height,
-      radius:shape.radius,stroke:shape.stroke,color:shape.tone==null?shape.color:colors[shape.tone]});
-  }
-  if(result.capsules)result.rings=cache.base.rings;
+  // Reference callers receive fresh logical objects; production native paths
+  // reuse a colored/projected base and allocate only the moving highlights.
+  copyRing(result,cache.base,colors);
 }
 // Resource topology stays fixed: only lengths, visibility and arc percentages change.
 function nativeResources(result,values) {
@@ -173,7 +199,7 @@ function nativeResources(result,values) {
   }
   return result;
 }
-function frame(state,cache) {
+function frame(state,cache,reuse,fullBorder) {
   var result={rects:[],arcs:[]},theme=state.theme==='claude'||state.theme==='deepseek'?state.theme:'chatgpt';
   if(state.native){result.capsules=[];result.rings=0;result.glyphs=null;result.glyphTheme=theme;result.glyphColor='#000000';result.glyphLeft=0;}
   if(state.page===1&&state.native)return nativeResources(result,state.values);
@@ -186,10 +212,10 @@ function frame(state,cache) {
     }
     return result;
   }
-  var mode=state.mode||'idle',pose=ui.pose(mode,state.seconds||0),alpha=state.still?1:.32+.65*pose.level/31;
+  var mode=state.mode||'idle',pose=ui.pose(mode,state.seconds||0),alpha=state.native||state.still?1:.32+.65*pose.level/31;
   var palette=state.colors||activity.colors(theme,mode,state.stale?null:state.counts);
-  petRing(result,palette,palette[0],palette.length,alpha,state.still?32:pose.level,cache);
-  if(pose.loading){
+  if(!fullBorder)petRing(result,palette,palette[0],palette.length,alpha,state.native||state.still?32:pose.level,cache,reuse);
+  if(pose.loading&&!fullBorder){
     var light=theme==='claude'?'#EBA270':theme==='deepseek'?'#8FA2FF':'#94B5FF';
     var tip=theme==='claude'?'#FFE7CD':theme==='deepseek'?'#E6EBFF':'#E8F9FF';
     for(var n=0;n<pose.highlights;n++){
@@ -213,11 +239,12 @@ function portraitRect(rect) {
   return rect;
 }
 // Project the logical landscape scene before binding native widgets. No rotated drawing layer.
-function portrait(scene) {
+function portrait(scene,skip) {
+  skip=skip||{rects:0,capsules:0,arcs:0};
   var i;
-  for(i=0;i<scene.rects.length;i++)portraitRect(scene.rects[i]);
-  for(i=0;i<scene.capsules.length;i++)portraitRect(scene.capsules[i]);
-  for(i=0;i<scene.arcs.length;i++){
+  for(i=skip.rects;i<scene.rects.length;i++)portraitRect(scene.rects[i]);
+  for(i=skip.capsules;i<scene.capsules.length;i++)portraitRect(scene.capsules[i]);
+  for(i=skip.arcs;i<scene.arcs.length;i++){
     var arc=scene.arcs[i],left=arc.left;
     arc.left=192-arc.top-arc.size;arc.top=left;arc.start=(arc.start+90)%360;
   }
@@ -236,6 +263,77 @@ function portrait(scene) {
 }
 function createRenderer() {
   var cache={};
-  return function(state){return frame(state,cache);};
+  function render(state){return frame(state,cache);}
+  render.native=function(state){return frame(state,cache,'logical');};
+  render.portrait=function(state){
+    var skip={rects:0,capsules:0,arcs:0};
+    return portrait(frame(state,cache,skip),skip);
+  };
+  return render;
 }
-module.exports={portrait:portrait,frame:frame,createRenderer:createRenderer,ring:ring,glyph:glyph,shade:shade};
+// Every viewport reveals the same whole native border. Cuts only partition its
+// color; no separately rasterized straight or arc can change the outer contour.
+var halfLength=298+Math.PI*88;
+function halfX(distance) {
+  var quarter=Math.PI*44;
+  if(distance<=0)return 0;
+  if(distance>=halfLength)return 490;
+  if(distance<quarter)return Math.round(96-88*Math.cos(distance/88));
+  if(distance<=quarter+298)return Math.round(96+distance-quarter);
+  return Math.round(394+88*Math.sin((distance-quarter-298)/88));
+}
+function borderWindows(start,fraction,key,color) {
+  var windows=[],end=start+fraction;
+  // Top halves straddle the path origin; do not introduce a seam there.
+  for(var half=0;half<4;half++){
+    var from=-.25+half*.5,to=from+.5,low=Math.max(start,from),high=Math.min(end,to);
+    if(high<=low)continue;
+    var a=halfX((low-from)*2*halfLength),b=halfX((high-from)*2*halfLength),bottom=half%2;
+    if(bottom){a=490-a;b=490-b;}
+    var left=Math.min(a,b),right=Math.max(a,b);
+    if(right>left)windows.push({id:key+':'+half,left:left,top:bottom*96,width:right-left,height:96,color:color,visible:true});
+  }
+  return windows;
+}
+function projectWindows(windows) {
+  return windows.map(function(item){var copy={};for(var key in item)copy[key]=item[key];return portraitRect(copy);});
+}
+function createBorderRenderer() {
+  var paletteKey='',base=[],portraitBase=[];
+  function render(state,project) {
+    var scene=frame(state,null,null,true);
+    if(state.page===1)return project?portrait(scene):scene;
+    var mode=state.mode||'idle',theme=state.theme||'chatgpt',pose=ui.pose(mode,state.seconds||0);
+    var palette=state.colors||activity.colors(theme,mode,state.stale?null:state.counts),key=palette.join('|');
+    if(key!==paletteKey){
+      paletteKey=key;base=[];
+      if(palette.length===1)base.push({id:'tone:0',left:0,top:0,width:490,height:192,color:palette[0],visible:true});
+      else for(var slot=0;slot<palette.length;slot++)base=base.concat(borderWindows(slot/palette.length,1/palette.length,'tone:'+slot,palette[slot]));
+      portraitBase=projectWindows(base);
+    }
+    var bodies=[],tips=[],light=theme==='claude'?'#EBA270':theme==='deepseek'?'#8FA2FF':'#94B5FF';
+    var tip=theme==='claude'?'#FFE7CD':theme==='deepseek'?'#E6EBFF':'#E8F9FF';
+    function loading(target,start,fraction,id,color,enabled){
+      var pieces=enabled?borderWindows(start,fraction,id,color):[];
+      // Each short highlight crosses at most one half boundary. Keep two
+      // widgets alive even while crossing it or switching loading modes.
+      for(var part=0;part<2;part++){
+        var piece=pieces[part]||{left:0,top:0,width:1,height:1,color:color,visible:false};
+        piece.id=id+':'+part;target.push(piece);
+      }
+    }
+    for(var n=0;n<2;n++){
+      var start=(pose.start+n*.5)%1,enabled=!state.still&&pose.loading&&n<pose.highlights;
+      loading(bodies,start,pose.fraction,'loading:'+n,light,enabled);
+      loading(tips,(start+pose.fraction-.025)%1,.025,'tip:'+n,tip,enabled);
+    }
+    if(project)portrait(scene);
+    scene.border={base:project?portraitBase:base,bodies:project?projectWindows(bodies):bodies,tips:project?projectWindows(tips):tips,
+      breathColor:'rgba(0,0,0,'+(state.still?0:Math.round((1-(.32+.65*pose.level/31))*1000)/1000)+')'};
+    return scene;
+  }
+  function draw(state){return render(state,false);}
+  draw.native=draw;draw.portrait=function(state){return render(state,true);};
+  return draw;
+}
+module.exports={portrait:portrait,frame:frame,createRenderer:createRenderer,createBorderRenderer:createBorderRenderer,ring:ring,glyph:glyph,shade:shade};

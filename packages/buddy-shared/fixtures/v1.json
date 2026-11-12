@@ -99,7 +99,8 @@
       "completionVibrationModes": [
         "short",
         "long"
-      ]
+      ],
+      "maxActivityHoldMs": 120000
     },
     "powerSaving": true,
     "buddyFps": 20,
@@ -351,7 +352,8 @@
           "completionVibrationModes": [
             "short",
             "long"
-          ]
+          ],
+          "maxActivityHoldMs": 120000
         },
         "powerSaving": true,
         "buddyFps": 20,
@@ -449,7 +451,8 @@
         "completionVibrationModes": [
           "short",
           "long"
-        ]
+        ],
+        "maxActivityHoldMs": 120000
       },
       "powerSaving": true,
       "buddyFps": 20,

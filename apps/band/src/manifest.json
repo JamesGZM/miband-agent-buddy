@@ -1,9 +1,9 @@
 {
   "package": "com.macprobe.band9",
   "name": "Buddy",
-  "versionName": "0.5.10",
-  "versionCode": 32,
-  "minAPILevel": 1,
+  "versionName": "0.5.18",
+  "versionCode": 40,
+  "minAPILevel": 2,
   "icon": "/common/icon.png",
   "deviceTypeList": [
     "watch"

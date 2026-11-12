@@ -144,7 +144,9 @@ test('a changed inventory invalidates an older in-flight version receipt', async
   const h = runtimeHarness({bandPackage: available, onWrite(c, child) {
     if (c.op === 'launch_buddy') child.later({event: 'result', id: c.id, ok: true});
   }}); t.after(() => h.runtime.stop());
-  await h.connect(); await h.clock.advance(4000);
+  await h.connect();
+  h.children[0].event({event:'buddy',installed:true,versionCode:15});
+  await h.clock.advance(4000);
   const before = h.calls.filter(c => c.op === 'snapshot').at(-1);
   h.children[0].event({event: 'buddy', installed: true, versionCode: 16});
   h.children[0].event(ack(before.payload, {appVersion: '0.5.3'}));

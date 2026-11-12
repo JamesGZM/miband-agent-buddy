@@ -44,10 +44,10 @@ test('activity lease fields are additive, paired and bounded at the band boundar
   const base = {...fixture.snapshot};
   delete base.activityHoldMs; delete base.idleHoldMs;
   assert.deepEqual(protocol.decodeMessage(JSON.stringify(base)), base);
-  for (const [activityHoldMs, idleHoldMs] of [[15000,60000],[0,5000],[1000,1800000]]) {
+  for (const [activityHoldMs, idleHoldMs] of [[15000,60000],[120000,60000],[0,5000],[1000,1800000]]) {
     assert.equal(protocol.decodeMessage(JSON.stringify({...base,activityHoldMs,idleHoldMs})).activityHoldMs, activityHoldMs);
   }
-  for (const pair of [{activityHoldMs:15000},{idleHoldMs:60000},{activityHoldMs:15001,idleHoldMs:60000},
+  for (const pair of [{activityHoldMs:15000},{idleHoldMs:60000},{activityHoldMs:120001,idleHoldMs:60000},
     {activityHoldMs:-1,idleHoldMs:60000},{activityHoldMs:999,idleHoldMs:60000},{activityHoldMs:0,idleHoldMs:4999},
     {activityHoldMs:15000,idleHoldMs:1800001},{activityHoldMs:true,idleHoldMs:60000}]) {
     assert.throws(() => protocol.decodeMessage(JSON.stringify({...base,...pair})));

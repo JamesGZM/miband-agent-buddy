@@ -6,6 +6,7 @@ import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
 import activityRing from '../../../../packages/buddy-shared/presentation/activity-ring.js';
 import { createBatteryAlert } from './battery-alert.mjs';
 import { createCompletionQueue } from './completion-queue.mjs';
+import snapshotProtocol from '../../../../packages/buddy-shared/protocol/snapshot.js';
 
 export const DEFAULT_TIMINGS = Object.freeze({
   sample: 2000, ack: 8000, probe: 30000, connect: 55000,
@@ -19,7 +20,8 @@ export function installationTimeout(sizeBytes) {
 }
 const LEGACY_WAKE_HOLD_MS = 30000;
 const MAX_WAKE_HOLD_MS = 1800000;
-const ACTIVITY_HOLD_MS = 15000;
+const LEGACY_ACTIVITY_HOLD_MS = 15000;
+const ACTIVITY_HOLD_MS = snapshotProtocol.MAX_ACTIVITY_HOLD_MS;
 const RESPONSE_RECOVERY = 'activity_unresponsive';
 const PREPARE_RECOVERY = 'activity_prepare_retry';
 const LINK_READY = ["connected", "waiting", "standby"];
@@ -48,6 +50,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   let batteryAt=0,batteryDevice=null,chargingKnown=null,chargingTimer=null,probeFailures=0,buddyDisplayed=false;
   let responseRecoveryTimer=null,responseRecoveryAttempted=false;
   let prepareRecovery=null,deviceAfterWake=false;
+  let reconnectWakeTimer=null,bridgeReconnect=false;
   const completions = createCompletionQueue({now,makeId});
   const agent = createCodexState({now,onEvent(event, previous) {
       if (desired && !paused && state.connection !== "installing") {
@@ -103,9 +106,18 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     prepareRecovery=null;
     wakePolicy.clearConnection(PREPARE_RECOVERY);
   }
+  function clearReconnectWake(){cancel(reconnectWakeTimer);reconnectWakeTimer=null;}
+  function activeDisplay(ack){
+    return ack?.keepScreen==='on' && ack.wakeDisplay?.active===true && ack.pageLifecycle?.visible===1;
+  }
+  function activityHold(){
+    const maximum=capabilities?.maxActivityHoldMs;
+    return Number.isInteger(maximum) && maximum>=1000 ? Math.min(ACTIVITY_HOLD_MS,maximum) : LEGACY_ACTIVITY_HOLD_MS;
+  }
   function cancelResponseRecovery(){
     clearResponseRecovery();
     clearPrepareRecovery();
+    clearReconnectWake();
     if([RESPONSE_RECOVERY,PREPARE_RECOVERY].includes(wakeFlight?.reason)){
       state.wake={...state.wake,status:'cancelled'};
       clearWake();clearPending();
@@ -195,6 +207,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   function beginOperation(request, kind, target) {
     clearResponseRecovery();
     clearPrepareRecovery();
+    clearReconnectWake();
     settleOperation("cancelled", "superseded");
     operation = {id: request, kind, status: "waking", code: null, at: now(), target};
     if (!transport || !desired || !LINK_READY.includes(state.connection)) settleOperation("failed", "not_connected");
@@ -265,6 +278,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     cancel(wakeDeadline); wakeDeadline = null; wakeFlight = null;
   }
   function launchWake(event) {
+    clearReconnectWake();
     if(event.reason!==RESPONSE_RECOVERY)clearResponseRecovery();
     if(event.reason!==PREPARE_RECOVERY)clearPrepareRecovery();
     clearPending();
@@ -294,6 +308,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   }
   async function stop() {
     deviceAfterWake=false;
+    bridgeReconnect=false;
     cancelResponseRecovery();
     completions.clear();clearChargingRecovery();buddyDisplayed=false;
     diagnose('stopped');
@@ -379,7 +394,19 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         cancel(watchdog);
         const restoreActivity = settings.activityKeepAwake && agent.status().activeSessions > 0;
         const checkFromLaunch = !paused && (launchOnConnect || restoreActivity);
-        if (checkFromLaunch) wakePolicy.requestConnection(launchOnConnect ? "connection" : "activity_reconnect");
+        if(checkFromLaunch){
+          if(!launchOnConnect && restoreActivity && bridgeReconnect){
+            // New Buddy can retain an active display during this reconnect.
+            // Let a fresh snapshot confirm it before reopening the page.
+            const owner=transport;
+            reconnectWakeTimer=schedule(()=>{
+              reconnectWakeTimer=null;
+              if(owner!==transport || !desired || paused || !settings.activityKeepAwake ||
+                agent.status().activeSessions===0 || !LINK_READY.includes(state.connection) || activeDisplay(state.ack))return;
+              wakePolicy.requestConnection('activity_reconnect');launchPendingWake();
+            },timings.ack);
+          }else wakePolicy.requestConnection(launchOnConnect ? "connection" : "activity_reconnect");
+        }
         launchOnConnect = false;
         state.connection = "waiting";
         state.error = null;
@@ -410,7 +437,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (event.event === "buddy") {
         if (state.connection === "installing") return;
         clearBuddyCheck();
-        if (state.buddy.installed !== event.installed || state.buddy.installedVersionCode !== event.versionCode) {
+        if (state.buddy.installed !== null && (state.buddy.installed !== event.installed || state.buddy.installedVersionCode !== event.versionCode)) {
           // An older in-flight application reply must not relabel a newly observed package.
           clearPending(); state.ack = null; state.lastAckAt = null; capabilities = null;
         }
@@ -449,6 +476,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         if(event.ack.keepScreen==='on' && event.ack.pageLifecycle?.visible===1)responseRecoveryAttempted=false;
         diagnose('connected');probeFailures=0;cancel(pingDeadline);pingDeadline=null;
         const ack = event.ack;if(ack.pageLifecycle?.visible===1)buddyDisplayed=true;
+        bridgeReconnect=activeDisplay(ack) && ack.capabilities?.activityHold===true &&
+          Number.isInteger(ack.capabilities?.maxActivityHoldMs) && ack.capabilities.maxActivityHoldMs>=ACTIVITY_HOLD_MS;
+        if(activeDisplay(ack) || ack.pageLifecycle?.visible===0)clearReconnectWake();
         if(pending.completion&&ack.completion?.id===pending.completion.id)completions.acknowledge(ack.completion);
         capabilities = ack.capabilities && typeof ack.capabilities === "object" ? ack.capabilities : null;
         if (wakeFlight?.queued && pending.wakeId === wakeFlight.id) {
@@ -539,7 +569,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
           installed: true,
           buddy: acknowledgedBuddyState(state.buddy, ack.appVersion),
         };
-        if(!wakeFlight && (firstReply || deviceAfterWake)){
+        if(!wakeFlight && reconnectWakeTimer===null && (firstReply || deviceAfterWake)){
           deviceAfterWake=false;requestDevice();
         }
         publish();
@@ -827,7 +857,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       };
       if (wakeFlight) { pending.wakeId = wakeFlight.id; pending.wakeHoldMs = wakeHold(); }
       if (capabilities?.activityHold === true) {
-        pending.activityHoldMs = !paused && settings.activityKeepAwake && activity.activeSessions > 0 ? ACTIVITY_HOLD_MS : 0;
+        pending.activityHoldMs = !paused && settings.activityKeepAwake && activity.activeSessions > 0 ? activityHold() : 0;
         pending.idleHoldMs = settings.wakeHoldMs ?? 20000;
         if(capabilities?.activityRing!==true)pending.sessionCounts = {...activity.sessionCounts};
       }
