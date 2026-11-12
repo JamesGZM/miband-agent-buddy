@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buddyPackageView, bandOnlyError } from '../../apps/desktop/ui/band-package.js';
-import { desktopUpdateView } from '../../apps/desktop/ui/desktop-update.js';
+import { desktopUpdateView, updateErrorMessage } from '../../apps/desktop/ui/desktop-update.js';
 
 test('band management distinguishes unknown, absent, update and current inventories', () => {
   const runtime = {connection:'standby'};
@@ -25,6 +25,15 @@ test('band management distinguishes unknown, absent, update and current inventor
   runtime.connection = 'disconnected';
   assert.equal(buddyPackageView(runtime).canCheck, false);
   assert.equal(buddyPackageView(runtime).installedVersion, null);
+});
+
+test('a verified package can retry pre-install failures while showing the failure reason',()=>{
+  for(const error of ['install_location','storage_error','install_failed']){
+    const view=desktopUpdateView({status:'ready',canInstall:true,error});
+    assert.equal(view.canInstall,true);assert.equal(view.hasUpdate,true);
+    assert.equal(view.label,updateErrorMessage(error));
+  }
+  assert.equal(desktopUpdateView({status:'error',canInstall:false,error:'package_invalid'}).canInstall,false);
 });
 
 test('only Buddy package errors are restricted to Band; connection errors remain visible', () => {

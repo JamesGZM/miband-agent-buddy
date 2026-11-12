@@ -69,3 +69,38 @@ test('approved production page owns one controller and has no bitmap component',
   const manifest=JSON.parse(readFileSync(new URL('../../apps/band/src/manifest.json',import.meta.url),'utf8'));
   assert.equal(manifest.router.pages['pages/index'].launchMode,'singleTask');
 });
+
+test('snapshot bursts ACK immediately but paint only the latest host plan at the next pet frame',async()=>{
+  const clock=fakeClock(),sent=[],channel={send:o=>sent.push(o.data)};
+  const controller=createPageController({...clock,render:drawing.createBorderRenderer(),
+    storage:{get:o=>o.fail(),set:o=>o.success()},application:{terminate(){}},
+    brightness:{setKeepScreenOn:o=>o.success()},interconnect:{instance:()=>channel}});
+  const page=Object.assign({},controller,controller.private);
+  page.onInit();page.onShow();
+  const base={v:1,type:'snapshot',session:'burst',text:'',value:0,cpu:42,mode:'working',
+    activityHoldMs:15000,idleHoldMs:60000,activityRing:['#647FFF','#78EDFF']};
+  const send=(seq,extra={})=>channel.onmessage({data:JSON.stringify({...base,seq,...extra})});
+  send(1);await clock.advance(100);
+  const nodes=page.borderBase.slice(),frames=page.diagnostics().frames;
+  for(let seq=2;seq<=101;seq++)send(seq,{cpu:seq%100,activityRing:[...base.activityRing]});
+  assert.equal(sent.length,101);
+  assert.equal(page.diagnostics().frames,frames,'receiving packets must not multiply native paints');
+  await clock.advance(100);
+  assert.equal(page.diagnostics().frames,frames+1);
+  assert.deepEqual(page.borderBase,nodes,'unchanged colors preserve keyed native base widgets');
+  for(let seq=102;seq<112;seq++)send(seq,{activityRing:['#647FFF','#78EDFF','#A192FF']});
+  send(112,{mode:'attention',activityRing:['#EBA270']});
+  assert.equal(sent.at(-1).mode,'attention');assert.equal(sent.at(-1).seq,112);
+  assert.equal(page.diagnostics().frames,frames+1);
+  await clock.advance(100);
+  assert.ok(page.borderBase.every(node=>node.borderStyle.includes('#EBA270')));
+  assert.equal(page.diagnostics().frames,frames+2);
+  send(113,{page:1});assert.equal(page.pageIndex,1);
+  assert.equal(page.diagnostics().frames,frames+3,'page switches remain immediate');
+  page.onHide();const hiddenFrames=page.diagnostics().frames;
+  for(let seq=114;seq<=130;seq++)send(seq,{page:0});
+  await clock.advance(1000);assert.equal(page.diagnostics().frames,hiddenFrames);
+  assert.equal(clock.size,0);
+  page.onShow();assert.equal(page.diagnostics().frames,hiddenFrames+1);
+  page.onDestroy();assert.equal(clock.size,0);
+});

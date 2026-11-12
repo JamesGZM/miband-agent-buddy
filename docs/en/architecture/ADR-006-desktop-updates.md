@@ -35,3 +35,5 @@ The desktop checks `https://buddy-updates.ailaogong.men/buddy/releases/latest` f
 The updater derives the Worker download URL from the exact official tag and architecture asset. It streams to a private temporary archive and requires the selected size and SHA-256 before extraction. A failed, partial or corrupt Worker download restarts from byte zero at the fixed GitHub URL. Storage failures stop immediately. Both sources retain archive, bundle identity/version, architecture and signature checks before installation; replacement and rollback are unchanged.
 
 Operational details: [update service](../development/updates.md).
+
+Install handoff retains the verified download until the sibling copy is validated and the installation helper is successfully spawned. Copy, validation, helper-write or spawn failure removes only the owned partial sibling stage. Pre-handoff storage/location/helper failures preserve a retryable ready state and show the failure reason; retries revalidate the bundle. Invalid packages cannot retry installation.

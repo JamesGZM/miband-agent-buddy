@@ -147,12 +147,15 @@ function createPageController(deps) {
           try { msg=protocol.acceptMessage(event.data,lastMessage); } catch(error) { internal.errorText='Invalid message'; return; }
           if(!msg)return;
           settingsController.apply(msg);
-          if(msg.page!=null&&msg.page!==self.pageIndex){self.pageIndex=msg.page;snapMetrics=true;metricsStamp='';}
+          var pageChanged=msg.page!=null&&msg.page!==self.pageIndex;
+          if(pageChanged){self.pageIndex=msg.page;snapMetrics=true;metricsStamp='';}
           if(visible&&msg.wakeId)keepController.hold(msg.wakeId,msg.wakeHoldMs);
           if(visible&&msg.activityHoldMs!=null)keepController.activity(msg.activityHoldMs,msg.idleHoldMs);
           lastMessage=msg; receivedAt=clock(); internal.received+=1;
           if((msg.mode||'idle')!==activeMode){activeMode=msg.mode||'idle';modeAt=receivedAt;}
-          self.tick();
+          // The existing pet animation tick paints the latest host plan. ACKs,
+          // leases and notifications remain immediate during snapshot bursts.
+          if(pageChanged||self.pageIndex!==0||!animatePet||timer===null)self.tick();
           var ack=protocol.makeAck(msg,internal.keepResult,internal.received);
           ack.appVersion=deps.appVersion||'0.5.5';ack.capabilities={maxWakeHoldMs:1800000,maxActivityHoldMs:protocol.MAX_ACTIVITY_HOLD_MS,themes:['chatgpt','claude','deepseek'],page:true,activityHold:true,activityRing:true,powerSaving:true,buddyFps:true};ack.wakeDisplay=keepController.display();var settingsAck=settingsController.snapshot(msg);for(var settingKey in settingsAck)ack[settingKey]=settingsAck[settingKey];ack.keepDiagnostics=keepController.snapshot();ack.page=self.pageIndex;ack.memory=!!msg.memory;ack.disk=!!msg.disk;
           if(screenBrightness){if(msg.wakeId&&msg.wakeId!==brightnessWake&&settingsAck.settingsApplied){brightnessWake=msg.wakeId;screenBrightness.configure(settingsAck.bandBrightness,settingsAck.powerSaving,settingsAck.bandAutoBrightness);}ack.capabilities.bandBrightness=true;ack.capabilities.bandAutoBrightness=true;ack.brightness=screenBrightness.snapshot();}

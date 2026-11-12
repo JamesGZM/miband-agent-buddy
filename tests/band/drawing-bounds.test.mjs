@@ -65,7 +65,7 @@ test('page measures static primitives once, does not probe animation frames and 
  const page=Object.assign({},controller,controller.private);
  page.onInit();page.onShow();
  const message={v:1,type:'snapshot',session:'bounds-fixture',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456','#ABCDEF']};
- channel.onmessage({data:JSON.stringify(message)});await clock.advance(200);
+ channel.onmessage({data:JSON.stringify(message)});await clock.advance(100);await clock.advance(200);
  assert.equal(calls.length,3);assert.ok(calls.some(id=>id.startsWith('buddy-base-capsules-')));
  assert.ok(calls.some(id=>id.startsWith('buddy-base-rects-')));assert.ok(calls.some(id=>id.startsWith('buddy-base-arcs-')));
  await clock.advance(2000);channel.onmessage({data:JSON.stringify({...message,seq:2})});
@@ -93,7 +93,7 @@ test('one-task page measures the loading primitives rather than only the complet
   storage:{get:o=>o.fail(),set:o=>o.success()},application:{terminate(){}},brightness:{setKeepScreenOn:o=>o.success()},interconnect:{instance:()=>channel}});
  const page=Object.assign({},controller,controller.private);page.onInit();page.onShow();
  const message={v:1,type:'snapshot',session:'one-task-bounds',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456']};
- channel.onmessage({data:JSON.stringify(message)});await clock.advance(200);
+ channel.onmessage({data:JSON.stringify(message)});await clock.advance(100);await clock.advance(200);
  assert.equal(calls.length,3);assert.ok(calls.some(id=>id.startsWith('buddy-live-rects-')));assert.ok(calls.some(id=>id.startsWith('buddy-live-arcs-')));
  await clock.advance(2000);channel.onmessage({data:JSON.stringify({...message,seq:2})});
  assert.equal(calls.length,3);assert.equal(sent.at(-1).drawing.bounds.find(x=>x.kind==='rects').expected.width,8);

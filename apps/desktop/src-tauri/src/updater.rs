@@ -635,8 +635,43 @@ fn claim_install(state: &mut UpdateState) -> Result<(PathBuf, String)> {
         .clone()
         .ok_or("update_not_ready")?;
     state.view.status = "installing";
+    state.view.error = None;
     state.view.can_install = false;
     Ok((staged, expected))
+}
+fn install_failed(state: &mut UpdateState, code: &'static str) {
+    let retry = state.staged.is_some()
+        && matches!(
+            code,
+            "install_location" | "storage_error" | "install_failed"
+        );
+    state.view.status = if retry { "ready" } else { "error" };
+    state.view.error = Some(code);
+    state.view.can_install = retry;
+}
+fn handoff_install(
+    staged: &Path,
+    parent: &Path,
+    download_parent: Option<&Path>,
+    prepare_and_launch: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    let stage = private_dir(parent).map_err(|_| "install_location")?;
+    if let Err(code) = prepare_and_launch(&stage) {
+        let _ = fs::remove_dir_all(&stage);
+        return Err(code);
+    }
+    // The helper now owns the sibling stage. Retain the verified download on
+    // every pre-handoff failure so a retry does not require another download.
+    if let (Some(directory), Some(download_parent)) = (staged.parent(), download_parent) {
+        if directory.parent() == Some(download_parent)
+            && directory
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("update-"))
+        {
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+    Ok(())
 }
 pub fn install(app: tauri::AppHandle) -> std::result::Result<(), String> {
     let (staged, expected) = {
@@ -654,50 +689,41 @@ pub fn install(app: tauri::AppHandle) -> std::result::Result<(), String> {
             return Err("install_location");
         }
         let parent = bundle.parent().ok_or("install_location")?;
-        let stage = private_dir(parent).map_err(|_| "install_location")?;
-        let next = stage.join(APP_NAME);
-        let status = Command::new("/usr/bin/ditto")
-            .arg(&staged)
-            .arg(&next)
-            .status()
-            .map_err(|_| "storage_error")?;
-        if !status.success() {
-            let _ = fs::remove_dir_all(&stage);
-            return Err("storage_error");
-        }
-        validate_bundle(&next, &expected)?;
-        // Only remove the owned download cache once its verified sibling copy is ready.
-        if let (Some(directory), Ok(parent)) = (staged.parent(), app.path().app_data_dir()) {
-            if directory.parent() == Some(parent.as_path())
-                && directory
-                    .file_name()
-                    .is_some_and(|n| n.to_string_lossy().starts_with("update-"))
-            {
-                let _ = fs::remove_dir_all(directory);
+        let download_parent = app.path().app_data_dir().ok();
+        handoff_install(&staged, parent, download_parent.as_deref(), |stage| {
+            let next = stage.join(APP_NAME);
+            let status = Command::new("/usr/bin/ditto")
+                .arg(&staged)
+                .arg(&next)
+                .status()
+                .map_err(|_| "storage_error")?;
+            if !status.success() {
+                return Err("storage_error");
             }
-        }
-        let helper = stage.join("install.sh");
-        fs::write(&helper, INSTALL_SCRIPT).map_err(|_| "storage_error")?;
-        let backup = parent.join(format!(
-            "MiBand Agent Buddy.previous-{:016x}.app",
-            rand::random::<u64>()
-        ));
-        Command::new("/bin/sh")
-            .arg(&helper)
-            .arg(std::process::id().to_string())
-            .arg(bundle)
-            .arg(&next)
-            .arg(&backup)
-            .arg("/usr/bin/open")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| "install_failed")?;
-        Ok(())
+            validate_bundle(&next, &expected)?;
+            let helper = stage.join("install.sh");
+            fs::write(&helper, INSTALL_SCRIPT).map_err(|_| "storage_error")?;
+            let backup = parent.join(format!(
+                "MiBand Agent Buddy.previous-{:016x}.app",
+                rand::random::<u64>()
+            ));
+            Command::new("/bin/sh")
+                .arg(&helper)
+                .arg(std::process::id().to_string())
+                .arg(bundle)
+                .arg(&next)
+                .arg(&backup)
+                .arg("/usr/bin/open")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|_| "install_failed")?;
+            Ok(())
+        })
     })();
     if let Err(code) = result {
-        error(&app, code);
+        mutate(&app, |state| install_failed(state, code));
         return Err(code.into());
     }
     mutate(&app, |s| s.view.status = "installing");
@@ -1165,6 +1191,68 @@ mod tests {
         assert!(claim_install(&mut state).is_ok());
         assert_eq!(state.view.status, "installing");
         assert_eq!(claim_install(&mut state), Err("update_not_ready"));
+    }
+    #[test]
+    fn pre_handoff_failures_clean_sibling_stages_and_preserve_the_verified_download() {
+        let root = private_dir(&std::env::temp_dir()).unwrap();
+        let data = root.join("data");
+        let applications = root.join("Applications");
+        fs::create_dir(&data).unwrap();
+        fs::create_dir(&applications).unwrap();
+        let download = private_dir(&data).unwrap();
+        let staged = download.join(APP_NAME);
+        fs::write(&staged, "verified fixture").unwrap();
+        for code in ["storage_error", "package_invalid", "install_failed"] {
+            let mut attempted = None;
+            assert_eq!(
+                handoff_install(&staged, &applications, Some(&data), |stage| {
+                    attempted = Some(stage.to_owned());
+                    fs::write(stage.join("partial"), "partial fixture").unwrap();
+                    Err(code)
+                }),
+                Err(code)
+            );
+            assert!(!attempted.unwrap().exists());
+            assert_eq!(fs::read_to_string(&staged).unwrap(), "verified fixture");
+        }
+        let mut handed_off = None;
+        handoff_install(&staged, &applications, Some(&data), |stage| {
+            assert!(
+                staged.exists(),
+                "download survives until helper launch succeeds"
+            );
+            handed_off = Some(stage.to_owned());
+            fs::write(stage.join("next"), "verified fixture").unwrap();
+            Ok(())
+        })
+        .unwrap();
+        assert!(!download.exists());
+        assert!(handed_off.unwrap().join("next").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn install_retry_preserves_validation_and_clears_the_previous_error_on_claim() {
+        for code in [
+            "install_location",
+            "storage_error",
+            "install_failed",
+            "package_invalid",
+        ] {
+            let mut state = UpdateState::default();
+            state.view.status = "ready";
+            state.view.latest_version = Some("0.6.0".into());
+            state.staged = Some("synthetic/Update.app".into());
+            claim_install(&mut state).unwrap();
+            install_failed(&mut state, code);
+            assert_eq!(state.view.error, Some(code));
+            assert_eq!(state.view.can_install, code != "package_invalid");
+            if code == "package_invalid" {
+                assert_eq!(claim_install(&mut state), Err("update_not_ready"));
+            } else {
+                assert!(claim_install(&mut state).is_ok());
+                assert!(state.view.error.is_none());
+            }
+        }
     }
     #[test]
     #[ignore = "requires the separately built macOS release archive"]

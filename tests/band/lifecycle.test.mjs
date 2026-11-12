@@ -182,7 +182,7 @@ test('native dynamic update cost stays constant from one through six task colors
  for(let count=1;count<=6;count++){
   const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
   const msg={v:1,type:'snapshot',session:'render-budget',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:colors.slice(0,count)};
-  channel.onmessage({data:JSON.stringify(msg)});
+  channel.onmessage({data:JSON.stringify(msg)});page.tick();
   let staticWrites=0,dynamicWrites=0,churn=0;
   for(const name of ['drawRects','drawArcs','drawCapsules','tipRects','tipArcs','baseRects','baseArcs','baseCapsules']){
    const list=page[name];
@@ -215,14 +215,14 @@ test('page observers never receive the globally cached glyph objects',()=>{
 test('pet geometry responds to counts, stale snapshots and idle without extra UI',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'counts',seq:1,text:'',value:0,cpu:42,mode:'attention',sessionCounts:{thinking:1,working:1,attention:1}};
- channel.onmessage({data:JSON.stringify(base)});const multi=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
+ channel.onmessage({data:JSON.stringify(base)});page.tick();const multi=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  setTime(1900);page.tick();assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),multi,'base colors update only with state');
  const breathing=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
- channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});
+ channel.onmessage({data:JSON.stringify({...base,seq:2,sessionCounts:{thinking:0,working:0,attention:1}})});page.tick();
  assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),breathing);
- channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});const working=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
+ channel.onmessage({data:JSON.stringify({...base,seq:3,mode:'working'})});page.tick();const working=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  setTime(11900);page.tick();assert.notEqual(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),working);
- channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});
+ channel.onmessage({data:JSON.stringify({...base,seq:4,mode:'idle',sessionCounts:{thinking:0,working:0,attention:0}})});page.tick();
  const idle=JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]);
  channel.onmessage({data:JSON.stringify({...base,seq:5,sessionCounts:{thinking:128,working:1,attention:0}})});
  assert.equal(JSON.stringify([page.baseArcs,page.baseCapsules,page.drawArcs,page.drawCapsules]),idle);assert.equal(page.diagnostics().errorText,'Invalid message');
@@ -303,7 +303,7 @@ test('selected frame rate changes live, power saving forces10 and turning it off
 test('multi-session animation reuses every bound shape without observer list mutations',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'multi-animation',seq:1,text:'',value:0,cpu:0,mode:'working',sessionCounts:{thinking:0,working:6,attention:0}};
- channel.onmessage({data:JSON.stringify(base)});
+ channel.onmessage({data:JSON.stringify(base)});page.tick();
  const lists=[page.drawRects,page.drawArcs,page.drawCapsules,page.tipRects,page.tipArcs],items=lists.map(list=>[...list]);
  for(const list of lists)list.splice=()=>assert.fail('animation changed an observed shape list');
  for(let tick=1;tick<=480;tick++){
@@ -341,7 +341,7 @@ test('band applies host-prepared colors and never passes AI counts into animatio
  page.onShow();
  const activityRing=['#123456','#ABCDEF'];
  const base={v:1,type:'snapshot',session:'prepared-ring',seq:1,text:'',value:0,cpu:0,mode:'working',activityRing};
- channel.onmessage({data:JSON.stringify(base)});
+ channel.onmessage({data:JSON.stringify(base)});page.tick();
  assert.deepEqual(rendered.colors,activityRing);assert.equal(sent.at(-1).data.capabilities.activityRing,true);
  const colors=rendered.colors;setTime(1500);page.tick();assert.equal(rendered.colors,colors);
  setTime(11000);page.tick();assert.equal(rendered.mode,'offline');assert.equal(rendered.colors,null);
@@ -353,7 +353,7 @@ test('band applies host-prepared colors and never passes AI counts into animatio
 test('static native ring bindings are recreated only for palette or page changes',()=>{
  const {page,channel,setTime}=harness({keepScreen:false});page.onShow();
  const base={v:1,type:'snapshot',session:'static-native',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:['#123456','#ABCDEF']};
- channel.onmessage({data:JSON.stringify(base)});
+ channel.onmessage({data:JSON.stringify(base)});page.tick();
  const names=['baseRects','baseArcs','baseCapsules'],lists=names.map(name=>page[name]),items=lists.map(list=>[...list]);
  const original=JSON.stringify(items);
  for(let i=1;i<=80;i++){
@@ -362,7 +362,7 @@ test('static native ring bindings are recreated only for palette or page changes
  }
  channel.onmessage({data:JSON.stringify({...base,seq:2})});
  assert.equal(JSON.stringify(lists),original,'identical fresh snapshots retain static bindings');
- channel.onmessage({data:JSON.stringify({...base,seq:3,activityRing:['#123456','#76CDB8']})});
+ channel.onmessage({data:JSON.stringify({...base,seq:3,activityRing:['#123456','#76CDB8']})});page.tick();
  assert.notEqual(JSON.stringify(lists),original);
  for(let n=0;n<lists.length;n++)for(const item of lists[n]){const old=items[n].find(old=>old.id===item.id);if(old)assert.equal(item.style,old.style,'a reused tid cannot change static style');}
  assert.equal(JSON.stringify(items),original,'do not mutate detached static items');
@@ -456,7 +456,7 @@ test('whole-border loading updates have constant cost at one through six colors 
  for(let count=1;count<=6;count++){
   const {page,channel,setTime,timers,sent}=harness({keepScreen:false,render:geometry.createBorderRenderer(),drawingCapabilities:{renderer:'native-border'}});
   page.onShow();channel.onmessage({data:JSON.stringify({v:1,type:'snapshot',session:'border-animation',seq:1,text:'',value:0,cpu:42,mode:'working',activityRing:colors.slice(0,count)})});
-  assert.equal(sent.at(-1).data.drawing.animationEnabled,true);
+  page.tick();assert.equal(sent.at(-1).data.drawing.animationEnabled,true);
   let staticWrites=0,dynamicWrites=0,churn=0;
   for(const name of ['borderBase','borderBodies','borderTips']){
    const list=page[name];

@@ -91,3 +91,5 @@ The alternative of restoring partial progress arcs would reintroduce the unaccep
 
 
 Physical follow-up: the user accepted the restored effects while two real tasks were running and reported no hang or reboot so far. The desktop preview visibly showed two task colors and loading. This is a short initial check, not an endurance result or proof of six-task stability.
+
+Buddy 0.5.19 coalesces incoming pet-page snapshots into the already scheduled animation tick. Packet acceptance, lease application, ACKs and completion notification processing remain immediate. Intermediate host color plans do not allocate native palettes; only the latest plan is painted. Page switches and static/resource pages retain immediate updates. This bounds rendering work under a burst without reducing the selected animation rate; software tests do not establish physical stability.

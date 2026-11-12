@@ -32,7 +32,7 @@ export function desktopUpdateView(update = {}) {
   };
   const status = update.status || "idle";
   return {
-    label: status === "error" ? errors[update.error] || labels.error : labels[status] || labels.error,
+    label: status === "error" || status === "ready" && update.error ? errors[update.error] || labels.error : labels[status] || labels.error,
     canCheck: !["checking", "downloading", "installing"].includes(status),
     canDownload: status === "available",
     canInstall: status === "ready" && update.canInstall === true,
