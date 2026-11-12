@@ -11,6 +11,10 @@ mod protocol;
 mod runtime;
 mod services;
 mod state;
+#[cfg(target_os = "macos")]
+mod updater;
+#[cfg(windows)]
+#[path = "updater_windows.rs"]
 mod updater;
 mod vault;
 #[allow(dead_code)]

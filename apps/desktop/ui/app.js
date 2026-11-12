@@ -1,4 +1,5 @@
 import { bridge } from "./bridge.js";
+import { wakeProgress } from "./connection-status.js";
 import { initialState } from "./state.js";
 import { startPreview } from "./preview.js";
 import { createToast } from "./toast.js";
@@ -623,7 +624,7 @@ function render() {
         `<button class="nav ${page === k ? "active" : ""}" data-page="${k}" data-label="${t(labels[k])}" aria-label="${t(labels[k])}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[k]}</svg><span class="nav-label">${t(labels[k])}</span></button>`,
     )
     .join("");
-  const status = t(connectionNames[r.connection] || "未連線");
+  const status = t(wakeProgress(r) || connectionNames[r.connection] || "未連線");
   const deviceName = device?.name || t("尚未選擇手環");
   const ready = ["connected", "waiting", "standby"].includes(r.connection);
   const battery = Number.isFinite(r.device?.battery) ? r.device.battery : r.battery;
@@ -664,7 +665,7 @@ function renderLoading(error = false) {
   $("#startup").innerHTML = `<img class="startup-icon" src="assets/app-icon.png" alt=""><p>${error ? t("無法讀取本機服務狀態") : t("載入中…")}</p>${error ? `<button class="button" data-action="retry">${t("重新載入")}</button>` : spinner}`;
 }
 function updateLive() {
-  const progress = operationActive() ? t(operationProgress[operation().status]) : bandActions.has(busyAction) ? actionProgress(busyAction) : "";
+  const progress = operationActive() ? t(operationProgress[operation().status]) : bandActions.has(busyAction) ? actionProgress(busyAction) : t(wakeProgress(state.runtime));
   $("#operation-status").innerHTML = progress ? `${spinner}<span>${progress}</span>` : "";
   if ($("#last-sync")) $("#last-sync").textContent = syncText();
   if ($("#device-sync")) $("#device-sync").textContent = syncText();

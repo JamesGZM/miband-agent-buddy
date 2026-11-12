@@ -8,7 +8,7 @@ const errors = {
   network_error: "無法連接 GitHub，請檢查網路後重試。",
   open_failed: "無法開啟瀏覽器，請手動開啟專案連結。",
   package_invalid: "更新包未通過驗證，請在 GitHub 查看發布資訊。",
-  platform_unsupported: "目前沒有適用於這台 Mac 的更新包。",
+  platform_unsupported: "此平台暫不支援 App 內更新，請前往 GitHub 下載。",
   rate_limited: "GitHub 請求次數已達上限，請稍後重試。",
   release_invalid: "GitHub 發布資訊無效，請稍後重試。",
   storage_error: "無法儲存更新包，請檢查可用空間及檔案權限。",

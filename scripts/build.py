@@ -1,12 +1,12 @@
 """Build only Buddy and its shared Mac preview artwork; never install anything."""
-import hashlib,json,shutil,subprocess,zipfile
+import hashlib,json,shutil,subprocess,sys,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def main():
-    subprocess.run(['python3','scripts/prepare_shared.py'],cwd=ROOT,check=True)
-    subprocess.run(['python3','scripts/render_band_ui.py'],cwd=ROOT,check=True)
-    subprocess.run(['python3','scripts/prepare_desktop.py'],cwd=ROOT,check=True)
-    subprocess.run(['npm','run','build'],cwd=ROOT/'apps/band',check=True)
+    subprocess.run([sys.executable,'scripts/prepare_shared.py'],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,'scripts/render_band_ui.py'],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,'scripts/prepare_desktop.py'],cwd=ROOT,check=True)
+    subprocess.run([shutil.which('npm') or 'npm','run','build'],cwd=ROOT/'apps/band',check=True)
     manifest=json.loads((ROOT/'apps/band/src/manifest.json').read_text())
     source=ROOT/'apps/band/dist'/(manifest['package']+'.debug.'+manifest['versionName']+'.rpk')
     with zipfile.ZipFile(source) as archive:

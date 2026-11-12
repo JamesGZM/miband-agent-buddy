@@ -714,8 +714,7 @@ mod tests {
         }
         assert_eq!(s.prefs.wake_hold_seconds, 20);
         perform(&mut s, Action::WakeHold(300)).unwrap();
-        let saved: Preferences =
-            serde_json::from_str(&std::fs::read_to_string(&s.config).unwrap()).unwrap();
+        let (saved, _, _) = persistence::load(&s.config);
         assert_eq!(saved.wake_hold_seconds, 300);
         std::fs::remove_dir_all(s.config.parent().unwrap()).unwrap();
     }

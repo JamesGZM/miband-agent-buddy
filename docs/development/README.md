@@ -133,3 +133,7 @@ Build the normal code-drawn Buddy page with a local test version and stage it fo
 python3 scripts/build_band_probe.py --revision 8 --activate
 npm run build:desktop
 ```
+
+## Windows preview builds
+
+The manual [Windows workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml) uses native x64 and ARM64 runners. It uploads unsigned NSIS installers, checksums and corresponding sources as Actions artifacts, without publishing a Release or blocking Mac releases. Use `npm ci --prefix scripts/windows` and `python scripts/build_windows.py --arch x64` (or `arm64`) on the matching Windows Rust/Node host after bootstrap and the band build. Set `BUDDY_NODE_LICENSE` to the official Node LICENSE and use Python UTF-8 mode. Windows credentials and preferences use user-scoped DPAPI; copying those files to a different account/machine does not migrate login. In-app updates are unavailable in the preview. Pairing, login, installation, notifications and hardware behavior need Windows verification. See [ADR-012](../architecture/ADR-012-windows-preview.md).

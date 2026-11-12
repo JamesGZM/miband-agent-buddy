@@ -1,0 +1,65 @@
+name: Windows preview installers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            arch: arm64
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PYTHONUTF8: '1'
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Preserve pinned patch line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+          architecture: ${{ matrix.arch }}
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Select matching native Rust host
+        run: rustup default stable-${{ matrix.target }}
+      - run: python -m pip install -r requirements.txt
+      - run: npm ci --prefix apps/band
+      - run: npm ci --prefix scripts/windows
+      - run: python native/transport/bootstrap.py
+      - run: python scripts/build.py
+      - run: npm run check:architecture
+      - run: cargo test --locked --manifest-path native/transport/Cargo.toml
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Locate bundled Node license
+        shell: pwsh
+        run: |
+          $nodeDirectory = Split-Path (Get-Command node).Source
+          $license = Join-Path $nodeDirectory 'LICENSE'
+          if (!(Test-Path $license)) { throw 'Official Node LICENSE missing' }
+          "BUDDY_NODE_LICENSE=$license" >> $env:GITHUB_ENV
+      - name: Build certificate-free native installer
+        run: python scripts/build_windows.py --arch ${{ matrix.arch }}
+      - name: Archive corresponding sources
+        run: python scripts/package_sources.py --output dist/MiBand-Agent-Buddy-source-windows-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: windows-preview-${{ matrix.arch }}
+          path: |
+            dist/MiBand-Agent-Buddy-windows-${{ matrix.arch }}-setup.exe
+            dist/MiBand-Agent-Buddy-windows-${{ matrix.arch }}-setup.exe.sha256
+            dist/MiBand-Agent-Buddy-source-windows-${{ matrix.arch }}.tar.gz
+            dist/MiBand-Agent-Buddy-source-windows-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error

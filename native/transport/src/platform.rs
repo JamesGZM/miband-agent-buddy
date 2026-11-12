@@ -8,7 +8,7 @@ use serde_json::json;
 pub fn run_main_loop() {
     let (tx, rx) = tokio::sync::mpsc::channel(8);
     read_commands(tx);
-    std::thread::spawn(move || {
+    let worker = move || {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let result = runtime.block_on(run(rx));
         if let Err(error) = &result {
@@ -17,6 +17,11 @@ pub fn run_main_loop() {
             );
         }
         std::process::exit(if result.is_ok() { 0 } else { 1 });
-    });
+    };
+    #[cfg(target_os = "macos")]
+    std::thread::spawn(worker);
+    #[cfg(target_os = "macos")]
     objc2_core_foundation::CFRunLoop::run();
+    #[cfg(target_os = "windows")]
+    worker();
 }

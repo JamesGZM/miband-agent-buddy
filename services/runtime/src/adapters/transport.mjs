@@ -7,7 +7,7 @@ export function transportFactory(binary, {spawnChild = spawn, killAfter = 1500} 
     let child = null, lines = null, closing = null;
     return {
       start(credentials) {
-        child = spawnChild(binary, [], {stdio: ['pipe', 'pipe', 'ignore']});
+        child = spawnChild(binary, [], {stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true});
         child.stdin.on('error', () => {});
         child.once('error', onError);
         child.once('close', (code, signal) => {lines?.close(); onClose({

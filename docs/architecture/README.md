@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
-This is the canonical current architecture. Historical architecture URLs redirect here. The app is macOS-only and targets Xiaomi Smart Band 9; physical verification currently covers the NFC model.
+This is the canonical current architecture. Historical architecture URLs redirect here. Stable releases target macOS and Xiaomi Smart Band 9; physical verification currently covers the NFC model. Windows x64/ARM64 installers are experimental. Their platform boundaries and verification limits are recorded in [ADR-012](ADR-012-windows-preview.md).
 
 ```text
 Desktop UI → bridge → Tauri commands → application services → private files

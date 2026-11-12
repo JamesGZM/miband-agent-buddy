@@ -1,5 +1,9 @@
 // Keys are the Traditional Chinese source strings used by the UI, runtime and Rust services.
 const pairs = [
+  ["此平台暫不支援 App 內更新，請前往 GitHub 下載。", "此平台暂不支持 App 内更新，请前往 GitHub 下载。", "In-app updates are not available on this platform. Download from GitHub."],
+  ["正在恢復喚醒 Buddy…", "正在恢复唤醒 Buddy…", "Recovering Buddy…"],
+  ["正在喚醒 Buddy…", "正在唤醒 Buddy…", "Waking Buddy…"],
+  ["喚醒指令已送出，等待 Buddy 確認", "唤醒指令已送出，等待 Buddy 确认", "Wake sent; waiting for Buddy to confirm"],
   ["自動亮度", "自动亮度", "Automatic brightness"],
   ["自動", "自动", "Auto"],
   ["自動亮度設定已套用到手環", "自动亮度设置已应用到手环", "Automatic brightness applied to the band"],

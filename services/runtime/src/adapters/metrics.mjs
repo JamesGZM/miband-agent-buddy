@@ -1,4 +1,5 @@
 import os from 'node:os';
+import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {statfs} from 'node:fs/promises';
@@ -18,13 +19,18 @@ export function diskFromFs(fs) {
   if(!Number.isFinite(totalBytes)||totalBytes<=0||usedBytes<0||usedBytes>totalBytes)throw new Error('Invalid disk counters');
   return {usedBytes,totalBytes,percent:usedBytes/totalBytes*100};
 }
+export function memoryFromFree(totalBytes, freeBytes) {
+  if (!Number.isFinite(totalBytes) || !Number.isFinite(freeBytes) || totalBytes <= 0 || freeBytes < 0 || freeBytes > totalBytes) throw new Error('Invalid memory counters');
+  const usedBytes = totalBytes - freeBytes;
+  return {usedBytes,totalBytes,percent:usedBytes/totalBytes*100};
+}
 export function createSampler() {
   let previous=null;
   return async()=>{
     const current=cpuTotals(),cpu=previous?cpuUsage(previous,current):null;previous=current;
     const values=await Promise.allSettled([
-      process.platform==='darwin'?exec('/usr/bin/vm_stat',[],{timeout:1500,maxBuffer:65536,env:{...process.env,LC_ALL:'C'}}).then(r=>memoryFromVm(r.stdout,os.totalmem())):Promise.reject(new Error('macOS required')),
-      statfs(process.platform==='darwin'?'/System/Volumes/Data':'/').then(diskFromFs)
+      process.platform==='darwin'?exec('/usr/bin/vm_stat',[],{timeout:1500,maxBuffer:65536,env:{...process.env,LC_ALL:'C'}}).then(r=>memoryFromVm(r.stdout,os.totalmem())):Promise.resolve().then(()=>memoryFromFree(os.totalmem(),os.freemem())),
+      statfs(process.platform==='darwin'?'/System/Volumes/Data':path.parse(os.homedir()).root).then(diskFromFs)
     ]);
     return {sampledAt:Date.now(),cpu:cpu===-1?null:cpu,memory:values[0].status==='fulfilled'?values[0].value:null,disk:values[1].status==='fulfilled'?values[1].value:null};
   };

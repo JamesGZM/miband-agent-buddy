@@ -6,6 +6,8 @@
 
 [下載](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) · [開始使用](#開始使用) · [參與貢獻](CONTRIBUTING.zh-TW.md) · [更新紀錄](CHANGELOG.zh-TW.md)
 
+![Buddy 首頁動畫](docs/images/app-buddy.gif)
+
 ## 功能
 
 - ChatGPT、Claude 與 DeepSeek 動態 Buddy 主題，在 Mac 上即時預覽。
@@ -14,6 +16,18 @@
 - 可選的任務期間保持亮屏、自訂待機息屏時間與省電動畫模式。
 - 集中管理手環連線、電量、儲存空間與 Buddy 安裝。
 - 選單列控制、可選背景執行、App 更新，以及繁體中文、簡體中文和英文介面。
+
+## App 截圖
+
+以下為本地版本的真實 macOS App 頁面。首頁 GIF 錄製自 App 即時預覽，不是手環實拍照片。
+
+| 手環管理 | AI 接入 |
+| --- | --- |
+| ![手環管理](docs/images/app-band.png) | ![AI 接入](docs/images/app-integrations.png) |
+| **帳號** | **設定** |
+| ![帳號](docs/images/app-account.png) | ![設定](docs/images/app-settings.png) |
+| **資源監控** | **顯示與任務通知** |
+| ![資源監控](docs/images/app-resources.png) | ![顯示與任務通知](docs/images/app-settings-display.png) |
 
 ## 下載
 
@@ -24,7 +38,11 @@
 | Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.zip` |
 | Intel | `MiBand-Agent-Buddy-macos-x64.zip` |
 
-目前版本尚未經過 Apple 公證。如果 macOS 阻止首次開啟，請確認下載來源後按照[安裝說明](docs/open-source/RELEASING.zh-TW.md)操作。目前不支援 Windows 和 Linux。
+目前版本尚未經過 Apple 公證。如果 macOS 阻止首次開啟，請確認下載來源後按照[安裝說明](docs/open-source/RELEASING.zh-TW.md)操作。
+
+### Windows 預覽版
+
+實驗性的無證書 **x64** 和 **ARM64** NSIS 安裝包，透過手動觸發的 [Windows preview installers 工作流程](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)建置。在完成的執行中下載對應的 `windows-preview-x64` 或 `windows-preview-arm64` Artifact，內含 `setup.exe`、SHA-256 與對應原始碼。Windows 藍牙、帳號登入、安裝與通知尚待實機驗證；App 內更新目前僅支援 Mac。Linux 暫不支援。
 
 ## 手環亮度與電量狀態
 

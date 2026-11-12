@@ -1,4 +1,4 @@
-"""Collect the resolved macOS Rust dependency notices without network access."""
+"""Collect the resolved target's Rust dependency notices without network access."""
 from pathlib import Path
 import argparse
 import hashlib

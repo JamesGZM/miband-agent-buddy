@@ -1,4 +1,4 @@
-"""Archive reviewed project and resolved dependency sources for a macOS release."""
+"""Archive reviewed project and resolved dependency sources for a desktop release."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -45,9 +45,9 @@ def main():
     # A source archive describes the reviewed commit, never an uncommitted mix.
     subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--'], cwd=ROOT, check=True)
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    arch = {'arm64': 'arm64', 'x86_64': 'x64'}.get(platform.machine())
+    arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'x64', 'amd64': 'x64'}.get(platform.machine().lower())
     if not arch:
-        raise SystemExit('Only macOS release sources are supported')
+        raise SystemExit('Only x64 and ARM64 release sources are supported')
     host = next(line.split(': ', 1)[1] for line in subprocess.check_output(['rustc', '-vV'], text=True).splitlines() if line.startswith('host: '))
     packages = {}
     for manifest in ['apps/desktop/src-tauri/Cargo.toml', 'native/transport/Cargo.toml']:
@@ -76,7 +76,7 @@ def main():
                     continue
                 add_file(archive, source, Path('rust-dependencies') / name / source.relative_to(directory))
             records.append({key: package.get(key) for key in ['name', 'version', 'source', 'license', 'repository']})
-        node = ROOT / 'apps/desktop/dist/MiBand Agent Buddy.app/Contents/Resources/runtime/bin/node'
+        node = ROOT / ('apps/desktop/dist/windows/runtime/bin/node.exe' if platform.system() == 'Windows' else 'apps/desktop/dist/MiBand Agent Buddy.app/Contents/Resources/runtime/bin/node')
         node_version = subprocess.check_output([str(node), '--version'], text=True).strip()
         description = {
             'revision': revision, 'target': host, 'rustDependencies': records,

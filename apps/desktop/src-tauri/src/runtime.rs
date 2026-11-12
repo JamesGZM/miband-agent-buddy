@@ -193,7 +193,13 @@ fn health(state: &RuntimeState) -> Value {
 }
 pub fn start(shared: Shared, app: tauri::AppHandle) {
     let (root, node) = runtime_paths();
-    let child = Command::new(&node)
+    let mut command = Command::new(&node);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW for the private stdio worker.
+    }
+    let child = command
         .arg(root.join("services/runtime/bin/buddy-runtime.mjs"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -302,9 +308,22 @@ fn runtime_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     // Release bundles retain the source layout inside Resources, so shared imports
     // and compatibility paths work after the .app is moved to another Mac.
     if let Ok(executable) = std::env::current_exe() {
+        #[cfg(target_os = "macos")]
         if let Some(contents) = executable.parent().and_then(|p| p.parent()) {
             let root = contents.join("Resources/runtime");
             let node = root.join("bin/node");
+            if node.is_file()
+                && root
+                    .join("services/runtime/bin/buddy-runtime.mjs")
+                    .is_file()
+            {
+                return (root, node);
+            }
+        }
+        #[cfg(windows)]
+        if let Some(directory) = executable.parent() {
+            let root = directory.join("runtime");
+            let node = root.join("bin/node.exe");
             if node.is_file()
                 && root
                     .join("services/runtime/bin/buddy-runtime.mjs")

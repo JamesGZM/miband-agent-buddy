@@ -93,6 +93,7 @@ pub fn labels(language: &str) -> Labels {
 }
 
 /// First entry of macOS `AppleLanguages`, e.g. `zh-Hans-CN`.
+#[cfg(target_os = "macos")]
 pub fn system_language() -> Option<String> {
     use std::sync::OnceLock;
     static CACHED: OnceLock<Option<String>> = OnceLock::new();
@@ -104,11 +105,26 @@ pub fn system_language() -> Option<String> {
                 .ok()?;
             let text = String::from_utf8(output.stdout).ok()?;
             text.lines()
-                .map(|line| line.trim().trim_matches(|c| c == '"' || c == ',' || c == ' '))
+                .map(|line| {
+                    line.trim()
+                        .trim_matches(|c| c == '"' || c == ',' || c == ' ')
+                })
                 .find(|line| !line.is_empty() && *line != "(" && *line != ")")
                 .map(str::to_string)
         })
         .clone()
+}
+
+#[cfg(windows)]
+pub fn system_language() -> Option<String> {
+    let mut name = [0u16; 85];
+    let length = unsafe {
+        windows_sys::Win32::Globalization::GetUserDefaultLocaleName(
+            name.as_mut_ptr(),
+            name.len() as i32,
+        )
+    };
+    (length > 1).then(|| String::from_utf16_lossy(&name[..length as usize - 1]))
 }
 
 pub fn current(choice: &str) -> &'static str {

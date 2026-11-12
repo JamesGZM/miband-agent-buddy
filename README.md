@@ -6,6 +6,8 @@ An open-source macOS companion that brings AI task activity and Mac resource usa
 
 [Download](https://github.com/JamesGZM/miband-agent-buddy/releases/latest) · [Getting started](#getting-started) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
+![Buddy homepage animation](docs/images/app-buddy.gif)
+
 ## Features
 
 - Animated Buddy themes for ChatGPT, Claude and DeepSeek, with a live preview on your Mac.
@@ -14,6 +16,18 @@ An open-source macOS companion that brings AI task activity and Mac resource usa
 - Optional task keep-awake, an adjustable idle screen timeout and a power-saving animation mode.
 - Band connection, battery, storage and Buddy installation management in one place.
 - Menu-bar controls, optional background operation, app updates, and English, Simplified Chinese and Traditional Chinese interfaces.
+
+## App screenshots
+
+Actual macOS App pages, captured from the local build. The homepage animation is recorded from the live App preview, not a band photograph.
+
+| Band management | AI connections |
+| --- | --- |
+| ![Band management](docs/images/app-band.png) | ![AI connections](docs/images/app-integrations.png) |
+| **Account** | **Settings** |
+| ![Account](docs/images/app-account.png) | ![Settings](docs/images/app-settings.png) |
+| **Resource monitoring** | **Display and task notifications** |
+| ![Resource monitoring](docs/images/app-resources.png) | ![Display and task notifications](docs/images/app-settings-display.png) |
 
 ## Download
 
@@ -24,7 +38,11 @@ Download the package for your Mac from [GitHub Releases](https://github.com/Jame
 | Apple Silicon | `MiBand-Agent-Buddy-macos-arm64.zip` |
 | Intel | `MiBand-Agent-Buddy-macos-x64.zip` |
 
-Current releases are not Apple-notarized. If macOS blocks the first launch, follow the [installation instructions](docs/open-source/RELEASING.md) after checking the download source. Windows and Linux are not supported.
+Current releases are not Apple-notarized. If macOS blocks the first launch, follow the [installation instructions](docs/open-source/RELEASING.md) after checking the download source.
+
+### Windows preview
+
+Experimental unsigned **x64** and **ARM64** NSIS installers are built by the manually triggered [Windows preview installers workflow](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml). Download the matching `windows-preview-x64` or `windows-preview-arm64` artifact from a completed run; each includes a `setup.exe`, SHA-256 and corresponding sources. Windows Bluetooth, account login, installation and notifications still need physical verification. In-app updates are currently Mac-only. Linux is not supported.
 
 ## Band brightness and battery status
 

@@ -4,6 +4,18 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.2] - 2026-11-12
+
+### Added
+
+- Real macOS App screenshots in all README languages.
+- Experimental certificate-free Windows x64/ARM64 NSIS installer workflow, with native runtime packaging, user-scoped DPAPI storage and corresponding sources. Windows device behavior and installation remain unverified.
+
+### Fixed
+
+- Show automatic recovery wake and acknowledgement phases explicitly; radio reconnection, launch enqueueing and Buddy confirmation remain separate states.
+- Includes the bounded response recovery, actual link-loss handling and local-certificate/CI signing separation prepared for the cancelled v0.7.1 release.
+
 ## [0.7.1] - 2026-11-12
 
 ### Fixed

@@ -27,6 +27,8 @@ pub async fn connect(addr: String, key: String) -> Result<tokio::sync::watch::Re
         while spp::core::get_connected_device_info_impl(&addr)?.is_none() {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
+        #[cfg(target_os = "windows")]
+        spp::core::start_subscription_impl(&addr)?;
         emit(json!({"event":"transport"}));
         let mtu = spp::core::get_max_send_len_impl(&addr)?;
         let tx_addr = addr.clone();

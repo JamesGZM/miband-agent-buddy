@@ -2,11 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { cpuUsage } from '../../services/runtime/src/adapters/cpu.mjs';
-import { memoryFromVm, diskFromFs } from '../../services/runtime/src/adapters/metrics.mjs';
+import { memoryFromVm, memoryFromFree, diskFromFs } from '../../services/runtime/src/adapters/metrics.mjs';
 const protocol = createRequire(import.meta.url)('../../packages/buddy-shared/protocol/snapshot.js');
 const { matchesAck } = protocol;
 const sample = { v: 1, type: 'snapshot', session: 'test-1', seq: 1, text: 'Mac ready', value: 42, cpu: 0 };
 const ack = { v: 1, type: 'ack', session: 'test-1', seq: 1, keepScreen: 'on', received: 1 };
+
+test('Windows memory counters preserve zero usage and reject impossible readings', () => {
+  assert.deepEqual(memoryFromFree(100,25),{usedBytes:75,totalBytes:100,percent:75});
+  assert.equal(memoryFromFree(100,100).percent,0);
+  for (const [total,free] of [[0,0],[100,101],[100,-1],[NaN,0],[100,Infinity]]) assert.throws(()=>memoryFromFree(total,free));
+});
 
 test('protocol validates fields and rejects replay within a session', () => {
   assert.deepEqual(protocol.decodeMessage(JSON.stringify(sample)), sample);

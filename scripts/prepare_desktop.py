@@ -11,6 +11,7 @@ icons=root/'apps/desktop/src-tauri/icons';icons.mkdir(parents=True,exist_ok=True
 with Image.open(root/'apps/desktop/artwork/app-icon.png') as source:
  icon=source.convert('RGBA')
 icon.resize((1024,1024),Image.Resampling.LANCZOS).save(icons/'icon.png')
+icon.save(icons/'icon.ico',format='ICO',sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
 icon.resize((64,64),Image.Resampling.LANCZOS).save(assets/'app-icon.png')
 # Template artwork uses alpha only: macOS supplies the light/dark menu-bar color.
 scale=4

@@ -4,6 +4,14 @@ import {readFileSync} from 'node:fs';
 
 const readWorkflow = name => readFileSync(new URL('../../.github/workflows/' + name, import.meta.url), 'utf8');
 
+test('Windows preview builds native x64 and ARM64 installers without publishing or certificates', () => {
+  const workflow = readWorkflow('windows.yml');
+  assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.doesNotMatch(workflow, /^  (push|pull_request|schedule):/m);
+  for (const value of ['windows-2025','windows-11-arm','arch: x64','arch: arm64','scripts/build_windows.py','scripts/package_sources.py','actions/upload-artifact']) assert.ok(workflow.includes(value),value);
+  assert.doesNotMatch(workflow, /contents: write|gh release|SIGNING_IDENTITY|\.p12|Import-PfxCertificate/);
+});
+
 test('ordinary source checks cannot package or publish application artifacts', () => {
   const workflow = readWorkflow('check.yml');
   assert.match(workflow, /^  push:/m);

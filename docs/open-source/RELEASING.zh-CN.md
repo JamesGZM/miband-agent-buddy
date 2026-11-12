@@ -36,4 +36,8 @@ App 内含 Node、运行时、共享模块、原生传输与 Buddy 包，可脱�
 
 设置 → 关于 → 检查更新读取本项目最新稳定 GitHub Release，下载时验证架构、摘要与解压后的 App。**安装并重启**是独立动作，会保留 App 数据，并在旁边留下 `MiBand Agent Buddy.previous-*.app`。目录不可写时先移到用户可写位置。App Translocation 路径和开发可执行文件不能原地更新。
 
-本地构建或没有发布版本时会如实显示，不会把源码归档当成可执行更新。未配置 Windows／Linux 包或 GitHub Developer ID 签名与公证；本地证书签名使用钥匙串中的已有身份。
+本地构建或没有发布版本时会如实显示，不会把源码归档当成可执行更新。Windows 预览安装包使用独立手动工作流。Linux 包与 GitHub Developer ID 签名、公证尚未配置；本地签名使用钥匙串中的已有身份。
+
+## Windows 预览构建
+
+手动触发的 [Windows 工作流](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)使用原生 x64/ARM64 runner，上传无证书 NSIS 安装包、校验值和对应源码，不发布 Release，也不阻挡 Mac 发布。在对应架构的 Windows Rust/Node 主机完成 bootstrap 和手环构建后，执行 `npm ci --prefix scripts/windows` 和 `python scripts/build_windows.py --arch x64`（或 `arm64`）。将 `BUDDY_NODE_LICENSE` 指向官方 Node LICENSE，Python 使用 UTF-8 模式。Windows 认证与设置使用当前用户范围 DPAPI，复制到另一账号/机器不能迁移登录。预览版不支持 App 内更新，配对、登录、安装、通知和硬件行为尚待 Windows 验证。见 [ADR-012](../architecture/ADR-012-windows-preview.zh-CN.md)。

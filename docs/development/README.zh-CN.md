@@ -129,3 +129,7 @@ UI 文案位于 `apps/desktop/ui/locales.js`，英文、简体与繁体同步更
 python3 scripts/build_band_probe.py --revision 8 --activate
 npm run build:desktop
 ```
+
+## Windows 预览构建
+
+手动触发的 [Windows 工作流](https://github.com/JamesGZM/miband-agent-buddy/actions/workflows/windows.yml)使用原生 x64/ARM64 runner，上传无证书 NSIS 安装包、校验值和对应源码，不发布 Release，也不阻挡 Mac 发布。在对应架构的 Windows Rust/Node 主机完成 bootstrap 和手环构建后，执行 `npm ci --prefix scripts/windows` 和 `python scripts/build_windows.py --arch x64`（或 `arm64`）。将 `BUDDY_NODE_LICENSE` 指向官方 Node LICENSE，Python 使用 UTF-8 模式。Windows 认证与设置使用当前用户范围 DPAPI，复制到另一账号/机器不能迁移登录。预览版不支持 App 内更新，配对、登录、安装、通知和硬件行为尚待 Windows 验证。见 [ADR-012](../architecture/ADR-012-windows-preview.zh-CN.md)。

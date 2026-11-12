@@ -17,8 +17,11 @@ pub fn delete_credentials(config: &Path) -> Result<(), String> {
     vault::delete(&config.with_file_name("credentials.json"))
 }
 pub fn load(config: &Path) -> (Preferences, Option<Credentials>, Option<String>) {
-    let mut prefs: Preferences = std::fs::read(config)
-        .ok()
+    #[cfg(unix)]
+    let saved_preferences = std::fs::read(config).ok();
+    #[cfg(windows)]
+    let saved_preferences = vault::read(config).ok().flatten();
+    let mut prefs: Preferences = saved_preferences
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     prefs.keep_screen = false;

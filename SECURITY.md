@@ -22,6 +22,8 @@ The directory uses permission `0700` and private files use `0600`. Credentials a
 
 Logging out removes the saved credential file and account-specific selection records. It does not revoke other Xiaomi account sessions. Device status is used locally; the desktop state excludes serial numbers and IMEI.
 
+Windows preview builds use Tauri’s per-user app-data directory (`%APPDATA%/io.github.jamesgzm.miband-agent-buddy/`). Preferences and credentials are protected with user-scoped Windows DPAPI before being written. There is no plaintext fallback; copying the files is not an account migration. Processes running as the same Windows user can still request decryption. Do not share this directory.
+
 ## Network and integration boundaries
 
 - Account sign-in uses Xiaomi's web flow. The login window has no local application IPC access, and navigation and authentication redirects are restricted to Xiaomi HTTPS domains.

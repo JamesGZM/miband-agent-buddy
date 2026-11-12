@@ -2,7 +2,7 @@
 
 [English](README.md) · **简体中文** · [繁體中文](README.zh-TW.md)
 
-这里是当前架构的权威说明，历史架构地址跳转到此。应用仅支持 macOS，目标为小米手环 9；实机验证目前覆盖 NFC 版。
+这里是当前架构的权威说明，历史架构地址跳转到此。稳定版面向 macOS 和小米手环 9，实机验证目前覆盖 NFC 版。Windows x64/ARM64 安装包属于实验性预览，其平台边界与验证限制见 [ADR-012](ADR-012-windows-preview.zh-CN.md)。
 
 ```text
 桌面 UI → bridge → Tauri 命令 → 应用服务 → 私密文件
