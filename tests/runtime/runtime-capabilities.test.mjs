@@ -57,10 +57,12 @@ test('power saving defaults off and is only sent to a band advertising the capab
   }
 });
 
-test('device status is requested after authentication, on refresh and every five minutes', async t => {
+test('device status follows the first Buddy reply, explicit refresh and five-minute interval', async t => {
   const h = runtimeHarness({onWrite: band(null)}); t.after(() => h.runtime.stop());
   await h.connect();
   const requests = () => h.calls.filter(c => c.op === 'device_status').length;
+  assert.equal(requests(), 0);
+  await h.clock.advance(6000);
   assert.equal(requests(), 1);
   h.children[0].event({event: 'device', battery: 64, charging: true, firmware: '3.0.0', model: 'fixture-model', storageTotal: 1000, storageFree: 250});
   assert.deepEqual(h.state.device, {battery: 64, charging: true, firmware: '3.0.0', model: 'fixture-model', storageTotal: 1000, storageFree: 250, at: h.clock.now()});

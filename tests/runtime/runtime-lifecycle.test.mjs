@@ -24,7 +24,7 @@ test('pause discards wake and pending data; resume does not replay old events', 
   await h.runtime.dispatch({op: 'pause', value: true});
   h.hook('UserPromptSubmit');
   await h.clock.advance(20000);
-  assert.deepEqual(h.calls.filter(c => c.id !== 'battery-poll').map(c => c.op), ['device_status', 'buddy_status']);
+  assert.deepEqual(h.calls.filter(c => c.id !== 'battery-poll').map(c => c.op), ['buddy_status']);
   await h.runtime.dispatch({op: 'pause', value: false});
   await h.clock.advance(2000);
   assert.equal(h.calls.filter(c => c.op === 'launch_buddy').length, 0);

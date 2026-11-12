@@ -26,3 +26,5 @@ Tauri 及插件、Rust 依赖和 Vela `aiot-toolkit` 保留各自许可证，准
 ## 灵感与图像
 
 Dan Wahlin 的 [Agent Buddy](https://github.com/DanWahlin/agent-buddy) 启发了基于生命周期的伴侣交互。胶囊、符号、圆环与几何 Buddy 图像由 `scripts/render_band_ui.py` 生成。品牌与工具名称仅用于描述主题和接入，不代表背书或商标授权。许可证原文保持不变；译文不授予额外权利。
+
+Windows 预览安装包在程序旁的 `licenses/` 中包含依赖声明，收集器按原生 Windows 目标解析依赖，Actions 同时提供安装包对应源码。`scripts/windows/package-lock.json` 中固定的 Tauri CLI 仅用于构建，不随应用分发。

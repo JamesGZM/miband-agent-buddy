@@ -74,3 +74,5 @@ The desktop bundle carries Node, runtime/shared source, native transport and its
 The normal band page and desktop preview use shared code geometry (ADR-008). Only the launcher icon ships as an image in the RPK; the local builder stages a test version of the same UI. Future band interfaces should prefer code drawing and preserve the approved design; image exceptions and performance/device checks follow the [Quick App UI guide](../development/quickapp-ui.md).
 
 [Band brightness and battery status](ADR-011-brightness-and-battery.md).
+
+A preparation failure before launch (`app_query_failed` / `app_sync_failed`) can authorize at most two further attempts within 60 seconds for an opted-in active task, using fresh current-link installed metadata and a successful link probe. Existing cooldown and display confirmation bounds still apply; missing results and post-launch failures cannot authorize another attempt. Initial background device queries follow the confirmed first wake. See [ADR-005](ADR-005-active-display.md).

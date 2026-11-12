@@ -4,6 +4,20 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.3] - 2026-11-12
+
+### Fixed
+
+- Recover an opted-in active task when reconnection fails before Buddy is launched. Fresh installed metadata and a successful current link probe authorize at most two preparation retries within 60 seconds, without waiting for another Hook. Missing or post-launch results cannot trigger duplicate launches.
+- Prioritize the first confirmed display lease ahead of background device queries. Cancel queued/in-flight recovery when task intent or connection ownership changes.
+- Includes the native ACK forwarding, actual link-loss handling, bounded response recovery and local-certificate/CI signing separation prepared in the cancelled v0.7.1/v0.7.2 releases.
+
+### Documentation and builds
+
+- Add a live App homepage GIF and screenshots of Band, AI connections, Account, Settings and resource/display views to all README languages.
+- Add experimental certificate-free Windows x64/ARM64 NSIS builds, user-scoped DPAPI storage, packaged runtime and corresponding source artifacts. Windows installation and device behavior remain unverified.
+- Local macOS packages use an existing user certificate; GitHub packages remain certificate-free. Short physical keep-awake observation passed; long-duration and actual-outage recovery verification remain documented limitations.
+
 ## [0.7.2] - 2026-11-12
 
 ### Added
