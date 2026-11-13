@@ -2,13 +2,43 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runBuddyCli} from '../../services/runtime/bin/buddy-cli.mjs';
+import {isMainModule} from '../../services/runtime/src/adapters/entrypoint.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+
+test('CLI guide executes through a linked installation path with either Node symlink mode', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'buddy-linked-entry-'));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const linked = join(directory, 'linked-installation');
+  await symlink(root, linked, process.platform === 'win32' ? 'junction' : 'dir');
+  const expected = await readFile(join(root, 'services/runtime/integration-guide.md'), 'utf8');
+  for (const flags of [[], ['--preserve-symlinks-main']]) {
+    const {stdout, stderr} = await promisify(execFile)(process.execPath,
+      [...flags, join(linked, 'services/runtime/bin/buddy-cli.mjs'), 'guide'], {cwd: directory, timeout: 5000});
+    assert.equal(stderr, '');
+    assert.ok(stdout === expected, 'linked CLI must print the complete guide');
+  }
+});
+
+test('entrypoint identity distinguishes linked CLI/runtime files from imports and invalid arguments', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'buddy-entry-identity-'));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const linked = join(directory, 'linked-installation');
+  await symlink(root, linked, process.platform === 'win32' ? 'junction' : 'dir');
+  for (const entry of ['buddy-cli.mjs', 'buddy-runtime.mjs']) {
+    const moduleUrl = new URL('../../services/runtime/bin/' + entry, import.meta.url).href;
+    assert.equal(isMainModule(moduleUrl, join(linked, 'services/runtime/bin', entry)), true);
+    assert.equal(isMainModule(moduleUrl, fileURLToPath(import.meta.url)), false);
+    assert.equal(isMainModule(moduleUrl, moduleUrl), false, 'an import URL argument is not an executable path');
+    assert.equal(isMainModule(moduleUrl, join(directory, 'missing.mjs')), false);
+    assert.equal(isMainModule(moduleUrl, ''), false);
+  }
+});
 
 test('retired source installers are absent while runtime compatibility entries remain', async () => {
   for (const name of ['install_agent_hooks.mjs', 'install_codex_hooks.mjs']) {

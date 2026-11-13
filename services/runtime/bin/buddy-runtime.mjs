@@ -1,7 +1,7 @@
 // Private stdio entry. Only sanitized state leaves this process.
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { isMainModule } from '../src/adapters/entrypoint.mjs';
 import { createRuntime } from '../src/core/runtime.mjs';
 import { createSampler } from '../src/adapters/metrics.mjs';
 import { createHookServer } from '../src/adapters/hook-server.mjs';
@@ -48,4 +48,4 @@ export function runRuntime() {
   return {stop: shutdown};
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) runRuntime();
+if (isMainModule(import.meta.url)) runRuntime();

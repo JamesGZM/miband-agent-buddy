@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "miband-agent-buddy"
-version = "0.7.8"
+version = "0.7.9"
 dependencies = [
  "aes",
  "anyhow",

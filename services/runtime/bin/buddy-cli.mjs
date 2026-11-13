@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises';
-import {pathToFileURL} from 'node:url';
+import {isMainModule} from '../src/adapters/entrypoint.mjs';
 import {validateActivity} from '../src/adapters/activity-contract.mjs';
 import {submitActivity} from '../src/adapters/activity-client.mjs';
 
@@ -20,7 +20,7 @@ export async function runBuddyCli(args, {submit = submitActivity} = {}) {
   } catch {return {value: {accepted: false, code: 'invalid_arguments'}};}
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(import.meta.url)) {
   // Observational commands always fail open, with a machine-readable outcome.
   try {
     const result = await runBuddyCli(process.argv.slice(2));

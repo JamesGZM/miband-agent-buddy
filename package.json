@@ -1,6 +1,6 @@
 {
   "name": "miband-agent-buddy",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "private": true,
   "description": "Turn Xiaomi Smart Band 9 into a desktop display for AI activity and system resources, with macOS and Windows apps",
   "type": "module",

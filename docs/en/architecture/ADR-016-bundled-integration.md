@@ -36,6 +36,10 @@ Aggregate status identifies the subsystem as `source: "buddy-activity"` and adds
 
 Keep existing Hook endpoint, compatibility entrypoints, wire v1, private data and npm commands. CLI flags and anonymous activity fields are unchanged. The MCP entrypoint is explicitly retired; existing host MCP registrations must be removed by the setup agent after reviewing only the Buddy entry. Do not auto-migrate legacy Hooks or double-report them. No band change, cloud service, telemetry, release or global configuration installation is part of this decision.
 
+## Entrypoint identity
+
+The bundled CLI and runtime compare canonical file identities, not the literal module URL and argv path. Node can resolve an entry module through a symbolic-link alias while retaining that alias in argv; string equality then silently skips startup. Keep the filesystem lookup in one runtime adapter, outside core, and treat missing/non-file arguments as imports. Comparing only basenames could start an imported service; requiring callers to canonicalize every launch path is fragile. Default Node resolution and preserve-symlinks-main both retain existing direct-entry behavior, with no wire/config change. A linked-directory child-process regression reproduces the empty guide before the fix, while identity and staged-import tests preserve side-effect-free imports. The release archive check also runs under a linked macOS temporary directory.
+
 ## Evidence
 
 Tests cover strict content rejection, source isolation, same-millisecond ordering, stale generations, duplicates, terminal closure, capacity/rate limits, isolated loopback receipts, hung ingress and concurrent real CLI processes. A generic execution first observed as working requests a bounded start wake without inventing a thinking event; subsequent thinking maps to resumption, so ordinary tool traffic cannot repeatedly relaunch Buddy. Regression tests cover first working, same-run transitions and later executions. Existing cooldown and connection recovery remain. Signed bundle, relocation and installed-App checks are separate validation steps. Host-loaded WorkBuddy callbacks and physical display must still be observed.

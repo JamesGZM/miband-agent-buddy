@@ -4,7 +4,31 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.9] - 2026-11-13
+
+### Improved
+
+- Request user-wide automatic reporting through the host's supported mechanism, with cross-project/later-turn verification. Keep setup minimal and observational: no default installer framework, project-bound execution dependencies or synchronous foreground delivery merely for ordering. Separate CLI ingress deadlines from whole-callback latency.
+- Bundle a self-contained CLI integration guide and reporting entrypoint in the desktop app. The AI connections page can display and copy setup instructions for host-managed lifecycle callbacks without a source checkout or external Node installation.
+- Accept bounded, content-free activity reports through the running runtime. Anonymous conversation identities, run/sequence watermarks, terminal guards and rate limits preserve independent concurrent tasks and reject stale deliveries.
+- Retire the repository Hook installers and bundled setup skill. Keep existing runtime Hook compatibility; `npm run hooks:install` now prints the integration guide without changing host configuration. Existing host callbacks remain in place; setup changes require the host's own configuration flow.
+- Share explicit production resource staging between Mac and Windows builds, excluding development scripts and fixtures while retaining the current guide and third-party legal notices.
+
+### Fixed
+
+- Resolve CLI and runtime entrypoint identity through symbolic links. A relocated App under a linked temporary directory now executes its CLI instead of silently exiting with empty output; imported modules still do not start services.
+- Wake an opted-in sleeping Buddy when a new generic task first reports `working`. Same-run thinking/tool updates no longer masquerade as a new task start.
+- Label aggregate activity honestly without attributing generic or legacy reports to a particular AI provider.
+
+### Verification limits
+
+- Supersedes the failed, unpublished v0.7.8 release attempt. Its tag is retained; the relocated-package check caught the entrypoint issue before publication.
+- Buddy remains **0.5.20 / code 42**; this release does not require a new band package. The user confirmed a short physical wake after the CLI-first-working fix and a manual retest of the revised App setup instructions. Automatic callbacks from every host and long-duration device stability remain unverified.
+- Mac packages remain ad-hoc signed and not Apple-notarized. Windows installers remain unsigned and experimental; Windows Bluetooth/SPP has not been tested on real Windows hardware.
+
 ## [0.7.8] - 2026-11-13
+
+Release attempt unpublished; superseded by **0.7.9**.
 
 ### Improved
 
