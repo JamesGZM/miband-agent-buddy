@@ -13,7 +13,7 @@ async function setup({activityKeepAwake=true}={}) {
       visible=true;
       if(!defer)child.later({event:'result',id:command.id,ok:true});
     }
-    if(command.op==='ping'&&command.id==='link-ping')child.later({event:'result',id:command.id,ok:true});
+    if(command.op==='ping'&&String(command.id).startsWith('link-ping-'))child.later({event:'result',id:command.id,ok:true});
     if(command.op!=='snapshot'||!responding)return;
     if(hideOnSnapshot){hideOnSnapshot=false;visible=false;display.hide();}
     const p=command.payload;

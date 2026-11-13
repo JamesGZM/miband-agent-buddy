@@ -54,7 +54,7 @@ test('received message is ACKed once and becomes stale after 10 seconds', () => 
   assert.equal(page.diagnostics().received, 1);
   assert.equal(page.cpuText, '0%');
   assert.equal(sent[0].data.appVersion, '0.5.5');
-  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, maxActivityHoldMs: 120000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, activityRing: true, powerSaving: true, buddyFps: true});
+  assert.deepEqual(sent[0].data.capabilities, {maxWakeHoldMs: 1800000, maxActivityHoldMs: 120000, themes: ['chatgpt', 'claude', 'deepseek'], page: true, activityHold: true, activityRing: true, powerSaving: true, buddyFps: true, channelLifecycle: true});
   assert.equal(typeof sent[0].data, 'object');
   assert.equal(sent[0].data.keepScreen, 'on');
   sent[0].success();

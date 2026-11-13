@@ -69,6 +69,26 @@ test('independent clients and conversations cannot end each other', () => {
   assert.equal(h.state.status().activeSessions,0);
 });
 
+test('repeated messages and retries retain one task while another conversation stays independent', () => {
+  const h=harness();
+  h.send({session:'other-conversation',state:'working'});
+  for (let run=1;run<=4;run++) {
+    h.advance(1000);
+    const start={run,seq:1,state:'thinking'};
+    assert.equal(h.send(start).accepted,true);
+    assert.equal(h.send(start).code,'ignored');
+    assert.equal(h.state.status().activeSessions,2);
+    assert.equal(h.send({run,seq:2,state:'working'}).accepted,true);
+    const ending={run,seq:3,state:run%2?'cancelled':'completed'};
+    assert.equal(h.send(ending).accepted,true);
+    assert.equal(h.send(ending).code,'ignored');
+    assert.equal(h.send({run,seq:4,state:'thinking'}).code,'ignored');
+    assert.equal(h.state.status().activeSessions,1);
+  }
+  assert.equal(h.send({session:'other-conversation',seq:2,state:'completed'}).accepted,true);
+  assert.equal(h.state.status().activeSessions,0);
+});
+
 test('aggregate status never identifies an AI provider for generic or legacy events', () => {
   const h=harness();
   const identity=()=>({source:h.state.status().source,scope:h.state.status().scope});

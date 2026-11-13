@@ -120,31 +120,109 @@ fn health(state: &RuntimeState) -> Value {
             "buddy_unresponsive",
         ],
     );
-    diagnostics["lastCode"] = enum_evidence(
+    let diagnostic_codes = &[
+        "connect_timeout",
+        "ack_timeout",
+        "ping_timeout",
+        "ping_failed",
+        "auth_rejected",
+        "timeout",
+        "operation_failed",
+        "event_lagged",
+        "event_closed",
+        "transfer_session_reset",
+        "transfer_send_timeout",
+        "transfer_ack_timeout",
+        "transfer",
+        "app_missing",
+        "app_query_failed",
+        "app_sync_failed",
+        "app_launch_failed",
+        "bluetooth_open_failed",
+        "bluetooth_link_closed",
+    ];
+    diagnostics["lastCode"] = enum_evidence(raw_diagnostics, "lastCode", diagnostic_codes);
+    diagnostics["recoveryLayer"] = enum_evidence(
         raw_diagnostics,
-        "lastCode",
+        "recoveryLayer",
+        &["none", "application", "link", "transport"],
+    );
+    let raw_first = raw_diagnostics.get("firstAnomaly").unwrap_or(&Value::Null);
+    if raw_first.is_object() {
+        let mut first = numeric_evidence(raw_first, &["at", "transportStart", "bandAt"]);
+        first["layer"] = enum_evidence(
+            raw_first,
+            "layer",
+            &["application", "channel", "link", "transport"],
+        );
+        let mut first_codes = diagnostic_codes.to_vec();
+        first_codes.extend_from_slice(&[
+            "transport_closed",
+            "transport_start_failed",
+            "channel_closed",
+            "channel_error",
+            "channel_send_failed",
+            "channel_ready_timeout",
+            "channel_ready_closed",
+            "channel_ready_failed",
+        ]);
+        first["code"] = enum_evidence(raw_first, "code", &first_codes);
+        for (key, maximum) in [("exitCode", 255), ("bandCode", 65535)] {
+            first[key] = raw_first
+                .get(key)
+                .and_then(Value::as_u64)
+                .filter(|n| *n <= maximum)
+                .map_or(Value::Null, |n| json!(n));
+        }
+        first["signal"] = enum_evidence(
+            raw_first,
+            "signal",
+            &["SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV", "SIGBUS"],
+        );
+        diagnostics["firstAnomaly"] = first;
+    }
+    let raw_channel = raw_diagnostics
+        .get("channelLifecycle")
+        .unwrap_or(&Value::Null);
+    let mut channel = numeric_evidence(
+        raw_channel,
         &[
-            "connect_timeout",
-            "ack_timeout",
-            "ping_timeout",
-            "ping_failed",
-            "auth_rejected",
-            "timeout",
-            "operation_failed",
-            "event_lagged",
-            "event_closed",
-            "transfer_session_reset",
-            "transfer_send_timeout",
-            "transfer_ack_timeout",
-            "transfer",
-            "app_missing",
-            "app_query_failed",
-            "app_sync_failed",
-            "app_launch_failed",
-            "bluetooth_open_failed",
-            "bluetooth_link_closed",
+            "opens",
+            "closes",
+            "errors",
+            "sendFailures",
+            "replays",
+            "readyChecks",
+            "openedAt",
+            "closedAt",
+            "firstAt",
         ],
     );
+    channel["state"] = enum_evidence(raw_channel, "state", &["unknown", "open", "closed"]);
+    channel["firstReason"] = enum_evidence(
+        raw_channel,
+        "firstReason",
+        &[
+            "closed",
+            "error",
+            "send_failed",
+            "ready_timeout",
+            "ready_closed",
+            "ready_failed",
+        ],
+    );
+    channel["firstCode"] = raw_channel
+        .get("firstCode")
+        .and_then(Value::as_u64)
+        .filter(|n| *n <= 65535)
+        .map_or(Value::Null, |n| json!(n));
+    for key in ["readySupported", "reconnected"] {
+        channel[key] = raw_channel
+            .get(key)
+            .and_then(Value::as_bool)
+            .map_or(Value::Null, |v| json!(v));
+    }
+    diagnostics["channelLifecycle"] = channel;
     diagnostics["exitCode"] = raw_diagnostics
         .get("exitCode")
         .and_then(Value::as_u64)
@@ -435,6 +513,27 @@ mod tests {
         assert!(!view.to_string().contains("synthetic-private-value"));
     }
 
+    #[test]
+    fn first_anomaly_and_channel_health_preserve_only_bounded_evidence() {
+        let mut state = RuntimeState::default();
+        state.fields.insert("diagnostics".into(), json!({
+            "recoveryLayer":"transport", "firstAnomaly":{"at":100,"transportStart":2,"layer":"link","code":"bluetooth_link_closed","exitCode":1,"signal":"SIGTERM","bandCode":1006,"private":"synthetic-private-value"},
+            "channelLifecycle":{"state":"closed","closes":2,"firstReason":"closed","firstCode":1006,"readySupported":true,"private":"synthetic-private-value"}
+        }));
+        let view = health(&state);
+        assert_eq!(
+            view["diagnostics"]["firstAnomaly"]["code"],
+            "bluetooth_link_closed"
+        );
+        assert_eq!(view["diagnostics"]["firstAnomaly"]["exitCode"], 1);
+        assert_eq!(view["diagnostics"]["channelLifecycle"]["firstCode"], 1006);
+        assert!(!view.to_string().contains("synthetic-private-value"));
+        state.fields.get_mut("diagnostics").unwrap()["firstAnomaly"] = json!({"at":-1,"layer":"synthetic-private-value","code":"synthetic-private-value","bandCode":65536,"exitCode":999,"signal":"synthetic-private-value"});
+        let view = health(&state);
+        assert!(view["diagnostics"]["firstAnomaly"].get("at").is_none());
+        assert!(view["diagnostics"]["firstAnomaly"]["bandCode"].is_null());
+        assert!(!view.to_string().contains("synthetic-private-value"));
+    }
     #[test]
     fn health_reports_safe_power_and_operation_evidence_without_extra_fields() {
         let mut state = RuntimeState {

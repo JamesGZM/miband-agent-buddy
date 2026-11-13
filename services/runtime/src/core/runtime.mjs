@@ -2,7 +2,7 @@ import { createWakePolicy } from './wake-policy.mjs';
 import { createCodexState } from './codex-state.mjs';
 import { createActivityIngress } from './activity-ingress.mjs';
 import { initialBuddyState, checkedBuddyState, acknowledgedBuddyState } from './band-package-state.mjs';
-import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
+import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError, channelEvidence } from './buddy-state.mjs';
 import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
 import activityRing from '../../../../packages/buddy-shared/presentation/activity-ring.js';
 import { createBatteryAlert } from './battery-alert.mjs';
@@ -39,16 +39,19 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
   const timings = {...DEFAULT_TIMINGS, install: installationTimeout(bandPackage?.sizeBytes), ...overrides};
   let timer = null, connectionDeadline = null, closing = false, started = false;
   let sampleFlight = null, sampleValue = null, sampleAt = null;
-  const diagnostics = {starts:0,closes:0,launches:0,snapshotWakes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null};
+  const diagnostics = {starts:0,closes:0,launches:0,snapshotWakes:0,ackTimeouts:0,pingTimeouts:0,phase:'idle',lastCode:null,exitCode:null,signal:null,firstAnomaly:null,recoveryLayer:'none'};
   const diagnosticCodes = ['auth_rejected','timeout','operation_failed','event_lagged','event_closed','transfer_session_reset','transfer_send_timeout','transfer_ack_timeout','transfer','app_missing','app_query_failed','app_sync_failed','app_launch_failed','bluetooth_open_failed','bluetooth_link_closed'];
   function diagnose(phase, code) {
     diagnostics.phase = phase; diagnostics.at = now();
     if (code) diagnostics.lastCode = code;
   }
+  function anomaly(layer,code,extra={}) {
+    if(!diagnostics.firstAnomaly)diagnostics.firstAnomaly={at:now(),layer,code,transportStart:diagnostics.starts,...extra};
+  }
   let commands = Promise.resolve(), stopping = null;
   const wakePolicy = createWakePolicy({now, cooldown: timings.cooldown, ttl: timings.ttl});
   const batteryAlert=createBatteryAlert();
-  let batteryAt=0,batteryDevice=null,chargingKnown=null,chargingTimer=null,probeFailures=0,buddyDisplayed=false;
+  let batteryAt=0,batteryDevice=null,chargingKnown=null,chargingTimer=null,probeFailures=0,buddyDisplayed=false,unresponsive=false;
   let responseRecoveryTimer=null,responseRecoveryAttempted=false;
   let prepareRecovery=null,deviceAfterWake=false;
   let reconnectWakeTimer=null,bridgeReconnect=false;
@@ -62,7 +65,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       }
     }});
   const activityIngress = createActivityIngress({now, accept: event => agent.accept(event)});
-  let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
+  let wakeFlight = null, wakeDeadline = null, pingDeadline = null, pingRequest = null, pingSequence = 0;
   let installExit=null,installStart=null;
   let operation = null, operationDeadline = null;
   let transport = null,
@@ -100,6 +103,15 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       operation,
       diagnostics,
     });
+  function clearProbe(){cancel(pingDeadline);pingDeadline=null;pingRequest=null;}
+  function probeLink(){
+    if(!transport||pingDeadline!==null||!desired)return;
+    const owner=transport;
+    diagnostics.recoveryLayer='link';
+    const request=pingRequest='link-ping-'+(++pingSequence);
+    pingDeadline=schedule(()=>failedProbe(owner,true,request),timings.ack);
+    if(!owner.write({op:'ping',id:request}))failedProbe(owner,false,request);
+  }
   function clearChargingRecovery(){cancel(chargingTimer);chargingTimer=null;}
   function clearResponseRecovery(){
     cancel(responseRecoveryTimer);responseRecoveryTimer=null;
@@ -157,6 +169,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       responseRecoveryTimer=null;
       if(owner!==transport || wakeFlight || operationActive() || !responseRecoveryEligible())return;
       responseRecoveryAttempted=true;
+      diagnostics.recoveryLayer='application';
       wakePolicy.requestConnection(RESPONSE_RECOVERY);launchPendingWake();
     },timings.sample);
   }
@@ -174,12 +187,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       wakePolicy.requestConnection('charging_recovery');launchPendingWake();
     },timings.charging);
   }
-  function failedProbe(owner,timedOut){
-    if(owner!==transport)return;
-    cancel(pingDeadline);pingDeadline=null;probeFailures++;
+  function failedProbe(owner,timedOut,request=pingRequest){
+    if(owner!==transport||request===null||request!==pingRequest)return;
+    clearProbe();probeFailures++;
     if(timedOut)diagnostics.pingTimeouts++;
     diagnose(timedOut?'link_timeout':'link_failed',timedOut?'ping_timeout':'ping_failed');
-    if(probeFailures>=2)owner.kill();
+    anomaly('link',timedOut?'ping_timeout':'ping_failed');
+    if(probeFailures>=2){diagnostics.recoveryLayer='transport';owner.kill();}
     else{retryAt=now()+timings.probeRetry;publish();}
   }
   function operationActive() {
@@ -208,6 +222,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     return operationActive() && !!flight && flight.operation === operation.id;
   }
   function beginOperation(request, kind, target) {
+    clearProbe();
     clearResponseRecovery();
     clearPrepareRecovery();
     clearReconnectWake();
@@ -331,7 +346,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     settleOperation("cancelled", "disconnected");
     wakePolicy.clear();
     clearWake();
-    cancel(pingDeadline); pingDeadline = null;
+    clearProbe();
     cancel(retryTimer);
     cancel(connectionDeadline);
     cancel(installDeadline);
@@ -379,13 +394,13 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       onError: handleError,
       onClose: handleClose,
     });
-    transport = child;probeFailures=0;
+    transport = child;probeFailures=0;unresponsive=false;
     diagnostics.starts++; diagnose('opening');
     session = makeId();
     seq = 0;
     clearPending();
     clearWake();
-    cancel(pingDeadline); pingDeadline = null;
+    clearProbe();
     retryAt = 0;
     state.connection = "connecting";
     state.ack = null;
@@ -395,7 +410,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     state.error = null;
     publish();
     cancel(connectionDeadline);
-    let watchdog = connectionDeadline = schedule(() => {diagnose('connect_timeout','connect_timeout');child.kill();}, timings.connect);
+    let watchdog = connectionDeadline = schedule(() => {diagnose('connect_timeout','connect_timeout');anomaly('transport','connect_timeout');diagnostics.recoveryLayer='transport';child.kill();}, timings.connect);
     let authenticated = false;
     function handleEvent(event) {
       if (child !== transport) return;
@@ -489,8 +504,14 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         clearResponseRecovery();
         clearPrepareRecovery();
         if(event.ack.keepScreen==='on' && event.ack.pageLifecycle?.visible===1)responseRecoveryAttempted=false;
-        diagnose('connected');probeFailures=0;cancel(pingDeadline);pingDeadline=null;
+        diagnose('connected');probeFailures=0;unresponsive=false;clearProbe();
+        diagnostics.recoveryLayer='none';
         const ack = event.ack;if(ack.pageLifecycle?.visible===1)buddyDisplayed=true;
+        const channel=channelEvidence(ack);
+        if(channel){
+          diagnostics.channelLifecycle=channel;
+          if(channel.firstReason)anomaly('channel','channel_'+channel.firstReason,{bandAt:channel.firstAt??null,bandCode:channel.firstCode??null});
+        }
         bridgeReconnect=activeDisplay(ack) && ack.capabilities?.activityHold===true &&
           Number.isInteger(ack.capabilities?.maxActivityHoldMs) && ack.capabilities.maxActivityHoldMs>=ACTIVITY_HOLD_MS;
         if(activeDisplay(ack) || ack.pageLifecycle?.visible===0)clearReconnectWake();
@@ -594,11 +615,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         }
         publish();
       }
-      if (event.event === "result" && event.id === "link-ping") {
+      if (event.event === "result" && event.id === pingRequest && pingRequest!==null) {
         if(pingDeadline===null)return;
-        cancel(pingDeadline); pingDeadline = null;
         if(event.ok){
-          probeFailures=0;diagnose('link_alive');scheduleResponseRecovery();
+          clearProbe();
+          probeFailures=0;diagnose('link_alive');diagnostics.recoveryLayer='application';scheduleResponseRecovery();
           if(prepareRecoveryActive()){
             prepareRecovery.probedAt=now();
             if(prepareRecoveryEligible())wakePolicy.requestConnection(PREPARE_RECOVERY);
@@ -667,7 +688,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         child.kill();
       }
       if (event.event === "error") {
-        diagnose('native_error',diagnosticCodes.includes(event.code)?event.code:'operation_failed');
+        const code=diagnosticCodes.includes(event.code)?event.code:'operation_failed';
+        diagnose('native_error',code);
+        anomaly(code.startsWith('bluetooth_')?'link':'transport',code);
         state.operationError = event.code;
         state.error = event.message;
         if (!canRetryTransportError(event.code)) {
@@ -680,6 +703,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     }
     function handleError() {
       if (child !== transport) return;
+      anomaly('transport','transport_start_failed');
       state.error = "無法啟動傳輸程式，請先完成 native/transport 建置";
     }
     function handleClose(info) {
@@ -690,6 +714,11 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       diagnostics.closes++;
       diagnostics.exitCode = Number.isInteger(info?.code) ? info.code : null;
       diagnostics.signal = ['SIGTERM','SIGKILL','SIGABRT','SIGSEGV','SIGBUS'].includes(info?.signal) ? info.signal : null;
+      anomaly('transport','transport_closed');
+      if(diagnostics.firstAnomaly.transportStart===diagnostics.starts && diagnostics.firstAnomaly.exitCode===undefined){
+        diagnostics.firstAnomaly={...diagnostics.firstAnomaly,exitCode:diagnostics.exitCode,signal:diagnostics.signal};
+      }
+      diagnostics.recoveryLayer='transport';
       diagnose('transport_closed');
       transport = null;
       settleOperation("failed", "link_lost");
@@ -697,7 +726,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       clearInstallExit();
       clearBuddyCheck();
       clearWake();
-      cancel(pingDeadline); pingDeadline = null;
+      clearProbe();
       clearPending();
       state.progress = null;
       state.connection = !desired && state.error ? "error" : "disconnected";
@@ -711,6 +740,9 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       case "connect":
         await stop();
         if (closing) return;
+        diagnostics.firstAnomaly=null;
+        diagnostics.channelLifecycle=null;
+        diagnostics.recoveryLayer='none';
         if(batteryDevice!==c.address){batteryAlert.reset();batteryDevice=c.address;chargingKnown=null;}
         credential = { address: c.address, key: c.key };
         desired = true;
@@ -797,7 +829,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         clearInstallExit();
         settleOperation("cancelled", "install");
         wakePolicy.clear(); clearWake();
-        cancel(pingDeadline); pingDeadline = null;
+        clearProbe();
         clearBuddyCheck();
         state.connection = "installing";
         state.buddy = {...state.buddy, status: "installing", error: null};
@@ -855,10 +887,6 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       now() >= retryAt &&
       ["connected", "waiting", "standby"].includes(state.connection)
     ) {
-      if (state.connection === "standby" && !pingDeadline) {
-        write({op: "ping", id: "link-ping"});
-        const owner=transport;pingDeadline = schedule(() => failedProbe(owner,true), timings.ack);
-      }
       const activity = agent.status();
       pending = {
         v: 1,
@@ -898,12 +926,17 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
       if (wakeFlight) pending.wakeId = wakeFlight.id;
       write({ op: "snapshot", id: seq, payload });
       deadline = schedule(() => {
+        const firstTimeout=!unresponsive;unresponsive=true;
         diagnostics.ackTimeouts++; diagnose('buddy_unresponsive','ack_timeout');
+        anomaly('application','ack_timeout');
         clearPending();
         state.connection = "standby";
         state.error = null;
+        // An absent app receipt is not evidence of an RFCOMM disconnect.
+        // Probe the device before authorizing an app wake or worker restart.
+        probeLink();
         // A user waiting on the band must not sit behind the idle probe interval.
-        retryAt = now() + (probeFailures?timings.probeRetry:(operationActive() ? timings.launch : deliveryRetry()));
+        retryAt = now() + (probeFailures?timings.probeRetry:(operationActive() ? timings.launch : firstTimeout?timings.sample:deliveryRetry()));
         publish();
 
       }, timings.ack);

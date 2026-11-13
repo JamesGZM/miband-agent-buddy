@@ -94,3 +94,5 @@ Buddy 安裝只在手環頁面管理。`state.buddy` 區分未知、檢查、缺
 
 - [ADR-015](ADR-015-coalesced-event-wake.md): 合併事件喚起.
 - [獨立更新服務](../development/updates.md).
+
+通道生命週期與首次異常記錄區分有界的應用、裝置探測、子程序恢復。見 [ADR-017](ADR-017-channel-recovery.md)。

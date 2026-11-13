@@ -4,6 +4,20 @@
 
 Notable changes are documented here. Desktop and Buddy versions are maintained independently.
 
+## [0.7.10] - 2026-11-13
+
+### Improved
+
+- Buddy **0.5.21 / code 44** observes interconnect channel open/close/error events, bounds optional readiness checks, and replays only the latest ACK once after channel recovery. Older firmware without the readiness API remains supported.
+- Probe the device immediately after a missing Buddy ACK, allow one quick fresh-snapshot retry, and give the first failed probe a snapshot response opportunity before a second probe can rebuild the transport. Explicit user actions supersede background probes; unique probe IDs reject late results.
+- Preserve the first observed anomaly, timestamp, layer and original worker exit evidence across automatic reconnects. Expose only allowlisted channel counters and sanitized error codes in local health diagnostics.
+- Clarify stable conversation identities, duplicate-report handling and recoverable terminal delivery in the bundled AI setup instructions. Completion/cancellation must not depend solely on background callbacks that the host can cancel.
+
+### Verification limits
+
+- Local checks passed with 427 Node tests, architecture boundaries, 46 desktop Rust tests and 18 transport Rust tests. The local channel build was installed and returned channel-open/application ACK evidence; sustained device stability and the cause of the reported foreground exit remain unverified.
+- Mac packages remain ad-hoc signed and not Apple-notarized. Windows installers remain unsigned and experimental; Windows Bluetooth/SPP has not been tested on real Windows hardware.
+
 ## [0.7.9] - 2026-11-13
 
 ### Improved

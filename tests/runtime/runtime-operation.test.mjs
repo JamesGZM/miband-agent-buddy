@@ -246,24 +246,22 @@ test('an explicit brightness error fails immediately without retrying the wake',
   assert.equal(h.calls.filter(c=>c.op==='launch_buddy').length,1);
 });
 
-test('a manual setting waits for an outstanding link probe before sending its snapshot', async t => {
+test('a manual setting supersedes an outstanding background probe and ignores its late result', async t => {
   const band = sleepingBand();
   const h = runtimeHarness({onWrite(c,child) { if (c.op !== 'ping') band.onWrite(c,child); }});
   t.after(() => h.runtime.stop());
   await h.connect(); await h.clock.advance(5000); band.awake=false;
-  for (let i=0;i<60&&!h.calls.some(c=>c.id==='link-ping');i++) await h.clock.advance(1000);
-  assert.ok(h.calls.some(c=>c.id==='link-ping'));
+  for (let i=0;i<60&&!h.calls.some(c=>String(c.id).startsWith('link-ping-'));i++) await h.clock.advance(1000);
+  assert.ok(h.calls.some(c=>String(c.id).startsWith('link-ping-')));
   const launches=band.launches.length;
   const old=h.calls.filter(c=>c.op==='snapshot')[0].payload;
   await h.runtime.dispatch({op:'configure',settings:{wakeHoldMs:60000},request:'op-probe'});
-  assert.equal(band.launches.length,launches);
+  assert.equal(band.launches.length,launches+1);
   h.children[0].event(ack(old));
-  const snapshots=h.calls.filter(c=>c.op==='snapshot').length;
-  await h.clock.advance(2000);
-  assert.equal(h.calls.filter(c=>c.op==='snapshot').length,snapshots,'settings must not precede launch acceptance');
-  h.children[0].event({event:'result',id:'link-ping',ok:true});
+  h.children[0].event({event:'result',id:h.calls.filter(c=>String(c.id).startsWith('link-ping-')).at(-1).id,ok:false});
   await h.clock.advance(6000);
   assert.equal(band.launches.length,launches+1);
+  assert.equal(h.children[0].killed,0);
   assert.equal(h.state.operation.status,'done');
 });
 

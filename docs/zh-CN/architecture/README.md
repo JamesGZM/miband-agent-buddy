@@ -94,3 +94,5 @@ Buddy 安装只在手环页面管理。`state.buddy` 区分未知、检查、缺
 
 - [ADR-015](ADR-015-coalesced-event-wake.md): 合并事件唤起.
 - [独立更新服务](../development/updates.md).
+
+通道生命周期与首次异常记录区分有界的应用、设备探测、子进程恢复。见 [ADR-017](ADR-017-channel-recovery.md)。

@@ -107,3 +107,15 @@ test('current localized guides do not instruct users to run retired installers o
     assert.match(guide, /npm run hooks:install/);
   }
 });
+
+test('setup requires stable conversation identity and acknowledged terminal recovery', async () => {
+  const {text} = await runBuddyCli(['guide']);
+  assert.match(text, /Never create a new source or session for each message/);
+  assert.match(text, /Reconfiguration must reuse existing identities and pending deliveries/);
+  assert.match(text, /Remove queued reports only after an `accepted` or `ignored` runtime receipt/);
+  assert.match(text, /Terminal delivery must survive cancellation of background callbacks/);
+  assert.match(text, /bounded synchronous terminal submission when necessary/);
+  assert.match(text, /One active conversation must remain one task across repeated messages/);
+  assert.match(text, /Simulate failed terminal submission and cancelled background delivery/);
+  assert.match(text, /Event count increasing is normal and is not task count increasing/);
+});

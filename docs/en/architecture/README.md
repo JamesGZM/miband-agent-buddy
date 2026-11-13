@@ -92,3 +92,5 @@ A preparation failure before launch (`app_query_failed` / `app_sync_failed`) can
 
 - [ADR-015](ADR-015-coalesced-event-wake.md): Coalesced event wakes.
 - [Dedicated update service](../development/updates.md).
+
+Channel lifecycle evidence and first-anomaly retention now distinguish bounded application, device-probe and worker recovery. See [ADR-017](ADR-017-channel-recovery.md).

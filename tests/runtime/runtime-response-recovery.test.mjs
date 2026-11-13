@@ -9,7 +9,7 @@ async function setup({keep=true,active=true,visible=1,probe=true,recover=true,de
       launches++;if(recover&&launches>1)responding=true;
       if(!deferLaunch||launches===1)child.later({event:'result',id:c.id,ok:true});
     }
-    if(c.op==='ping'&&c.id==='link-ping'&&probe!==null)child.later({event:'result',id:c.id,ok:probe});
+    if(c.op==='ping'&&String(c.id).startsWith('link-ping-')&&probe!==null)child.later({event:'result',id:c.id,ok:probe});
     if(c.op==='snapshot'&&responding)child.later(ack(c.payload,{
       keepScreen:'on',wakeDisplay:{id:c.payload.wakeId,remainingMs:20000},
       capabilities:{activityHold:true},pageLifecycle:{visible},
@@ -69,9 +69,9 @@ for(const action of ['stop','disable','disconnect','manual','reset','install'])t
 test('disconnect cancels the settling timer and ignores a late probe from the old transport',async t=>{
   const h=await setup({probe:null});t.after(()=>h.runtime.stop());h.silence();await h.clock.advance(12000);
   const child=h.children[0],before=h.launches();
-  child.event({event:'result',id:'link-ping',ok:true});
+  child.event({event:'result',id:h.calls.filter(c=>String(c.id).startsWith('link-ping-')).at(-1).id,ok:true});
   await h.runtime.dispatch({op:'disconnect'});
-  child.event({event:'result',id:'link-ping',ok:true});
+  child.event({event:'result',id:h.calls.filter(c=>String(c.id).startsWith('link-ping-')).at(-1).id,ok:true});
   await h.clock.advance(10000);assert.equal(h.launches(),before);
   assert.ok(h.states.every(s=>s.wake?.reason!=='activity_unresponsive'));
 });

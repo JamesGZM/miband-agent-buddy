@@ -6,6 +6,7 @@ var activityRing = require('../common/generated/activity-ring');
 var keepScreenModule = require('../common/keep-screen');
 var settingsModule = require('../common/settings');
 var completionModule = require('../common/completion-notice');
+var channelModule = require('../common/channel-lifecycle');
 
 // Keep observed arrays and their existing items alive across animation ticks.
 function patchShapes(target,source) {
@@ -43,7 +44,7 @@ function createPageController(deps) {
   var alive=false;
   var settingsController=null, buddyTheme='chatgpt', keepWanted=false, powerSaving=false,buddyFps=10;
   var keepController = null;
-  var channel = null, timer = null, exitTimer = null, lastMessage = null;
+  var channel = null, channelLifecycle = null, timer = null, exitTimer = null, lastMessage = null;
   var receivedAt = 0, visible = false, lastTapAt = -1000;
   var activeMode = 'idle', modeAt = 0, exiting = false, metricsStamp = '';
   var rings = null, snapMetrics = true, lastRingPaint = 0;
@@ -141,6 +142,7 @@ function createPageController(deps) {
       rings={cpu:ui.createRingTransition(),memory:ui.createRingTransition(),disk:ui.createRingTransition()};snapMetrics=true;
       try {
         channel=interconnect.instance();
+        channelLifecycle=channelModule.createChannelLifecycle(channel,clock,schedule,cancel);
         channel.onmessage=function(event) {
           if(!alive || exiting)return;
           var msg;
@@ -164,9 +166,9 @@ function createPageController(deps) {
           if(lifecycle)ack.pageLifecycle=lifecycle.snapshot();
           if(deps.drawingCapabilities){ack.drawing={capabilities:deps.drawingCapabilities,frames:renderFrames,effectiveFps:ui.effectiveFps(powerSaving,buddyFps),animationEnabled:animatePet,elapsedMs:Math.max(0,clock()-modeAt)};if(boundsProbe)ack.drawing.bounds=boundsProbe.snapshot();}
           if(msg.command==='exit')exitTimer=schedule(function(){self.exitApp();},500);
-          channel.send({data:ack,success:function(){if(!alive)return;internal.errorText='';if(msg.command==='exit')self.exitApp();},fail:function(data,code){if(!alive)return;internal.errorText='ACK error '+code;if(msg.command==='exit')self.exitApp();}});
+          ack.capabilities.channelLifecycle=true;
+          channelLifecycle.send(ack,function(){if(!alive)return;internal.errorText='';if(msg.command==='exit')self.exitApp();},function(data,code){if(!alive)return;internal.errorText='ACK error '+code;if(msg.command==='exit')self.exitApp();});
         };
-        channel.onerror=function(event){if(!alive)return;internal.errorText='LINK error '+event.code;};
       }catch(error){internal.errorText='Interconnect unavailable';}
     },
     onShow() {
@@ -179,7 +181,7 @@ function createPageController(deps) {
     onRefresh(){if(!alive||exiting)return;if(lifecycle)lifecycle.refresh(pageId);this.tick();},
     onHide(){if(lifecycle)lifecycle.hide(pageId);this.releaseKeep();},
     onBackPress(){this.releaseKeep();return false;},
-    onDestroy(){if(!alive)return;alive=false;lastGlyph=null;lastBorderBase=null;baseStyles={};baseSources={};baseTargets={};movingTargets={};boundsKey='';if(boundsProbe)boundsProbe.close();if(lifecycle)lifecycle.destroy(pageId);this.releaseKeep();if(settingsController)settingsController.close();if(notifier)notifier.close();if(screenBrightness)screenBrightness.close();if(channel){channel.onmessage=null;channel.onerror=null;}channel=null;},
+    onDestroy(){if(!alive)return;alive=false;lastGlyph=null;lastBorderBase=null;baseStyles={};baseSources={};baseTargets={};movingTargets={};boundsKey='';if(boundsProbe)boundsProbe.close();if(lifecycle)lifecycle.destroy(pageId);this.releaseKeep();if(settingsController)settingsController.close();if(notifier)notifier.close();if(screenBrightness)screenBrightness.close();if(channelLifecycle)channelLifecycle.close();channelLifecycle=null;if(channel)channel.onmessage=null;channel=null;},
     exitApp(){
       if(exiting)return;
       exiting=true;this.releaseKeep();

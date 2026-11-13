@@ -26,7 +26,8 @@ test('connection evidence distinguishes open/auth/ACK/link failure and retains f
   assert.equal(h.state.diagnostics.phase,'authenticating');child.event({event:'authenticated'});
   await h.clock.advance(6000);assert.equal(h.state.diagnostics.phase,'connected');
   respond=false;await h.clock.advance(12000);
-  assert.equal(h.state.diagnostics.phase,'buddy_unresponsive');assert.equal(h.state.diagnostics.ackTimeouts,1);
+  assert.equal(h.state.diagnostics.phase,'link_alive');assert.equal(h.state.diagnostics.ackTimeouts,1);
+  assert.equal(h.state.diagnostics.firstAnomaly.code,'ack_timeout');
   child.event({event:'error',code:'event_lagged',message:'synthetic'});
   assert.equal(h.state.diagnostics.lastCode,'event_lagged');
   child.handlers.onClose({code:1,signal:'SIGSEGV'});

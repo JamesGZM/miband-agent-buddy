@@ -100,7 +100,8 @@
         "short",
         "long"
       ],
-      "maxActivityHoldMs": 120000
+      "maxActivityHoldMs": 120000,
+      "channelLifecycle": true
     },
     "powerSaving": true,
     "buddyFps": 20,
@@ -109,7 +110,23 @@
       "id": "completion-fixture",
       "status": "accepted"
     },
-    "completionVibrationMode": "short"
+    "completionVibrationMode": "short",
+    "channelLifecycle": {
+      "state": "open",
+      "opens": 2,
+      "closes": 1,
+      "errors": 0,
+      "sendFailures": 0,
+      "replays": 1,
+      "readyChecks": 2,
+      "readySupported": true,
+      "reconnected": true,
+      "openedAt": 1500,
+      "closedAt": 1400,
+      "firstAt": 1400,
+      "firstReason": "closed",
+      "firstCode": 1006
+    }
   },
   "credentials": {
     "address": "fixture-device",
@@ -353,7 +370,8 @@
             "short",
             "long"
           ],
-          "maxActivityHoldMs": 120000
+          "maxActivityHoldMs": 120000,
+          "channelLifecycle": true
         },
         "powerSaving": true,
         "buddyFps": 20,
@@ -362,7 +380,23 @@
           "id": "completion-fixture",
           "status": "accepted"
         },
-        "completionVibrationMode": "short"
+        "completionVibrationMode": "short",
+        "channelLifecycle": {
+          "state": "open",
+          "opens": 2,
+          "closes": 1,
+          "errors": 0,
+          "sendFailures": 0,
+          "replays": 1,
+          "readyChecks": 2,
+          "readySupported": true,
+          "reconnected": true,
+          "openedAt": 1500,
+          "closedAt": 1400,
+          "firstAt": 1400,
+          "firstReason": "closed",
+          "firstCode": 1006
+        }
       }
     },
     {
@@ -452,7 +486,8 @@
           "short",
           "long"
         ],
-        "maxActivityHoldMs": 120000
+        "maxActivityHoldMs": 120000,
+        "channelLifecycle": true
       },
       "powerSaving": true,
       "buddyFps": 20,
@@ -461,7 +496,23 @@
         "id": "completion-fixture",
         "status": "accepted"
       },
-      "completionVibrationMode": "short"
+      "completionVibrationMode": "short",
+      "channelLifecycle": {
+        "state": "open",
+        "opens": 2,
+        "closes": 1,
+        "errors": 0,
+        "sendFailures": 0,
+        "replays": 1,
+        "readyChecks": 2,
+        "readySupported": true,
+        "reconnected": true,
+        "openedAt": 1500,
+        "closedAt": 1400,
+        "firstAt": 1400,
+        "firstReason": "closed",
+        "firstCode": 1006
+      }
     },
     "paused": false,
     "settings": {

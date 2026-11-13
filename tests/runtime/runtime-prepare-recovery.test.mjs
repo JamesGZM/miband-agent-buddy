@@ -37,7 +37,7 @@ async function reconnectFailure({code='app_query_failed',recover=true,probe=true
       if(ok)awake=true;
       if(!deferRetry||launches<=2)child.later({event:'result',id:c.id,ok,code:ok?null:code});
     }
-    if(c.op==='ping' && c.id==='link-ping' && probe!==null)child.later({event:'result',id:c.id,ok:probe});
+    if(c.op==='ping' && String(c.id).startsWith('link-ping-') && probe!==null)child.later({event:'result',id:c.id,ok:probe});
     if(c.op==='snapshot') {
       // A later inventory request succeeds, but cannot open the page itself.
       if(inventory)child.later({event:'buddy',installed:true,versionCode:32});

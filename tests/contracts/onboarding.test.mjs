@@ -112,6 +112,8 @@ test('generic integration copies the whole integration guide by application iden
   assert.match(request, /Delivery channel/);
   assert.match(request, /later ordinary user turn without a notification instruction/);
   assert.match(request, /current session as not yet loaded/);
+  assert.match(request, /不得每說一句就新增任務/);
+  assert.match(request, /收到接收回執才移除/);
   assert.match(request, /不要假設安裝目錄或掃描家目錄/);
   assert.match(request, /不需要下載原始碼或安裝額外環境/);
   assert.ok(!request.includes(config.guidePath));
@@ -150,6 +152,8 @@ test('all setup-request languages require global automatic reporting with bounde
       assert.match(request, scope);
       assert.match(request, mechanism);
       assert.match(request, delivery);
+      assert.match(request, /run/);
+      assert.match(request, /識別碼|标识符|identity/);
       assert.ok(request.endsWith(config.guide));
     }
   } finally {setLanguage('zh-Hant');}
