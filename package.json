@@ -1,6 +1,6 @@
 {
   "name": "miband-agent-buddy",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "private": true,
   "description": "Turn Xiaomi Smart Band 9 into a desktop display for AI activity and system resources, with macOS and Windows apps",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "python3 scripts/build.py",
     "build:desktop": "python3 scripts/build_desktop.py",
     "bootstrap": "python3 native/transport/bootstrap.py",
-    "hooks:install": "node scripts/install_codex_hooks.mjs",
+    "hooks:install": "node services/runtime/bin/buddy-cli.mjs guide",
     "pretest": "python3 scripts/prepare_shared.py",
     "check:architecture": "node scripts/check_architecture.mjs"
   },

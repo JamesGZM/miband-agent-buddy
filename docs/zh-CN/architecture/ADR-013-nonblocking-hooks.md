@@ -2,6 +2,8 @@
 
 [English](../../en/architecture/ADR-013-nonblocking-hooks.md) · **简体中文** · [繁體中文](../../zh-TW/architecture/ADR-013-nonblocking-hooks.md)
 
+历史决策：源码安装与 skill 分发已由 [ADR-016](ADR-016-bundled-integration.md) 取代。旧安装脚本已移除，原 npm 命令改为输出离线指南。下述事件合约与隐私决策仍适用。
+
 ## 问题
 
 同步命令会等待本地 HTTP，接收端无响应时约 600ms；错误放行不代表不等待。旧安装器也不会升级已匹配命令的同步字段。

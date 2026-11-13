@@ -2,6 +2,8 @@
 
 **English** · [简体中文](../../zh-CN/architecture/ADR-004-local-agent-hooks.md) · [繁體中文](../../zh-TW/architecture/ADR-004-local-agent-hooks.md)
 
+Historical decision: source-installation and skill distribution are superseded by [ADR-016](ADR-016-bundled-integration.md). The old installer scripts are removed; the npm command now prints the offline guide. The event-contract and privacy decisions below remain relevant.
+
 ## Problem
 
 The existing Codex-only setup does not guide a new user through connecting a project, does not support Claude Code or custom harnesses, and cannot label parallel AI work clearly in the desktop.

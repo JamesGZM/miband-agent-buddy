@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const groups=[
+  'docs/architecture/ADR-016-bundled-integration.md',
   'docs/README.md','docs/display.md','docs/development/updates.md',
   'docs/architecture/ADR-015-coalesced-event-wake.md',
   'docs/architecture/ADR-013-nonblocking-hooks.md','docs/architecture/ADR-014-language-documentation.md',
@@ -27,7 +28,7 @@ const localized=(file,locale)=>{
   return locale==='en'?file:`docs/${locale}/${file}`;
 };
 const read=file=>readFileSync(path.join(root,file),'utf8');
-const canonical=new Set(['AGENTS.md','skills/buddy-hooks/SKILL.md']);
+const canonical=new Set(['AGENTS.md','services/runtime/integration-guide.md']);
 const translations=new Map(groups.flatMap(base=>['en','zh-CN','zh-TW'].map(locale=>[localized(base,locale),base])));
 const languageLabels=new Set(['English','简体中文','繁體中文']);
 function anchors(source) {

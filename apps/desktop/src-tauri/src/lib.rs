@@ -3,6 +3,7 @@ mod app;
 mod commands;
 mod domain;
 mod i18n;
+mod integration;
 mod login;
 mod net;
 mod notifications;
@@ -22,5 +23,8 @@ mod vault;
 mod xiaomi;
 
 pub fn run() {
+    if let Some(code) = integration::run_if_requested() {
+        std::process::exit(code);
+    }
     app::run();
 }

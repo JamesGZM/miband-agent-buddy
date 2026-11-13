@@ -5,6 +5,7 @@ export function createWakePolicy({ now = Date.now, cooldown = 10000, ttl = 60000
     observe(event, previous, {coalesce = false} = {}) {
       let reason = null, mode = null;
       if (event.event === 'UserPromptSubmit') { reason = 'start'; mode = 'thinking'; }
+      if (event.runStart && event.event === 'PreToolUse') { reason = 'start'; mode = 'working'; }
       if (event.event === 'PermissionRequest' && previous?.event !== 'PermissionRequest') { reason = 'attention'; mode = 'attention'; }
       if (event.event === 'Stop' && (!previous || ['thinking','working','attention'].includes(previous.mode))) { reason = 'complete'; mode = 'complete'; }
       // A terminal/cancel event invalidates an earlier start for this session.

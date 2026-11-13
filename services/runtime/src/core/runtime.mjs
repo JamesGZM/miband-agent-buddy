@@ -1,5 +1,6 @@
 import { createWakePolicy } from './wake-policy.mjs';
 import { createCodexState } from './codex-state.mjs';
+import { createActivityIngress } from './activity-ingress.mjs';
 import { initialBuddyState, checkedBuddyState, acknowledgedBuddyState } from './band-package-state.mjs';
 import { acceptAck, confirmedSettings, reconnectDelay, canRetryTransportError } from './buddy-state.mjs';
 import wire from '../../../../packages/buddy-shared/protocol/runtime.js';
@@ -60,6 +61,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         if(agent.status().activeSessions===0)cancelResponseRecovery();
       }
     }});
+  const activityIngress = createActivityIngress({now, accept: event => agent.accept(event)});
   let wakeFlight = null, wakeDeadline = null, pingDeadline = null;
   let installExit=null,installStart=null;
   let operation = null, operationDeadline = null;
@@ -738,6 +740,7 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
         cancelResponseRecovery();
         completions.clear();clearChargingRecovery();
         agent.reset();
+        activityIngress.reset();
         wakePolicy.clearEvents();
         if (wakeFlight?.session) {
           state.wake = {...state.wake, status: "cancelled"};
@@ -925,6 +928,10 @@ export function createRuntime({createTransport, sample, makeId, packagePath, ban
     acceptHook(event) {
       if (!closing) agent.accept(event);
     },
+    acceptActivity(value) {
+      return closing ? {accepted: false, code: 'unavailable'} : activityIngress.accept(value);
+    },
+    activityStatus() {return agent.status();},
     reportError(message) {state.error = message; publish();},
     stop() {
       if (stopping) return stopping;

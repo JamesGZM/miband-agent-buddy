@@ -21,7 +21,7 @@ export function runRuntime() {
     try {void runtime.dispatch(JSON.parse(line));}
     catch {runtime.reportError('操作無法完成');}
   });
-  const server = createHookServer({accept: runtime.acceptHook});
+  const server = createHookServer({accept: runtime.acceptHook, report: runtime.acceptActivity, status: runtime.activityStatus});
   let stopping = null;
   async function shutdown(code = 0) {
     if (stopping) return stopping;

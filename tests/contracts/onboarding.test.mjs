@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { initialPage, setupStage, welcomePage, onboardingCard, connectionGuide, readyCard } from '../../apps/desktop/ui/onboarding.js';
-import { HOOK_SOURCES, SKILL_URL, setupRequest, integrationsPage } from '../../apps/desktop/ui/integrations.js';
+import { setupRequest, integrationCopy, integrationsPage } from '../../apps/desktop/ui/integrations.js';
 import { initialState } from '../../apps/desktop/ui/state.js';
 import { setLanguage } from '../../apps/desktop/ui/i18n.js';
 
@@ -94,16 +95,62 @@ test('Buddy confirmation offers optional AI setup without requiring a Hook event
   assert.equal(initialPage(state), 'buddy', 'a transient disconnect still must not restart setup');
 });
 
-test('every supported source produces a project-scoped skill request, never an auto-install command', () => {
+test('generic integration copies the whole integration guide by application identity without paths', () => {
   setLanguage('zh-Hant');
-  for (const source of HOOK_SOURCES) {
-    const request = setupRequest(source.id);
-    assert.ok(request.includes(SKILL_URL));
-    assert.ok(request.includes(source.name));
-    assert.match(request, /專案級 Hooks/);
-    assert.doesNotMatch(request, /curl|sudo|dangerously/);
-  }
-  assert.equal(setupRequest('invalid'), null);
-  assert.match(integrationsPage({eventCount: 0}, String), /等待第一個事件/);
-  assert.match(integrationsPage({eventCount: 2, lastEventAt: Date.now()}, String), /已收到 Hooks 事件/);
+  const config = {application:{name:'MiBand Agent Buddy',id:'io.github.jamesgzm.miband-agent-buddy'},
+    command:'/synthetic/Buddy.app/Contents/MacOS/buddy', cliArgs:['--buddy-cli'], guidePath:'/synthetic/runtime/integration-guide.md',
+    guide:readFileSync(new URL('../../services/runtime/integration-guide.md',import.meta.url),'utf8')};
+  const request = setupRequest(config);
+  assert.match(request, /使用者全域的持續自動狀態回報/);
+  assert.match(request, /跨專案、新主對話及後續輪次/);
+  assert.match(request, /選擇支援的自動觸發機制/);
+  assert.match(request, /不要只測通 CLI 就結束/);
+  assert.match(request, /不得自行改成專案級接入/);
+  assert.match(request, /單次上報成功不代表自動接入完成/);
+  assert.match(request, /自動接入未完成/);
+  assert.match(request, /Automatic trigger/);
+  assert.match(request, /Delivery channel/);
+  assert.match(request, /later ordinary user turn without a notification instruction/);
+  assert.match(request, /current session as not yet loaded/);
+  assert.match(request, /不要假設安裝目錄或掃描家目錄/);
+  assert.match(request, /不需要下載原始碼或安裝額外環境/);
+  assert.ok(!request.includes(config.guidePath));
+  assert.ok(!request.includes(config.command));
+  assert.ok(request.includes('--buddy-cli'));
+  assert.ok(request.includes(config.guide));
+  assert.ok(request.endsWith(config.guide));
+  assert.doesNotMatch(request,/https?:\/\/|\/Applications\/|\/Contents\/|\.app\b|\/synthetic\//i);
+  assert.equal(integrationCopy('request',config),request);
+  assert.equal(integrationCopy('unknown',config),null);
+  assert.doesNotMatch(request,/MCP|report_activity|buddy_status/);
+  assert.doesNotMatch(request,/離線|离线|offline/i);
+  assert.equal(integrationCopy('request',undefined),null);
+  const page = integrationsPage({eventCount:0},String,config);
+  assert.match(page,/等待第一個事件/);
+  assert.match(page,/不同專案的新對話/);
+  assert.match(page,/不另外要求上報/);
+  assert.doesNotMatch(page,/在目標專案|為目前對話建立/);
+  assert.match(page,/複製接入說明/);
+  assert.match(page,/查看接入說明/);
+  assert.doesNotMatch(page,/Custom harness|DeepSeek harness|選擇你的 AI 工具|data-copy-provider|MCP/);
+  assert.match(integrationsPage({eventCount:2,lastEventAt:Date.now()},String,config),/已收到活動事件/);
+  assert.match(integrationsPage({},String),/data-copy-integration="request" disabled/);
+});
+
+test('all setup-request languages require global automatic reporting with bounded observation', () => {
+  const config = {application:{name:'MiBand Agent Buddy'},guide:'Synthetic guide'};
+  try {
+    for (const [language, scope, mechanism, delivery] of [
+      ['zh-Hant', /使用者全域/, /自動觸發機制/, /非阻塞觀察機制/],
+      ['zh-Hans', /用户全局/, /自动触发机制/, /非阻塞观察机制/],
+      ['en', /user-wide/, /supported automatic trigger/, /nonblocking observation/],
+    ]) {
+      setLanguage(language);
+      const request = setupRequest(config);
+      assert.match(request, scope);
+      assert.match(request, mechanism);
+      assert.match(request, delivery);
+      assert.ok(request.endsWith(config.guide));
+    }
+  } finally {setLanguage('zh-Hant');}
 });

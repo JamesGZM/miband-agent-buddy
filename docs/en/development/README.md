@@ -68,7 +68,6 @@ GitHub explicitly uses `ci`, does not inspect the keychain and rejects supplied 
 | `scripts` | Build, resource generation, packaging and local setup tools |
 | `tests` | Runtime, band, contract and architecture suites |
 | `mac` | Supported compatibility entrypoints |
-| `skills/buddy-hooks` | Project-level AI integration instructions |
 
 The [architecture document](../architecture/README.md) defines ownership and dependency direction. [AGENTS.md](../../../AGENTS.md) summarizes repository rules for automated coding tools.
 

@@ -3,7 +3,7 @@ import { wakeProgress } from "./connection-status.js";
 import { initialState } from "./state.js";
 import { startPreview } from "./preview.js";
 import { createToast } from "./toast.js";
-import { integrationsPage, setupRequest, SKILL_URL } from "./integrations.js";
+import { integrationsPage, integrationCopy } from "./integrations.js";
 import { initialPage, setupStage, welcomePage, onboardingCard, connectionGuide, readyCard } from "./onboarding.js";
 import { buddyPackageView, bandOnlyError } from "./band-package.js";
 import { desktopUpdateView, updateErrorMessage, PROJECT_URL } from "./desktop-update.js";
@@ -646,7 +646,7 @@ function render() {
       : page === "devices"
         ? devicesPage()
         : page === "hooks"
-          ? integrationsPage(state.runtime.agent, escape)
+          ? integrationsPage(state.runtime.agent, escape, state.integration)
         : page === "account"
           ? accountPage()
           : settingsPage();
@@ -880,10 +880,10 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (!hydrated) return;
-  if (b.dataset.copySkill || b.dataset.copyProvider) {
-    const text = b.dataset.copySkill ? SKILL_URL : setupRequest(b.dataset.copyProvider);
+  if (b.dataset.copyIntegration) {
+    const text = integrationCopy(b.dataset.copyIntegration, state.integration);
     if (text) bridge.copyText(text)
-      .then(() => toast.show("success", t("已複製，可貼到 AI 的專案對話")))
+      .then(() => toast.show("success", t("已複製，可貼到要接入的 AI 工具")))
       .catch(() => toast.show("error", t("無法複製，請手動選取下方文字")));
     return;
   }

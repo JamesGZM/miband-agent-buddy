@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {runtimeHarness, ack} from '../helpers/runtime.mjs';
+import {sanitizeActivity} from '../../services/runtime/src/adapters/activity-contract.mjs';
 
 const {createKeepScreen}=createRequire(import.meta.url)('../../apps/band/src/common/keep-screen.js');
 
@@ -102,4 +103,29 @@ test('unresponsive foreground receipts cannot permanently suppress a real event 
   h.silence();await h.clock.advance(12000);const before=h.launches().length;
   h.event('UserPromptSubmit');await h.clock.advance(16000);
   assert.equal(h.launches().length,before+1);
+});
+
+test('a generic run starting with working wakes a sleeping Buddy without waiting for completion',async t=>{
+  const h=await setup({activityKeepAwake:false});t.after(()=>h.runtime.stop());
+  h.hide();await h.clock.advance(40000);
+  const before=h.launches().length;
+  const send=value=>h.runtime.acceptActivity(sanitizeActivity({source:'fixture-client',session:'fixture-conversation',run:1,seq:1,state:'working',...value}));
+  assert.equal(send({}).accepted,true);
+  await h.clock.advance(2000);
+  assert.equal(h.state.agent.state,'working');
+  assert.equal(h.launches().length,before+1);
+  assert.equal(h.state.wake.reason,'start');
+  await h.clock.advance(4000);
+  assert.equal(h.state.wake.status,'confirmed');
+  for(let seq=2;seq<=8;seq++){
+    h.hide();await h.clock.advance(12000);
+    assert.equal(send({seq,state:seq%2?'working':'thinking'}).accepted,true);
+    await h.clock.advance(2000);
+    assert.equal(h.launches().length,before+1,'ordinary tool/resumption events must not relaunch');
+  }
+  assert.equal(send({seq:9,state:'cancelled'}).accepted,true);
+  await h.clock.advance(12000);
+  assert.equal(send({run:2,seq:1}).accepted,true);
+  await h.clock.advance(2000);
+  assert.equal(h.launches().length,before+2,'a later execution must wake again');
 });

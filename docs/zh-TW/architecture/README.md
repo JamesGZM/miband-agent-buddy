@@ -1,5 +1,9 @@
 # 架構
 
+桌面建置共用 `scripts/runtime_resources.py`，只封裝 runtime bin/src 與共享 protocol/presentation 中的 JavaScript 模組、最小 ESM/CommonJS 套件資訊和目前離線接入指南，不包含開發 npm scripts、測試 fixtures 或額外 Markdown。指南仍供 CLI guide/help 使用，並內嵌於 App 介面；授權／來源資料另行完整封裝，包括上游 README 聲明。
+
+新 AI 接入使用已驗證的宿主 Hooks／回調 → 內建 `--buddy-cli` → 既有 runtime。通用指令附完整接入說明和應用身分，不附安裝路徑，由接入 AI 選擇已驗證的宿主機制。不要求額外環境，不新增對外 API。匿名身分與遞增輪次、順序支援有界並行接收，本機回執不等待裝置。舊 Hooks 保留且不自動遷移。見 [ADR-016](ADR-016-bundled-integration.md)。
+
 [English](../../en/architecture/README.md) · [简体中文](../../zh-CN/architecture/README.md) · **繁體中文**
 
 這裡是當前架構的權威說明，歷史架構地址跳轉到此。本專案把小米手環 9 作為電腦旁的桌面顯示屏，提供 macOS 與 Windows x64/ARM64 桌面 App。實機驗證目前覆蓋 macOS 搭配 NFC 版手環；Windows 仍屬實驗性預覽，其平台邊界與驗證限制見 [ADR-012](ADR-012-windows-preview.md)。
@@ -42,9 +46,9 @@ AI Hooks → 回環 HTTP → Node 執行時核心 → 傳輸適配器
 
 ## 活動與有界喚醒
 
-Hooks 僅包含事件、會話哈希和時間戳；接收器綁定 `127.0.0.1:10731`，拒絕瀏覽器來源寫入並限制輸入。Codex 相容路徑保留，新 provider 先命名空間再哈希。[項目 skill 原文](../../../skills/buddy-hooks/SKILL.md)與只合併的安裝器支援項目配置（[ADR-004](ADR-004-local-agent-hooks.md)）。失敗時成功退出，不作權限決定。最多 128 個會話，僅存記憶體，聚合優先級為等待確認、執行、思考；不推斷並行工具或子代理數量。15 分鐘無事件只標為過期，仍保持活動與亮屏續期。`reset_activity` 清除觀察記錄，不取消 AI 任務。
+Hooks 僅包含事件、會話哈希和時間戳；接收器綁定 `127.0.0.1:10731`，拒絕瀏覽器來源寫入並限制輸入。Codex 相容路徑保留，新 provider 先命名空間再哈希。[內建指南](../../../services/runtime/integration-guide.md)定義目前接入方式（[ADR-016](ADR-016-bundled-integration.md)）；原始碼安裝器已退役，既有事件發送器保持相容。失敗時成功退出，不作權限決定。最多 128 個會話，僅存記憶體，聚合優先級為等待確認、執行、思考；不推斷並行工具或子代理數量。15 分鐘無事件只標為過期，仍保持活動與亮屏續期。`reset_activity` 清除觀察記錄，不取消 AI 任務。
 
-提交任務、新權限請求和完成可請求喚醒，普通指標和工具流量不能。只保留一個事件，TTL 60 秒，全局冷卻 10 秒，等待確認優先；取消和恢復工具執行會使舊請求失效。
+提交任務、通用新輪次首個 working、新權限請求和完成可請求喚醒；同輪次後續 thinking 是恢復而不是新開始，普通指標和工具流量不能。只保留一個事件，TTL 60 秒，全局冷卻 10 秒，等待確認優先；取消和恢復工具執行會使舊請求失效。
 
 新鮮可見且亮屏中的回執及未過期租約允許優先發快照；喚起期間 Hook 合入同一交易。隱藏或關閉亮屏的競爭允許在原期限內後備啟動一次（[ADR-015](ADR-015-coalesced-event-wake.md)）。
 

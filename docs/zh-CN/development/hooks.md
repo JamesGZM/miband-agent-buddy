@@ -1,12 +1,18 @@
-# 本地 AI Hooks
+# 本地 AI 接入
 
 [English](../../en/development/hooks.md) · **简体中文** · [繁體中文](../../zh-TW/development/hooks.md)
 
-把 [Buddy Hooks skill 原文](../../../skills/buddy-hooks/SKILL.md) 提供给项目中的 AI，或复制公开链接：
+## 内置 CLI
 
-`https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md`
+新接入请从已安装 App 的 **AI 接入**页复制通用指令，其中直接附上完整接入说明与 MiBand Agent Buddy 应用身份，不附文档链接或安装路径。由接入 AI 通过宿主或操作系统的应用注册信息确认入口，不猜测目录或扫描家目录。接入 AI 检查宿主能力，分别选择已验证的生命周期触发器并通过内置 CLI 投递，用户无需选择模型或平台。Buddy 内置 Node 和接入代码，不需要 checkout、npm 或额外运行环境；不要扫描家目录寻找源码。
 
-请它将**当前项目**连接到正在运行的 Buddy 桌面 App。仓库提供可复用指引，安装 skill 本身不会安装或启用生命周期 Hooks。
+新接入默认要求用户全局自动上报，覆盖本地不同项目、新主对话及后续轮次。触发机制由宿主能力决定，Hooks 只是选项，不是前提。不得自行降级为项目级配置或测通 CLI 后结束；先完成本轮可做的持久设置，再分别报告宿主启用、跨项目新对话和后续轮次的真实验证状态。必要时可以有最小元数据适配器，但不默认另造安装器，不依赖接入项目或其他 App 的私有执行环境。优先使用宿主支持的后台观察机制，保持有界、有序投递；300ms 仅限制接收入口，不是完整回调时延。必须同步的处理器只做最小有界接收或交接，保持宿主原生行为。
+
+桌面程序在启动界面前处理 `--buddy-cli guide`、`--buddy-cli status`、`--buddy-cli report`。[内置指南](../../../services/runtime/integration-guide.md) 定义匿名 source/session/run/seq/state 合约。CLI 向唯一已运行的 runtime 提交。内部 loopback 入口是实现细节，不是另一套对外 API。
+
+本机提交时限 300ms；宿主限制命令启动并按对话串行化，独立对话可并发调用 CLI，不建立无界进程队列。客户端调度和启动另有延迟。均不等待蓝牙或手环 ACK；失败不得阻止原任务或反复重试。每个对话的轮次和顺序水位拒绝迟到、重复和重新打开已结束轮次的事件；来源隔离并行客户端，通用水位最多保留 128 个对话至重设或重启。原生 Hooks 与通用接入不可重复统计同一对话。仅模型上报可能漏报取消；提问提醒必须有真实解除信号。见 [ADR-016](../architecture/ADR-016-bundled-integration.md)。
+
+下文只记录供既有配置使用的旧事件发送器。新接入遵循内置指南，不再提供平台专用源码安装器。
 
 ## 选择需要用户的提醒
 
@@ -21,8 +27,6 @@
 | 可选非阻塞提问 | 工具返回只代表问题提交，不代表回答。当前事件型适配器不能在后续活动中独立保留待答问题。除非 harness 自己聚合待答请求、提供真实回答/取消/失效回调，并串行上报归一化状态直到最后一个问题关闭，否则不启用此映射。 |
 | 缺少可靠生命周期 | 保留活动上报，明确注明提问提醒未支持或未验证。 |
 
-安装后分别报告原生授权、阻塞提问、非阻塞提问能力及解除方式。用隔离接收器验证重复开始、回答、取消和并发会话；配置存在不代表宿主已触发或物理屏幕已验证。详见 [安装 Skill](../../../skills/buddy-hooks/SKILL.md#select-needs-user-reminders)。
-
 ## 支持的方式
 
 | 工具 | 接入 | 配置 |
@@ -32,26 +36,19 @@
 | DeepSeek 或其他自定义 harness | 生命周期回调调用通用发送器 | 接入真实 harness，不虚构模型专属设置文件 |
 | 普通 ChatGPT／Claude 桌面聊天 | 不宣称自动接入 | 需要提供受支持生命周期回调的本地工具 |
 
-安装器支持 `codex` 与 `claude-code`，仅合并本地配置，不授予 AI 操作权限。Codex 需要审阅并信任非托管 Hooks，项目本身也需要信任；管理策略可能阻止执行。完成后检查 `/hooks` 并开始新会话。参阅官方 [Codex 发现与信任规则](https://learn.chatgpt.com/docs/hooks)及 [Claude Code 配置](https://code.claude.com/docs/en/hooks)。
+既有适配器配置由实际宿主或接入 AI 管理，不再由仓库安装器写入。Codex 需要宿主审阅/信任及适用的项目信任；应确认实际加载源并验证真实回调。参见官方 [Codex Hooks](https://learn.chatgpt.com/docs/hooks) 与 [Claude Code Hooks](https://code.claude.com/docs/en/hooks)。
 
-## 设置与移除
+## 源码兼容命令
 
-从 Buddy 仓库运行，将示例目标替换为已有项目的绝对路径：
+基于 checkout 的 Codex/Claude 安装器已退役。新接入使用 App 的完整接入说明，由接入 AI 建立已验证的生命周期触发器，通过内置 CLI 投递。
+
+保留原 npm 命令作为只读指南入口：
 
 ```sh
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --dry-run --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --status --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --uninstall --json
+npm run hooks:install
 ```
 
-Claude 使用 `claude-code`。明确要求用户级安装时省略 scope/root。原有 `npm run hooks:install` 保持为用户级 Codex 入口，并转发参数。同一 Node 和 checkout 路径的安装具有幂等性。原配置在项目外的 `~/Library/Application Support/io.github.jamesgzm.miband-agent-buddy/hook-backups` 私密备份，目录权限 `0700`、文件 `0600`，并原子更新。无效 JSON、符号链接文件／目录及错误的 hook 组不修改。移除只清理匹配命令，不覆盖后来改动；不要直接用整份旧备份还原。
-
-保持单一有效 Buddy scope。项目安装会检查用户级、祖先及项目共享配置。其他 scope 已有 Buddy 命令时，返回 `blocked: true`、`reason: "existing_scope"` 与 `conflictingPaths`，不安装目标配置。`installed` 只描述选定文件。先确认工具实际加载及信任的 scope，再移除旧条目。自定义 wrapper 与插件 Hooks 仍需在 `/hooks` 人工检查；检测到配置不代表已加载。
-
-独占 `.buddy-lock` 串行化同一配置的 Buddy 更新，冲突时返回重试信息。进程崩溃留下空锁时，先确认安装器已停止再移除该锁。外部编辑器不遵守此锁；安装时避免编辑同一配置。替换前会再次检查，但不能保证排除其他应用的并发修改。
-
-`--status` 只返回配置定义数；实际送达看运行时 `agent.eventCount` 与 `lastEventAt`。ACK 确认软件接收，不证明物理亮屏。移动源码或 Node 会使绝对命令失效，需要重新安装并移除旧命令。
+此命令只输出内置接入指南，不安装、升级、移除或信任任何宿主 Hooks；旧 provider/scope/uninstall 参数不再支持。清理既有配置时，检查实际宿主设置，私密备份后只移除旧 Buddy 条目，保留其他 Hooks 和后续修改。不要用整份旧备份覆盖当前设置。配置、宿主加载/信任与真实自动事件必须分别验证。
 
 ## 通用 harness 发送器
 
@@ -88,10 +85,10 @@ Claude 原生 `Stop` 不在用户中断时触发。取消后仍显示活动可�
 
 支持后台命令的宿主使用异步 Hooks。Codex 的 `SessionEnd` 始终同步，因此每个 CLI 发送入口先校验、脱敏，再启动不继承管道的独立发送进程，不等待 HTTP。输入看门狗为 150ms；发送进程的 HTTP 超时为 600ms，进程看门狗为 1.2 秒。进程启动仍有少量开销。通知采用尽力送达，不重试、不输出权限决定。
 
-在相同作用域重新运行安装器可升级已有 Buddy 配置：仅更新其 `async`、`timeout`，保留其他 Hooks 和设置，替换前生成私有备份。`--status --json` 的 `needsUpgrade` 标记旧配置。通过 `/hooks` 检查变更并重新开启宿主会话。
+旧处理器变更需在宿主中审阅，并按要求重新加载。新增回调优先使用内置 CLI；仓库不再提供升级或重写宿主配置的脚本。
 
 事件时间戳在发送入口读取输入、启动后台进程之前生成。接收器忽略更早的事件，同一毫秒内终止事件不会被活动事件覆盖。宿主独立调度仍可能导致入口乱序启动，会话退出也可能取消未启动的通知，因此这不是保证送达的事件日志。自定义 harness 应按回调顺序将通知加入自己的后台队列，不在 agent 执行路径等待 HTTP。
 
 ## 已有本机 Cursor Hooks
 
-已有 Cursor 包装脚本可调用 `services/runtime/bin/cursor-hook.mjs`。它将原有六个事件映射到相同的 `custom` 会话命名空间，先脱敏再后台发送，即使输入错误或不结束也会输出有效宿主响应。`beforeSubmitPrompt` 返回 `continue: true`；`preToolUse` 返回 `permission: "allow"`，表示 Buddy 自身不阻止操作；其他安全 Hooks 与 Cursor 权限仍由宿主管理。不输出后续提示词。Cursor 此处未记录原生 `async` 字段，不应直接复制 Codex 配置字段。本适配器用于已配置的本机命令，安装器仍只管理 Codex 和 Claude Code。参见 [Cursor 官方 Hooks 文档](https://cursor.com/docs/hooks)。
+已有 Cursor 包装脚本可调用 `services/runtime/bin/cursor-hook.mjs`。它将原有六个事件映射到相同的 `custom` 会话命名空间，先脱敏再后台发送，即使输入错误或不结束也会输出有效宿主响应。`beforeSubmitPrompt` 返回 `continue: true`；`preToolUse` 返回 `permission: "allow"`，表示 Buddy 自身不阻止操作；其他安全 Hooks 与 Cursor 权限仍由宿主管理。不输出后续提示词。Cursor 此处未记录原生 `async` 字段，不应直接复制 Codex 配置字段。本适配器用于已配置的本机命令，新接入遵循内置指南。参见 [Cursor 官方 Hooks 文档](https://cursor.com/docs/hooks)。

@@ -347,7 +347,7 @@ pub fn start(shared: Shared, app: tauri::AppHandle) {
     }
 }
 
-fn runtime_paths() -> (std::path::PathBuf, std::path::PathBuf) {
+pub(crate) fn runtime_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     // Release bundles retain the source layout inside Resources, so shared imports
     // and compatibility paths work after the .app is moved to another Mac.
     if let Ok(executable) = std::env::current_exe() {

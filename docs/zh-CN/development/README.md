@@ -66,7 +66,6 @@ GitHub 明确使用 `ci`，不读取钥匙串并拒绝传入证书身份，不�
 | `scripts` | 构建、资源生成、打包与本地设置 |
 | `tests` | 运行时、手环、契约和架构测试 |
 | `mac` | 兼容入口 |
-| `skills/buddy-hooks` | 项目级 AI 接入指引 |
 
 [架构文档](../architecture/README.md)定义所有权与依赖方向，供编码助手执行的规则原文见 [AGENTS.md](../../../AGENTS.md)。
 

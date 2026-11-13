@@ -33,6 +33,7 @@ pub async fn get_state(
     let mut view =
         serde_json::to_value(services::view(&s, autostart)).map_err(|_| "狀態編碼失敗")?;
     view["appVersion"] = json!(env!("CARGO_PKG_VERSION"));
+    view["integration"] = crate::integration::config();
     view["desktopUpdate"] = crate::updater::view(&app);
     Ok(view)
 }

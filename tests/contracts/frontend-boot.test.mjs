@@ -24,7 +24,8 @@ test('actual frontend boots, refreshes native state and renders every existing p
     runtime:{connection:'connected',agent:{state:'thinking'},ack:{appVersion:'0.5.2',page:0,buddyTheme:'chatgpt',settingsApplied:true},lastAckAt:Date.now(),metrics:{
       sampledAt:Date.now(),cpu:42,memory:{usedBytes:8*2**30,totalBytes:16*2**30,percent:50},
       disk:{usedBytes:60e9,totalBytes:100e9,percent:60},
-    }},autostart:false};
+    }},autostart:false,
+    integration:{application:{name:'MiBand Agent Buddy',id:'io.github.jamesgzm.miband-agent-buddy'},guide:'Complete offline guide fixture'}};
   const initialAck = state.runtime.ack;
   delete state.runtime.ack;
   let failInitialState;
@@ -120,16 +121,16 @@ test('actual frontend boots, refreshes native state and renders every existing p
   }
   click({page: 'hooks'});
   assert.match(node('#content').innerHTML, /等待第一個事件/);
-  click({copySkill: 'true'});
+  click({copyIntegration: 'request'});
   await settle();
-  assert.equal(copies.at(-1), 'https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md');
-  click({copyProvider: 'claude-code'});
-  await settle();
-  assert.match(copies.at(-1), /Claude Code/);
-  assert.match(copies.at(-1), /專案級 Hooks/);
+  assert.match(copies.at(-1), /使用者全域的持續自動狀態回報/);
+  assert.match(copies.at(-1), /選擇支援的自動觸發機制/);
+  assert.equal(node('#toast').textContent, '已複製，可貼到要接入的 AI 工具');
+  assert.ok(copies.at(-1).endsWith(state.integration.guide));
+  assert.doesNotMatch(copies.at(-1),/https?:\/\/|\/Applications\/|\.app\b/i);
   state.runtime.agent = {state: 'attention', eventCount: 3, lastEventAt: Date.now(), activeSessions: 3, sessionCounts: {thinking: 1, working: 1, attention: 1}};
   await refresh();
-  assert.match(node('#content').innerHTML, /已收到 Hooks 事件/);
+  assert.match(node('#content').innerHTML, /已收到活動事件/);
   click({page: 'buddy'});
   assert.doesNotMatch(node('#content').innerHTML, /開始使用 Buddy/);
   assert.match(node('#activity').textContent, /3 個任務/);

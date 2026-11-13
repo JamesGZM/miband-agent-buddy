@@ -2,6 +2,8 @@
 
 [English](../../en/architecture/ADR-004-local-agent-hooks.md) · **简体中文** · [繁體中文](../../zh-TW/architecture/ADR-004-local-agent-hooks.md)
 
+历史决策：源码安装与 skill 分发已由 [ADR-016](ADR-016-bundled-integration.md) 取代。旧安装脚本已移除，原 npm 命令改为输出离线指南。下述事件合约与隐私决策仍适用。
+
 ## 问题
 
 原来的 Codex 专用设置缺少新用户项目接入引导，不支持 Claude Code 或自定义 harness，也不能清楚表达并发 AI 工作。

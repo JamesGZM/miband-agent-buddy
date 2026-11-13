@@ -93,7 +93,7 @@ macOS 開啟 DMG 後，將 **MiBand Agent Buddy.app** 拖入 **Applications**；
 
 ## 接入 AI 工具
 
-將 **AI 接入**頁面的設定請求複製到專案的 AI 對話中，或分享 [Buddy Hooks skill](https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md) 連結，由 AI 按照指引完成專案設定與驗證。
+在 **AI 接入**頁面複製完整接入說明，貼到要接入的 AI 工具，要求跨專案和新對話的使用者全域自動回報。機制按宿主能力選擇，Hooks 只是選項；Buddy 內建 CLI 和指南，不需要原始碼或額外環境。宿主啟用及真實自動開始／結束須單獨驗證，CLI 測通不代表接入完成。見 [本機 AI 接入](../zh-TW/development/hooks.md)。
 
 | 工具 | 接入方式 |
 | --- | --- |

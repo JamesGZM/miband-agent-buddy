@@ -119,8 +119,8 @@ body {
 .hook-source-head { flex-wrap: wrap; }
 .hook-source h3 { margin: 0; font-size: 14px; }
 .hook-source p { min-height: 65px; }
-.hook-source details { margin-top: 12px; color: var(--muted); font-size: 12px; }
-.hook-source textarea { width: 100%; min-height: 130px; resize: vertical; margin-top: 8px; color: var(--text); background: var(--control); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: inherit; user-select: text; }
+.hook-source details, .hook-intro details { margin-top: 12px; color: var(--muted); font-size: 12px; }
+.hook-source textarea, .hook-intro textarea { width: 100%; min-height: 130px; resize: vertical; margin-top: 8px; color: var(--text); background: var(--control); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: inherit; user-select: text; }
 .welcome-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .9fr); align-items: center; gap: 40px; min-height: 440px; max-width: 960px; margin: 20px auto; }
 .welcome-intro { padding: 12px 0; }
 .welcome-icon { width: 76px; height: 76px; display: block; margin-bottom: 24px; }

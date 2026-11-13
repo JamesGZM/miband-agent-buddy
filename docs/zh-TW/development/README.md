@@ -66,7 +66,6 @@ GitHub 明確使用 `ci`，不讀取鑰匙圈並拒絕傳入證書身分，不�
 | `scripts` | 構建、資源生成、打包與本地設定 |
 | `tests` | 執行時、手環、契約和架構測試 |
 | `mac` | 相容入口 |
-| `skills/buddy-hooks` | 項目級 AI 接入指引 |
 
 [架構文檔](../architecture/README.md)定義所有權與依賴方向，供編碼助手執行的規則原文見 [AGENTS.md](../../../AGENTS.md)。
 

@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from runtime_resources import stage_runtime_sources
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / 'apps/desktop'
@@ -17,10 +18,6 @@ TARGETS = {'x64': 'x86_64-pc-windows-msvc', 'arm64': 'aarch64-pc-windows-msvc'}
 def run(args, **kwargs):
     kwargs.setdefault('cwd', ROOT)
     return subprocess.run([str(a) for a in args], check=True, **kwargs)
-
-
-def copy_tree(source, target):
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', 'node_modules', '.DS_Store'))
 
 
 def pe_machine(path):
@@ -60,9 +57,7 @@ def main():
     runtime = output / 'runtime'
     (runtime / 'bin').mkdir(parents=True)
     shutil.copy2(node, runtime / 'bin/node.exe')
-    for name in ['services/runtime', 'packages/buddy-shared']:
-        copy_tree(ROOT / name, runtime / name)
-    shutil.copy2(ROOT / 'package.json', runtime / 'package.json')
+    stage_runtime_sources(ROOT, runtime)
     native = runtime / 'native/transport/target/debug'
     native.mkdir(parents=True)
     shutil.copy2(ROOT / f'native/transport/target/{target}/release/buddy-transport.exe', native / 'buddy-transport.exe')

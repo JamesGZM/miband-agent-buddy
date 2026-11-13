@@ -13,6 +13,7 @@ test('architecture guard rejects effects in core and cross-app imports', () => {
     ['apps/desktop/src-tauri/src/domain.rs','use std::process::Command;'],
     ['tests/runtime/invalid.mjs',"const s=readFileSync(file).replace('8000','80');"],
     ['scripts/invalid.py',"path = root/'quickapp/src/app.ux'"],
+    ['services/runtime/src/adapters/invalid.mjs',"const path = 'tools/list.mjs';"],
   ]) assert.ok(checkSource(file,source).length,file);
 });
 test('architecture guard accepts pure shared imports and the explicit platform bridge', () => {

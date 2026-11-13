@@ -2,6 +2,8 @@
 
 **English** · [简体中文](../../zh-CN/architecture/ADR-013-nonblocking-hooks.md) · [繁體中文](../../zh-TW/architecture/ADR-013-nonblocking-hooks.md)
 
+Historical decision: source-installation and skill distribution are superseded by [ADR-016](ADR-016-bundled-integration.md). The old installer scripts are removed; the npm command now prints the offline guide. The event-contract and privacy decisions below remain relevant.
+
 ## Problem
 
 Synchronous command hooks wait for local HTTP delivery (about 600ms when the receiver stalls). Fail-open exit codes alone do not prevent delays. Reinstalling formerly matched only commands, leaving old synchronous fields unchanged.

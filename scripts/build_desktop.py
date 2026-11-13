@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 from PIL import Image
+from runtime_resources import stage_runtime_sources
 
 PROJECT = Path(__file__).resolve().parents[1]
 DESKTOP = PROJECT / 'apps/desktop'
@@ -25,10 +26,6 @@ def system_libraries(binary):
         library = line.strip().split(' (', 1)[0]
         if not library.startswith(('/System/Library/', '/usr/lib/')):
             raise SystemExit(f'Non-portable library in {binary.name}: {library}')
-
-
-def copy_tree(source, target):
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', 'node_modules', '.DS_Store'))
 
 
 def local_signing_identities():
@@ -117,15 +114,12 @@ def main():
     Image.open(DESKTOP / 'src-tauri/icons/icon.png').save(resources / 'Buddy.icns', format='ICNS')
     shutil.copy2(executable, contents / 'MacOS/miband-agent-buddy')
     shutil.copy2(node, runtime / 'bin/node')
-    copy_tree(PROJECT / 'services/runtime', runtime / 'services/runtime')
-    copy_tree(PROJECT / 'packages/buddy-shared', runtime / 'packages/buddy-shared')
+    stage_runtime_sources(PROJECT, runtime)
     (runtime / 'native/transport/target/debug').mkdir(parents=True)
     shutil.copy2(transport, runtime / 'native/transport/target/debug/buddy-transport')
     (runtime / 'dist').mkdir()
     for name in ['buddy.debug.rpk', 'buddy-package.json']:
         shutil.copy2(PROJECT / 'dist' / name, runtime / 'dist' / name)
-    # Package-level type semantics must match the checkout for the shared CJS files.
-    shutil.copy2(PROJECT / 'package.json', runtime / 'package.json')
     notices = resources / 'licenses'
     notices.mkdir()
     for name in ['LICENSE', 'THIRD_PARTY_NOTICES.md']:

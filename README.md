@@ -93,7 +93,7 @@ In **Settings → Task notifications**, **Task completion vibration** is off by 
 
 ## Connect your AI tools
 
-Copy the setup request from **AI connections** into your project's AI conversation, or share the [Buddy Hooks skill](https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md). It guides the AI through project configuration and verification.
+Copy the complete setup instructions from **AI connections** into the AI tool you want to connect. Request user-wide automatic reporting across projects and new conversations through a supported host mechanism; Hooks are one option. Buddy bundles CLI and the guide, without a source checkout or extra runtime. Verify host activation and real automatic start/end reports separately from a CLI test. See [local AI integration](docs/en/development/hooks.md).
 
 | Tool | Connection |
 | --- | --- |

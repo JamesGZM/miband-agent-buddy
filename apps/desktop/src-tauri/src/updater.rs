@@ -1265,6 +1265,12 @@ mod tests {
         let bundle = extract(&archive, &directory).unwrap();
         validate_bundle(&bundle, env!("CARGO_PKG_VERSION")).unwrap();
         let runtime = bundle.join("Contents/Resources/runtime");
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(runtime.join("package.json")).unwrap()).unwrap();
+        assert_eq!(manifest["type"], "module");
+        assert!(manifest.get("scripts").is_none());
+        assert!(manifest.get("devDependencies").is_none());
+        assert!(!runtime.join("packages/buddy-shared/fixtures").exists());
         let module =
             url::Url::from_file_path(runtime.join("services/runtime/bin/buddy-runtime.mjs"))
                 .unwrap();
@@ -1282,6 +1288,26 @@ mod tests {
         assert!(
             result.success(),
             "bundled runtime modules must resolve without the checkout"
+        );
+        let executable = bundle.join("Contents/MacOS/miband-agent-buddy");
+        let guide = Command::new(&executable)
+            .args(["--buddy-cli", "guide"])
+            .env("PATH", "/usr/bin:/bin")
+            .env_remove("NODE_OPTIONS")
+            .current_dir(&directory)
+            .output()
+            .unwrap();
+        assert!(guide.status.success());
+        assert!(guide.stderr.is_empty());
+        assert_eq!(
+            String::from_utf8(guide.stdout).unwrap(),
+            fs::read_to_string(runtime.join("services/runtime/integration-guide.md")).unwrap()
+        );
+        assert!(!runtime.join("services/runtime/bin/buddy-mcp.mjs").exists());
+        assert!(
+            !runtime
+                .join("services/runtime/src/adapters/buddy-mcp.mjs")
+                .exists()
         );
         assert_eq!(validate_bundle(&bundle, "999.0.0"), Err("package_invalid"));
         fs::remove_file(runtime.join("native/transport/target/debug/buddy-transport")).unwrap();

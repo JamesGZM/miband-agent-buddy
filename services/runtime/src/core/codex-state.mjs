@@ -8,9 +8,11 @@ export function createCodexState({now=Date.now,onEvent=()=>{}}={}){
   const at=now();
   if(!event||!EVENTS.includes(event.event)||!/^\w{64}$/.test(event.session)||!Number.isSafeInteger(event.at)||Math.abs(at-event.at)>30000)throw new Error('Invalid Codex event');
   const old=sessions.get(event.session);
-  if(old&&(event.at<old.at||(event.at===old.at&&(old.seen.includes(event.event)||terminal.has(old.event)&&!terminal.has(event.event)))))return;
+  const ordered=Number.isSafeInteger(event.revision)&&event.revision>0;
+  if(old&&(ordered ? event.revision<=(old.revision||0) : (event.at<old.at||(event.at===old.at&&(old.seen.includes(event.event)||terminal.has(old.event)&&!terminal.has(event.event))))))return;
+  if(!old&&sessions.size>=128&&ordered)return false;
   if(!old&&sessions.size>=128)sessions.delete(sessions.keys().next().value);
-  sessions.set(event.session,{at:event.at,mode:modes[event.event],event:event.event,seen:old?.at===event.at?[...old.seen,event.event]:[event.event]});lastEventAt=at;eventCount++;onEvent(event,old);
+  sessions.set(event.session,{at:event.at,mode:modes[event.event],event:event.event,revision:ordered?event.revision:undefined,seen:!ordered&&old?.at===event.at?[...old.seen,event.event]:[event.event]});lastEventAt=at;eventCount++;onEvent(event,old);
  }
  function status(){
   const at=now();let selected=null;
@@ -26,7 +28,7 @@ export function createCodexState({now=Date.now,onEvent=()=>{}}={}){
    sessionCounts[item.mode]++;
    if(at-item.at>staleAfter)staleSessions++;else freshActiveSessions++;
   }
-  return {connected:lastEventAt!==null,state:selected?.state??'idle',source:'codex-hooks',stale:staleSessions>0,lastEventAt,eventCount,activeSessions:freshActiveSessions+staleSessions,freshActiveSessions,staleSessions,sessionCounts};
+  return {connected:lastEventAt!==null,state:selected?.state??'idle',source:'buddy-activity',scope:'aggregate',stale:staleSessions>0,lastEventAt,eventCount,activeSessions:freshActiveSessions+staleSessions,freshActiveSessions,staleSessions,sessionCounts};
  }
  function reset(){sessions.clear();}
  return {accept,status,reset};

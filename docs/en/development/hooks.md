@@ -1,18 +1,24 @@
-# Local AI Hooks
+# Local AI integration
 
 **English** · [简体中文](../../zh-CN/development/hooks.md) · [繁體中文](../../zh-TW/development/hooks.md)
 
-Give an AI working in your project the [Buddy Hooks skill](../../../skills/buddy-hooks/SKILL.md), or copy this public link:
+## Bundled CLI
 
-`https://github.com/JamesGZM/miband-agent-buddy/blob/main/skills/buddy-hooks/SKILL.md`
+For new integrations, copy the generic request from the installed App's **AI integration** page. It copies the complete integration guide and identifies MiBand Agent Buddy by application name/identity, without document links or installation paths. The setup AI resolves the verified installed application through the host or OS application registry, never by guessing or scanning the home directory. The setup AI independently chooses verified host lifecycle triggers that invoke the bundled CLI; users do not select a model/platform. Buddy bundles Node and all integration source, so no checkout, npm or external runtime is required. Never scan the home directory to discover a checkout.
 
-Ask it to connect **this project** to the running Buddy desktop app. This repository contains the reusable instructions; installing a skill by itself does not install or activate lifecycle hooks.
+New setup requests user-wide automatic reporting across local projects, new main conversations and later turns. The mechanism is host-dependent; Hooks are one option, not a prerequisite. Do not silently substitute project scope or finish after a CLI test. Complete feasible persistent configuration, then distinguish native activation and real different-project/later-turn verification from transport readiness. A minimal adapter may translate metadata when necessary, but do not build another installer by default or depend on the setup project or another App's private runtime. Prefer supported background observation with bounded, ordered delivery; 300ms bounds ingress only, not the full callback. Required synchronous handlers keep minimal bounded acceptance/handoff and preserve native behavior.
+
+The desktop executable accepts `--buddy-cli guide`, `--buddy-cli status`, `--buddy-cli report` before desktop startup. The [bundled guide](../../../services/runtime/integration-guide.md) defines the shared anonymous source/session/run/seq/state contract. CLI submits to one existing runtime. Its loopback ingress is private implementation detail, not another public integration API.
+
+Local ingress has a 300ms deadline. Hosts bound command launch and serialize each conversation; independent conversations may invoke CLI concurrently without unbounded process queues. Client scheduling/startup adds latency. No path waits for Bluetooth or band ACK. Failure must not block original work or trigger repeated retries. Per-conversation watermarks reject delayed runs, duplicate sequences and reopening terminal runs. Source identities isolate concurrent clients; generic watermarks are bounded to 128 until reset/restart. Native Hooks and generic reporting must not double-count the same conversation. Model-only reporting may miss cancellation; configure only question reminders with real resolution signals. See [ADR-016](../architecture/ADR-016-bundled-integration.md).
+
+The remaining sections document legacy event senders retained for existing configurations. New setup follows the bundled guide; no platform-specific source installer remains.
 
 ## Needs-user reminder selection
 
 `PermissionRequest` is Buddy's normalized **needs user** reminder: the whole outer ring turns yellow, even with multiple tasks. It does not answer or authorize anything. Resumption restores the ordinary task palette and retains host task counts. No extra icon or question text is shown.
 
-The setup agent chooses optional question integration from the host's real capabilities; installing the skill alone does not make all AI questions observable. Native Codex/Claude `PermissionRequest` is for approvals. Cursor's existing adapter reports activity but establishes no dedicated permission/question callback. Do not invent event names or tool matchers, inspect transcripts, or require the model to remember manual notifications each turn.
+The setup agent chooses optional question integration from the host's real capabilities; copying the guide alone does not make all AI questions observable. Native Codex/Claude `PermissionRequest` is for approvals. Cursor's existing adapter reports activity but establishes no dedicated permission/question callback. Do not invent event names or tool matchers, inspect transcripts, or require the model to remember manual notifications each turn.
 
 | Route | Requirement and clearing rule |
 | --- | --- |
@@ -20,8 +26,6 @@ The setup agent chooses optional question integration from the host's real capab
 | Optional blocking question | Verify a real start and answer/cancel lifecycle, and that the session cannot emit unrelated activity while waiting. Reuse the same provider/session identity and existing reminder/resumption events. |
 | Optional nonblocking question | A tool returning is submission, not an answer. The current event-only adapter cannot hold a separate pending question through later activity. Leave mapping disabled unless the harness owns pending-request aggregation, real resolution/cancel/invalidation callbacks, and serialized normalized reporting until the last request closes. |
 | No reliable lifecycle | Keep activity reporting and explicitly report question reminders as unsupported/unverified. |
-
-After installation report native approval, blocking question and nonblocking question capabilities separately, including how each clears. Validate duplicates, resolution, cancellation and concurrent sessions against an isolated receiver; configuration alone is not host-callback or physical-screen verification. See the [installation skill](../../../skills/buddy-hooks/SKILL.md#select-needs-user-reminders) for the setup contract.
 
 ## Supported routes
 
@@ -32,26 +36,19 @@ After installation report native approval, blocking question and nonblocking que
 | DeepSeek or another custom harness | Explicit lifecycle callbacks invoke the generic sender | Add to the actual harness; no invented model-specific settings file |
 | Ordinary ChatGPT / Claude desktop Chat | No automatic integration claimed | A local host with supported lifecycle callbacks is required |
 
-The installer supports `codex` and `claude-code`. Configuration is a local merge, not an agent-permission grant. Codex requires review and trust of non-managed hooks; project trust is also required. Managed policies can prevent local hooks from running. After setup, inspect `/hooks` and start a new session. See the official [Codex discovery and trust rules](https://learn.chatgpt.com/docs/hooks) and [Claude Code configuration](https://code.claude.com/docs/en/hooks).
+Existing adapter configuration is managed by the actual host or setup AI, not a repository installer. Codex requires native review/trust and project trust where applicable; inspect the loaded settings source and verify real callbacks. See the official [Codex Hooks](https://learn.chatgpt.com/docs/hooks) and [Claude Code Hooks](https://code.claude.com/docs/en/hooks).
 
-## Setup and removal
+## Source compatibility command
 
-Run from the Buddy checkout, replacing the example target with an existing absolute project path:
+The checkout-specific Codex/Claude installers have been retired. New setup uses the App's full setup instructions and lets the setup AI establish a verified lifecycle trigger with bundled CLI delivery.
+
+The existing npm command is retained as a read-only guide alias:
 
 ```sh
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --dry-run --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --status --json
-node scripts/install_agent_hooks.mjs codex --scope project --project-root /absolute/project --uninstall --json
+npm run hooks:install
 ```
 
-Use `claude-code` for Claude. Omit scope/root for explicit user-wide setup. Existing `npm run hooks:install` remains the user-wide Codex entrypoint and forwards flags to the same installer. Installation is idempotent for the same Node and checkout paths. Existing configs are backed up outside the project under `~/Library/Application Support/io.github.jamesgzm.miband-agent-buddy/hook-backups` (directory `0700`, files `0600`) and updated atomically. Invalid JSON, linked config files/directories and malformed hook groups are left untouched. Removal keeps unrelated settings and hook commands; old whole-file backups should not overwrite later changes.
-
-Keep one effective Buddy scope. Project installation checks known user, ancestor and project-shared definitions. When another scope contains Buddy commands, it returns `blocked: true`, `reason: "existing_scope"` and `conflictingPaths` without installing into the selected project. `installed` continues to describe only that selected file. Review which scope the host loads and trusts, then remove the previous Buddy entries if switching scope. Custom wrapper commands and plugin-bundled hooks still require manual inspection in `/hooks`; detection is not proof that a host has loaded a config.
-
-An exclusive `.buddy-lock` serializes Buddy updates to one config. A competing update fails with a retry message. If a process crashes and leaves the empty lock, confirm no installer is running before removing that exact lock. External editors do not honor the lock; avoid editing the same config during installation. The installer checks again before replacement but cannot guarantee exclusion of unrelated applications.
-
-`--status` returns installed definition counts only. Runtime `agent.eventCount` and `lastEventAt` show actual delivery. An ACK confirms software reception, not physical illumination. Moving the source checkout or Node executable invalidates installed absolute commands; reinstall and remove the previous commands.
+It prints the bundled integration guide. It does not install, upgrade, remove or grant trust to any host Hooks; old provider/scope/uninstall flags are unsupported. For an existing configuration, inspect the actual host settings and remove only the previous Buddy entries with a private backup, preserving other hooks and later edits. Never restore an old whole-file backup over current settings. Host trust/loading and real automatic events must be verified separately from configuration.
 
 ## Generic harness sender
 
@@ -88,10 +85,10 @@ Independent main conversations aggregate by urgency: needs user, working, thinki
 
 Native command hooks run in the background where the host supports it. Codex always runs `SessionEnd` synchronously, so every CLI sender first validates and sanitizes input, then launches a detached delivery worker with no inherited pipes and returns without waiting for HTTP. Input has a 150ms watchdog; the worker has a 600ms HTTP timeout and a 1.2s process watchdog. Process startup still has a small cost. Delivery is best effort, with no retries or permission decisions.
 
-Rerun the same installer and scope to upgrade existing Buddy handlers: it updates only their `async` and `timeout` fields, preserves other hooks/settings, and makes a private backup before replacement. `--status --json` reports `needsUpgrade` for old handlers. Review changes through `/hooks` and reload the host session.
+Review any legacy handler changes through the host and reload as required. Prefer the current bundled CLI for newly configured callbacks; no repository script upgrades or rewrites host configuration.
 
 Events carry the timestamp captured by the sender before input processing and worker launch. The receiver ignores older events; at equal timestamps a terminal event cannot be replaced by an active event. Independently scheduled host hooks can still start out of order, and session teardown can cancel pending host work. This is an observational display, not a guaranteed event journal. Custom harnesses should enqueue notifications in callback order on their own background queue without awaiting HTTP in the agent execution path.
 
 ## Existing local Cursor hooks
 
-An existing Cursor wrapper can call `services/runtime/bin/cursor-hook.mjs`. It maps the installed six events to the same `custom` session namespace, sanitizes before detached delivery, and emits a valid host response even on invalid or open input. `beforeSubmitPrompt` returns `continue: true`; `preToolUse` returns `permission: "allow"` so Buddy adds no veto. Other security hooks and Cursor permissions remain owned by the host. No follow-up prompt is emitted. Cursor does not document a native `async` field here; do not copy Codex configuration fields into Cursor. This adapter is for an already configured local command; the installer still only manages Codex and Claude Code. See the official [Cursor Hooks reference](https://cursor.com/docs/hooks).
+An existing Cursor wrapper can call `services/runtime/bin/cursor-hook.mjs`. It maps the installed six events to the same `custom` session namespace, sanitizes before detached delivery, and emits a valid host response even on invalid or open input. `beforeSubmitPrompt` returns `continue: true`; `preToolUse` returns `permission: "allow"` so Buddy adds no veto. Other security hooks and Cursor permissions remain owned by the host. No follow-up prompt is emitted. Cursor does not document a native `async` field here; do not copy Codex configuration fields into Cursor. This adapter is for an already configured local command; new setup follows the bundled guide. See the official [Cursor Hooks reference](https://cursor.com/docs/hooks).
